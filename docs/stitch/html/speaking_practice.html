@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Luyện nói - Zkouška z češtiny</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline-variant": "#d8d0c8",
+                        "on-primary-fixed-variant": "#8a4518",
+                        "on-error": "#ffffff",
+                        "on-background": "#3a302a",
+                        "surface-container-highest": "#e6e0d6",
+                        "inverse-primary": "#f0a878",
+                        "surface-variant": "#ece6dc",
+                        "on-secondary-container": "#605850",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#fbe8d8",
+                        "surface-tint": "#c2652a",
+                        "on-tertiary-fixed": "#2e1515",
+                        "primary-container": "#e08850",
+                        "surface-dim": "#dcd6cc",
+                        "on-tertiary": "#ffffff",
+                        "surface-container": "#f2ece4",
+                        "outline": "#9a9088",
+                        "on-surface-variant": "#605850",
+                        "on-primary-fixed": "#401a08",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#e8a0a0",
+                        "on-tertiary-container": "#3a2020",
+                        "secondary-container": "#eae2da",
+                        "secondary-fixed": "#eae2da",
+                        "inverse-surface": "#3a302a",
+                        "surface-bright": "#faf5ee",
+                        "secondary-fixed-dim": "#cec6be",
+                        "surface": "#faf5ee",
+                        "error": "#c0392b",
+                        "primary": "#c2652a",
+                        "on-secondary-fixed-variant": "#504840",
+                        "on-primary-container": "#fbe8d8",
+                        "surface-container-low": "#f6f0e8",
+                        "surface-container-high": "#ece6dc",
+                        "on-secondary-fixed": "#2a2420",
+                        "secondary": "#78706a",
+                        "primary-fixed-dim": "#f0a878",
+                        "tertiary": "#8c3c3c",
+                        "on-surface": "#3a302a",
+                        "inverse-on-surface": "#faf5ee",
+                        "background": "#faf5ee",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error-container": "#7a1a10",
+                        "error-container": "#fce4e0",
+                        "tertiary-fixed": "#fce0e0",
+                        "tertiary-container": "#d47070",
+                        "on-tertiary-fixed-variant": "#6e3030"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["EB Garamond"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .record-pulse {
+            animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.3; }
+            100% { transform: scale(0.8); opacity: 0.5; }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-[#faf5ee] dark:bg-stone-900 border-b border-[#d8d0c8]/60 dark:border-stone-800 sticky top-0 z-50">
+<div class="flex justify-between items-center w-full px-6 py-4">
+<div class="flex items-center gap-4">
+<button class="active:scale-95 transition-transform duration-200 text-stone-500 hover:bg-[#c2652a]/5 p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+<h1 class="font-headline text-2xl tracking-tight text-[#c2652a] dark:text-[#d97e4a] font-semibold">Zkouška z češtiny</h1>
+</div>
+<div class="hidden md:flex gap-6">
+<span class="text-[#c2652a] font-medium font-body">Luyện nói (Speaking Practice)</span>
+</div>
+</div>
+</header>
+<main class="flex-grow max-w-4xl mx-auto w-full px-6 py-8 flex flex-col gap-8">
+<!-- Progress Indicator -->
+<div class="w-full flex flex-col gap-2">
+<div class="flex justify-between items-end">
+<span class="font-label text-xs uppercase tracking-widest text-secondary">Tiến trình (Progress)</span>
+<span class="font-headline text-xl text-primary font-bold">4/10</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[40%] transition-all duration-500"></div>
+</div>
+</div>
+<!-- Section Title (Mobile) -->
+<div class="md:hidden">
+<h2 class="font-headline text-3xl font-bold text-on-background">Luyện nói</h2>
+</div>
+<!-- Prompt Card -->
+<section class="bg-surface-container-lowest rounded-xl p-8 shadow-[0_2px_16px_rgba(58,48,42,0.04)] border border-outline-variant/30">
+<div class="flex items-start gap-4 mb-6">
+<span class="material-symbols-outlined text-primary mt-1" data-icon="chat_bubble">chat_bubble</span>
+<div>
+<h3 class="font-headline text-2xl text-on-background mb-2">Chủ đề: Giới thiệu bản thân</h3>
+<p class="text-lg leading-relaxed font-medium">Hãy giới thiệu về bản thân và gia đình bạn (Giới thiệu 1-2 phút).</p>
+</div>
+</div>
+<div class="p-4 bg-surface-container-low rounded-lg border-l-4 border-primary/40">
+<p class="text-sm text-secondary italic">
+                    Đây là câu hỏi thường gặp nhất trong phần thi nói của kỳ thi Trvalý. Giám khảo muốn đánh giá khả năng phản xạ và vốn từ vựng cơ bản về cuộc sống của bạn.
+                </p>
+</div>
+</section>
+<!-- Recording Area -->
+<section class="flex flex-col items-center justify-center py-12 gap-8 flex-grow">
+<!-- Waveform Placeholder -->
+<div class="flex items-end gap-1 h-12 w-full max-w-xs justify-center opacity-40">
+<div class="w-1.5 bg-primary rounded-full h-4 animate-pulse"></div>
+<div class="w-1.5 bg-primary rounded-full h-8 animate-pulse" style="animation-delay: 0.1s"></div>
+<div class="w-1.5 bg-primary rounded-full h-12 animate-pulse" style="animation-delay: 0.2s"></div>
+<div class="w-1.5 bg-primary rounded-full h-6 animate-pulse" style="animation-delay: 0.3s"></div>
+<div class="w-1.5 bg-primary rounded-full h-10 animate-pulse" style="animation-delay: 0.4s"></div>
+<div class="w-1.5 bg-primary rounded-full h-5 animate-pulse" style="animation-delay: 0.5s"></div>
+<div class="w-1.5 bg-primary rounded-full h-12 animate-pulse" style="animation-delay: 0.6s"></div>
+<div class="w-1.5 bg-primary rounded-full h-8 animate-pulse" style="animation-delay: 0.7s"></div>
+</div>
+<!-- Main Button -->
+<div class="relative group">
+<div class="absolute inset-0 bg-primary/20 rounded-full record-pulse"></div>
+<button class="relative z-10 w-24 h-24 bg-primary text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all duration-300">
+<span class="material-symbols-outlined text-4xl" data-icon="mic" style="font-variation-settings: 'FILL' 1;">mic</span>
+</button>
+</div>
+<!-- Timer -->
+<div class="flex flex-col items-center gap-1">
+<span class="font-headline text-3xl font-bold tracking-widest text-primary">0:45 <span class="text-secondary/50">/ 2:00</span></span>
+<span class="font-label text-[10px] uppercase tracking-widest text-secondary font-bold">Đang ghi âm...</span>
+</div>
+<!-- Secondary Controls -->
+<div class="flex gap-4">
+<button class="px-6 py-3 rounded-full border border-outline text-secondary font-semibold flex items-center gap-2 hover:bg-surface-container-high transition-colors active:scale-95">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+                    Ghi lại
+                </button>
+<button class="px-8 py-3 rounded-full bg-primary text-white font-bold flex items-center gap-2 hover:opacity-90 shadow-md active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="check">check</span>
+                    Nộp bài
+                </button>
+</div>
+</section>
+<!-- Tips Area -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-20">
+<div class="bg-surface-container-high/50 p-6 rounded-xl border border-outline-variant/20">
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-tertiary" data-icon="lightbulb">lightbulb</span>
+<h4 class="font-headline text-xl font-bold">Mẹo (Tips)</h4>
+</div>
+<ul class="text-sm space-y-2 text-on-surface/80 list-disc pl-4">
+<li>Nói chậm, rõ ràng từng âm tiết tiếng Séc.</li>
+<li>Sử dụng cấu trúc: "Jmenuji se...", "Mám rodinu...", "Bydlím v...".</li>
+<li>Đừng quá lo lắng về lỗi ngữ pháp nhỏ, quan trọng là sự tự tin.</li>
+</ul>
+</div>
+<div class="bg-surface-container-high/50 p-6 rounded-xl border border-outline-variant/20">
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-primary" data-icon="visibility">visibility</span>
+<h4 class="font-headline text-xl font-bold">Lưu ý</h4>
+</div>
+<ul class="text-sm space-y-2 text-on-surface/80 list-disc pl-4">
+<li>Đảm bảo môi trường xung quanh yên tĩnh.</li>
+<li>Kiểm tra micrô trước khi bắt đầu bài thi thật.</li>
+<li>Nhấn 'Nộp bài' khi bạn đã hài lòng với bản ghi.</li>
+</ul>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-8 pb-8 pt-4 bg-[#faf5ee] dark:bg-stone-900 border-t border-[#d8d0c8]/60 dark:border-stone-800 shadow-[0_-2px_16px_rgba(58,48,42,0.04)] rounded-t-3xl">
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 p-4 hover:text-[#c2652a] dark:hover:text-[#d97e4a] transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-[#c2652a] text-white rounded-full p-4 scale-110 shadow-lg active:scale-90 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="mic" style="font-variation-settings: 'FILL' 1;">mic</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 p-4 hover:text-[#c2652a] dark:hover:text-[#d97e4a] transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="check_circle">check_circle</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,30 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.g.dart
+*.freezed.dart
+
+# Env (never commit real values)
+env.dev.json
+env.staging.json
+env.prod.json
+
+# IDE
+.vscode/settings.json
+.idea/
+*.iml
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+# macOS
+macos/Pods/
+
+# Assets (placeholders only — real assets managed outside VCS)
+assets/fonts/

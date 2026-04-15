@@ -1,0 +1,14 @@
+{
+  "id": "result-001",
+  "attemptId": "attempt-001",
+  "userId": "user-001",
+  "totalScore": 75,
+  "passThreshold": 60,
+  "sectionScores": {
+    "reading": { "score": 80, "total": 100 },
+    "listening": { "score": 70, "total": 100 },
+    "grammar": { "score": 75, "total": 100 }
+  },
+  "weakSkills": ["listening"],
+  "createdAt": "2024-06-01T10:00:00.000Z"
+}

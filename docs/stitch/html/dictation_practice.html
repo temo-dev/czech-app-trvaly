@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+
+<html class="light" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700;800&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#c2652a",
+                        "outline-variant": "#d8d0c8",
+                        "secondary-fixed": "#eae2da",
+                        "secondary-fixed-dim": "#cec6be",
+                        "on-primary-fixed": "#401a08",
+                        "surface-tint": "#c2652a",
+                        "on-background": "#3a302a",
+                        "error-container": "#fce4e0",
+                        "tertiary-container": "#d47070",
+                        "primary-fixed-dim": "#f0a878",
+                        "primary-container": "#e08850",
+                        "outline": "#9a9088",
+                        "background": "#faf5ee",
+                        "tertiary-fixed": "#fce0e0",
+                        "on-surface": "#3a302a",
+                        "surface-dim": "#dcd6cc",
+                        "error": "#c0392b",
+                        "surface-bright": "#faf5ee",
+                        "tertiary": "#8c3c3c",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-container": "#605850",
+                        "surface-container": "#f2ece4",
+                        "inverse-surface": "#3a302a",
+                        "secondary": "#78706a",
+                        "inverse-on-surface": "#faf5ee",
+                        "on-primary-container": "#fbe8d8",
+                        "on-error": "#ffffff",
+                        "on-tertiary-container": "#3a2020",
+                        "on-primary-fixed-variant": "#8a4518",
+                        "on-primary": "#ffffff",
+                        "on-surface-variant": "#605850",
+                        "surface-variant": "#ece6dc",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#fbe8d8",
+                        "on-secondary-fixed-variant": "#504840",
+                        "inverse-primary": "#f0a878",
+                        "tertiary-fixed-dim": "#e8a0a0",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error-container": "#7a1a10",
+                        "surface-container-highest": "#e6e0d6",
+                        "on-tertiary-fixed": "#2e1515",
+                        "on-secondary-fixed": "#2a2420",
+                        "surface": "#faf5ee",
+                        "surface-container-low": "#f6f0e8",
+                        "surface-container-high": "#ece6dc",
+                        "secondary-container": "#eae2da",
+                        "on-tertiary-fixed-variant": "#6e3030"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["EB Garamond"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .serif-title { font-family: 'EB Garamond', serif; }
+        .sans-body { font-family: 'Manrope', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background sans-body selection:bg-primary/20">
+<!-- TopAppBar -->
+<header class="bg-[#faf5ee] dark:bg-stone-950 flex justify-between items-center w-full px-6 h-16 fixed top-0 z-50 border-b border-[#d8d0c8]/60 dark:border-stone-800">
+<div class="flex items-center gap-4">
+<button class="text-stone-500 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors p-2 rounded-full active:opacity-80 active:scale-95 transition-all">
+<span class="material-symbols-outlined">close</span>
+</button>
+<div class="flex flex-col">
+<h1 class="serif-title text-xl font-bold text-[#c2652a]">Chính tả (Dictation)</h1>
+<!-- Progress Bar -->
+<div class="w-32 h-1 bg-outline-variant/30 rounded-full mt-1 overflow-hidden">
+<div class="h-full bg-primary w-[40%] rounded-full"></div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-stone-500 font-medium text-sm">4/10</span>
+<button class="text-stone-500 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors p-2 rounded-full active:opacity-80 active:scale-95 transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-8">
+<!-- Audio Playback Card -->
+<section class="bg-surface-container-low rounded-xl p-8 shadow-[0_2px_16px_rgba(58,48,42,0.04)] border border-outline-variant/20">
+<div class="flex flex-col items-center gap-6">
+<button class="w-20 h-20 bg-primary text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-90 transition-all shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+<div class="w-full space-y-3">
+<!-- Simple Waveform Representation -->
+<div class="flex items-end justify-center gap-1 h-12">
+<div class="w-1 bg-primary/20 h-4 rounded-full"></div>
+<div class="w-1 bg-primary/20 h-6 rounded-full"></div>
+<div class="w-1 bg-primary/40 h-8 rounded-full"></div>
+<div class="w-1 bg-primary h-12 rounded-full"></div>
+<div class="w-1 bg-primary h-10 rounded-full"></div>
+<div class="w-1 bg-primary/40 h-7 rounded-full"></div>
+<div class="w-1 bg-primary/20 h-5 rounded-full"></div>
+<div class="w-1 bg-primary/10 h-3 rounded-full"></div>
+<div class="w-1 bg-primary/20 h-6 rounded-full"></div>
+<div class="w-1 bg-primary/40 h-9 rounded-full"></div>
+<div class="w-1 bg-primary h-11 rounded-full"></div>
+<div class="w-1 bg-primary h-8 rounded-full"></div>
+<div class="w-1 bg-primary/40 h-5 rounded-full"></div>
+<div class="w-1 bg-primary/20 h-3 rounded-full"></div>
+</div>
+<div class="flex justify-between text-[10px] uppercase tracking-widest text-secondary font-bold">
+<span>0:00</span>
+<span>0:08</span>
+</div>
+</div>
+<div class="flex items-center gap-2 px-4 py-2 bg-secondary-fixed/50 rounded-full">
+<span class="material-symbols-outlined text-sm text-primary">history</span>
+<span class="text-xs font-bold text-on-secondary-fixed-variant uppercase tracking-wider">Còn 2 lần nghe</span>
+</div>
+</div>
+</section>
+<!-- Input Section -->
+<section class="space-y-4">
+<label class="block serif-title text-2xl text-on-surface">Viết những gì bạn nghe được</label>
+<div class="relative">
+<textarea class="w-full h-40 p-6 bg-surface-container-lowest border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-xl sans-body text-lg resize-none placeholder:text-outline/50 transition-shadow" placeholder="Bắt đầu nhập tại đây..."></textarea>
+</div>
+</section>
+<!-- Result Comparison Section (Showing State After Submission) -->
+<section class="bg-surface-variant/30 rounded-xl p-8 border border-outline-variant/40 space-y-6">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">analytics</span>
+<h3 class="serif-title text-2xl text-on-surface">Kết quả</h3>
+</div>
+<div class="space-y-6">
+<!-- Correct Czech Sentence -->
+<div>
+<span class="text-[10px] uppercase tracking-widest text-secondary font-bold block mb-2">Câu mẫu</span>
+<p class="text-xl serif-title leading-relaxed text-on-surface">
+                        Bydlím v Praze a studuji na univerzitě.
+                    </p>
+</div>
+<!-- User Comparison -->
+<div>
+<span class="text-[10px] uppercase tracking-widest text-secondary font-bold block mb-2">Câu của bạn</span>
+<div class="text-lg leading-relaxed sans-body flex flex-wrap gap-x-1 gap-y-2">
+<span class="text-green-700 bg-green-50 px-1 rounded">Bydlím</span>
+<span class="text-green-700 bg-green-50 px-1 rounded">v</span>
+<span class="text-error line-through bg-error-container px-1 rounded">Brně</span>
+<span class="text-green-700 bg-green-50 px-1 rounded">a</span>
+<span class="text-orange-600 bg-orange-50 border-b-2 border-orange-200 px-1 rounded italic">studuji</span>
+<span class="text-green-700 bg-green-50 px-1 rounded">na</span>
+<span class="text-green-700 bg-green-50 px-1 rounded">univerzitě.</span>
+</div>
+</div>
+<!-- Legend -->
+<div class="flex flex-wrap gap-4 pt-4 border-t border-outline-variant/40">
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-green-500"></div>
+<span class="text-xs text-secondary">Đúng</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-error"></div>
+<span class="text-xs text-secondary">Sai</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-orange-500"></div>
+<span class="text-xs text-secondary">Thiếu</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Action Area -->
+<div class="fixed bottom-0 left-0 w-full bg-background/80 backdrop-blur-md p-6 flex justify-center items-center z-50">
+<button class="w-full max-w-md bg-primary text-white py-4 rounded-xl font-bold tracking-wide uppercase text-sm hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20">
+            Tiếp tục
+        </button>
+</div>
+<!-- BottomNavBar (Hidden in focused exercise but defined per JSON structure) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-8 py-4 mb-safe bg-[#faf5ee] dark:bg-stone-950 border-t border-[#d8d0c8]/60 dark:border-stone-800 shadow-[0_-2px_16px_rgba(58,48,42,0.04)] hidden">
+<button class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 h-12 w-12 hover:text-[#c2652a] transition-colors">
+<span class="material-symbols-outlined">volume_up</span>
+</button>
+<button class="flex flex-col items-center justify-center bg-[#c2652a] text-white rounded-full h-12 w-12 scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</button>
+</nav>
+</body></html>

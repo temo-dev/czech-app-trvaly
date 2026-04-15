@@ -1,0 +1,31 @@
+{
+  "@@locale": "en",
+  "appName": "Czech Exam",
+  "continueLabel": "Continue",
+  "cancelLabel": "Cancel",
+  "confirmLabel": "Confirm",
+  "retryLabel": "Retry",
+  "loading": "Loading...",
+  "errorGeneric": "Something went wrong. Please try again.",
+  "errorOffline": "No internet connection.",
+  "emptyStateDefault": "Nothing here yet",
+  "loginTitle": "Log in",
+  "signupTitle": "Create account",
+  "emailLabel": "Email",
+  "passwordLabel": "Password",
+  "forgotPassword": "Forgot password?",
+  "dashboardTitle": "Dashboard",
+  "coursesTitle": "Courses",
+  "practiceTitle": "Practice",
+  "progressTitle": "Progress",
+  "profileTitle": "Profile",
+  "streakLabel": "{days} day streak",
+  "@streakLabel": {
+    "placeholders": {
+      "days": { "type": "int" }
+    }
+  },
+  "startMockTest": "Start free mock test",
+  "upgradeLabel": "Upgrade",
+  "subscribeTitle": "Choose your plan"
+}

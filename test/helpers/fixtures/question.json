@@ -1,0 +1,20 @@
+{
+  "id": "q-001",
+  "type": "mcq",
+  "skill": "grammar",
+  "difficulty": "beginner",
+  "prompt": "Jak se řekne 'hello' česky?",
+  "audioUrl": null,
+  "imageUrl": null,
+  "options": [
+    { "id": "opt-a", "text": "Ahoj", "isCorrect": true },
+    { "id": "opt-b", "text": "Nashledanou", "isCorrect": false },
+    { "id": "opt-c", "text": "Prosím", "isCorrect": false },
+    { "id": "opt-d", "text": "Děkuji", "isCorrect": false }
+  ],
+  "matchPairs": [],
+  "orderItems": [],
+  "correctAnswer": null,
+  "explanation": "Ahoj is the informal Czech greeting for hello.",
+  "points": 10
+}

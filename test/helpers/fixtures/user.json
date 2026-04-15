@@ -1,0 +1,14 @@
+{
+  "id": "user-001",
+  "email": "test@example.com",
+  "displayName": "Test User",
+  "avatarUrl": null,
+  "locale": "vi",
+  "examDate": "2024-09-01T00:00:00.000Z",
+  "dailyGoalMinutes": 30,
+  "currentStreakDays": 7,
+  "totalXp": 1240,
+  "subscriptionTier": "free",
+  "subscriptionExpiresAt": null,
+  "createdAt": "2024-01-01T00:00:00.000Z"
+}

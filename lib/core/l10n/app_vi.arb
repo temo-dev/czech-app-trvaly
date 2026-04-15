@@ -1,0 +1,31 @@
+{
+  "@@locale": "vi",
+  "appName": "Ôn thi Trvalý",
+  "continueLabel": "Tiếp tục",
+  "cancelLabel": "Hủy",
+  "confirmLabel": "Xác nhận",
+  "retryLabel": "Thử lại",
+  "loading": "Đang tải...",
+  "errorGeneric": "Đã xảy ra lỗi. Vui lòng thử lại.",
+  "errorOffline": "Không có kết nối mạng.",
+  "emptyStateDefault": "Không có dữ liệu",
+  "loginTitle": "Đăng nhập",
+  "signupTitle": "Tạo tài khoản",
+  "emailLabel": "Email",
+  "passwordLabel": "Mật khẩu",
+  "forgotPassword": "Quên mật khẩu?",
+  "dashboardTitle": "Trang chủ",
+  "coursesTitle": "Khóa học",
+  "practiceTitle": "Luyện tập",
+  "progressTitle": "Tiến trình",
+  "profileTitle": "Hồ sơ",
+  "streakLabel": "{days} ngày liên tiếp",
+  "@streakLabel": {
+    "placeholders": {
+      "days": { "type": "int" }
+    }
+  },
+  "startMockTest": "Bắt đầu thi thử miễn phí",
+  "upgradeLabel": "Nâng cấp",
+  "subscribeTitle": "Chọn gói của bạn"
+}

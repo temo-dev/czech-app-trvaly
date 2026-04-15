@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "background": "#faf5ee",
+                    "error-container": "#fce4e0",
+                    "on-error-container": "#7a1a10",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-fixed-variant": "#6e3030",
+                    "tertiary-container": "#d47070",
+                    "tertiary-fixed": "#fce0e0",
+                    "surface-bright": "#faf5ee",
+                    "secondary-fixed-dim": "#cec6be",
+                    "inverse-surface": "#3a302a",
+                    "on-primary-container": "#fbe8d8",
+                    "primary": "#c2652a",
+                    "on-secondary-fixed-variant": "#504840",
+                    "surface": "#faf5ee",
+                    "error": "#c0392b",
+                    "tertiary": "#8c3c3c",
+                    "on-surface": "#3a302a",
+                    "secondary": "#78706a",
+                    "primary-fixed-dim": "#f0a878",
+                    "surface-container-low": "#f6f0e8",
+                    "surface-container-high": "#ece6dc",
+                    "on-secondary-fixed": "#2a2420",
+                    "inverse-on-surface": "#faf5ee",
+                    "outline": "#9a9088",
+                    "on-surface-variant": "#605850",
+                    "surface-container": "#f2ece4",
+                    "on-tertiary": "#ffffff",
+                    "secondary-container": "#eae2da",
+                    "tertiary-fixed-dim": "#e8a0a0",
+                    "on-tertiary-container": "#3a2020",
+                    "on-primary-fixed": "#401a08",
+                    "on-primary": "#ffffff",
+                    "secondary-fixed": "#eae2da",
+                    "surface-container-highest": "#e6e0d6",
+                    "on-error": "#ffffff",
+                    "on-background": "#3a302a",
+                    "on-primary-fixed-variant": "#8a4518",
+                    "outline-variant": "#d8d0c8",
+                    "surface-variant": "#ece6dc",
+                    "on-secondary-container": "#605850",
+                    "on-secondary": "#ffffff",
+                    "inverse-primary": "#f0a878",
+                    "primary-fixed": "#fbe8d8",
+                    "surface-dim": "#dcd6cc",
+                    "primary-container": "#e08850",
+                    "surface-tint": "#c2652a",
+                    "on-tertiary-fixed": "#2e1515"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["EB Garamond"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .circular-progress {
+            background: conic-gradient(#c2652a calc(78 * 1%), #eae2da 0);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar from JSON -->
+<header class="bg-[#faf5ee] dark:bg-stone-950 border-b border-[#d8d0c8]/60 dark:border-stone-800 shadow-[0_2px_16px_rgba(58,48,42,0.04)] fixed top-0 w-full z-50 px-6 h-16 flex justify-between items-center">
+<div class="flex items-center gap-4">
+<button class="active:scale-95 transition-transform duration-200 hover:bg-[#c2652a]/5 dark:hover:bg-[#c2652a]/10 p-2 rounded-full text-[#c2652a]">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="text-2xl font-headline font-bold tracking-tight text-[#c2652a] dark:text-[#d4834d]">Speaking Analysis</h1>
+</div>
+<button class="active:scale-95 transition-transform duration-200 hover:bg-[#c2652a]/5 dark:hover:bg-[#c2652a]/10 p-2 rounded-full text-[#c2652a]">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</header>
+<main class="pt-24 pb-32 px-4 max-w-4xl mx-auto space-y-10">
+<!-- Hero Score Section -->
+<section class="flex flex-col items-center text-center space-y-6">
+<div class="relative w-48 h-48 sm:w-56 sm:h-56 rounded-full p-4 flex items-center justify-center circular-progress shadow-xl">
+<div class="absolute inset-2 bg-[#faf5ee] rounded-full flex flex-col items-center justify-center">
+<span class="text-5xl sm:text-6xl font-headline font-extrabold text-primary">78</span>
+<span class="text-sm font-label uppercase tracking-widest text-secondary font-bold">/ 100</span>
+</div>
+</div>
+<div class="space-y-1">
+<h2 class="text-3xl font-headline font-bold text-on-surface">Kết quả luyện tập</h2>
+<p class="text-secondary font-medium">Bạn đang làm rất tốt! Hãy xem các phân tích chi tiết bên dưới.</p>
+</div>
+</section>
+<!-- Metrics Bento Grid -->
+<section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/30 flex flex-col items-center text-center space-y-2">
+<span class="text-primary font-headline text-2xl font-bold">85%</span>
+<span class="text-xs font-label uppercase tracking-wider text-secondary font-bold leading-tight">Exam Similarity</span>
+</div>
+<div class="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/30 flex flex-col items-center text-center space-y-2">
+<span class="text-primary font-headline text-2xl font-bold">72%</span>
+<span class="text-xs font-label uppercase tracking-wider text-secondary font-bold leading-tight">Clarity</span>
+</div>
+<div class="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/30 flex flex-col items-center text-center space-y-2">
+<span class="text-primary font-headline text-2xl font-bold">75%</span>
+<span class="text-xs font-label uppercase tracking-wider text-secondary font-bold leading-tight">Fluency</span>
+</div>
+<div class="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/30 flex flex-col items-center text-center space-y-2">
+<span class="text-primary font-headline text-2xl font-bold">82%</span>
+<span class="text-xs font-label uppercase tracking-wider text-secondary font-bold leading-tight">Relevance</span>
+</div>
+</section>
+<!-- Feedback Summary -->
+<section class="bg-surface-container-highest/40 rounded-[32px] p-8 border border-outline-variant/20">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-primary" data-icon="auto_awesome">auto_awesome</span>
+<h3 class="text-xl font-headline font-bold text-on-surface">Phản hồi từ AI</h3>
+</div>
+<p class="text-on-surface-variant leading-relaxed font-medium">
+                Bài nói của bạn có cấu trúc rõ ràng và bám sát chủ đề. Tuy nhiên, tốc độ nói đôi lúc còn bị ngắt quãng ở các câu phức. Bạn nên chú ý hơn vào việc nối âm để tăng tính tự nhiên.
+            </p>
+</section>
+<!-- Strengths & Improvements Layout -->
+<div class="grid md:grid-cols-2 gap-6">
+<!-- Strengths -->
+<section class="bg-surface-container-lowest rounded-[28px] p-8 border border-outline-variant/40 shadow-sm">
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-primary" data-icon="task_alt">task_alt</span>
+<h3 class="text-xl font-headline font-bold text-on-surface">Ưu điểm</h3>
+</div>
+<ul class="space-y-4">
+<li class="flex gap-3">
+<span class="text-primary mt-1 text-sm font-bold">●</span>
+<p class="text-on-surface-variant font-medium">Sử dụng từ vựng chuyên ngành chính xác trong ngữ cảnh.</p>
+</li>
+<li class="flex gap-3">
+<span class="text-primary mt-1 text-sm font-bold">●</span>
+<p class="text-on-surface-variant font-medium">Ngữ điệu tự nhiên, có sự nhấn nhá ở các từ khóa quan trọng.</p>
+</li>
+</ul>
+</section>
+<!-- Improvements -->
+<section class="bg-surface-container-lowest rounded-[28px] p-8 border border-outline-variant/40 shadow-sm">
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-tertiary" data-icon="error_outline">error_outline</span>
+<h3 class="text-xl font-headline font-bold text-on-surface">Cần cải thiện</h3>
+</div>
+<ul class="space-y-4">
+<li class="flex gap-3">
+<span class="text-tertiary mt-1 text-sm font-bold">●</span>
+<p class="text-on-surface-variant font-medium">Phát âm âm cuối (ending sounds) như /s/ và /t/ chưa đều.</p>
+</li>
+<li class="flex gap-3">
+<span class="text-tertiary mt-1 text-sm font-bold">●</span>
+<p class="text-on-surface-variant font-medium">Lỗi chia động từ ở các câu điều kiện loại 2.</p>
+</li>
+</ul>
+</section>
+</div>
+<!-- Sample Answer Card -->
+<section class="relative overflow-hidden bg-primary/5 rounded-[32px] p-8 border border-primary/10">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="lightbulb">lightbulb</span>
+<h3 class="text-xl font-headline font-bold text-on-surface">Câu trả lời gợi ý</h3>
+</div>
+<button class="flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-2.5 rounded-full font-label font-bold text-sm hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-lg" data-icon="play_circle" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+                    Nghe mẫu
+                </button>
+</div>
+<div class="space-y-4">
+<p class="text-on-surface italic font-medium leading-relaxed bg-surface-container-lowest/60 p-6 rounded-2xl border border-primary/5">
+                    "I personally believe that sustainable development is no longer a choice but a necessity for our generation. If governments had invested more in renewable energy decades ago, we would not be facing such a severe climate crisis today..."
+                </p>
+<p class="text-secondary text-sm font-medium">Gợi ý: Hãy tập trung vào cụm từ "no longer a choice" để nhấn mạnh ý kiến của bạn.</p>
+</div>
+<!-- Abstract Deco Background -->
+<div class="absolute -right-12 -bottom-12 w-48 h-48 bg-primary/5 rounded-full blur-3xl -z-10"></div>
+</section>
+<!-- CTAs -->
+<section class="flex flex-col sm:flex-row gap-4 pt-4">
+<button class="flex-1 bg-primary text-on-primary py-4 rounded-xl font-label font-bold text-base hover:opacity-95 active:scale-[0.98] transition-all shadow-lg shadow-primary/20">
+                Luyện tập lại
+            </button>
+<button class="flex-1 bg-surface-container-highest text-on-surface py-4 rounded-xl font-label font-bold text-base hover:bg-surface-container-high active:scale-[0.98] transition-all border border-outline-variant/50">
+                Tiếp tục bài học
+            </button>
+</section>
+</main>
+<!-- BottomNavBar from JSON -->
+<nav class="fixed bottom-0 w-full z-50 bg-[#faf5ee]/90 dark:bg-stone-950/90 backdrop-blur-md border-t border-[#d8d0c8]/60 dark:border-stone-800 shadow-[0_-4px_20px_rgba(58,48,42,0.03)] flex justify-around items-center px-4 py-3 pb-safe rounded-t-2xl">
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-600 hover:text-[#c2652a] transition-all duration-150 active:translate-y-0.5" href="#">
+<span class="material-symbols-outlined" data-icon="mic">mic</span>
+<span class="text-[11px] font-sans font-semibold tracking-wide uppercase Manrope mt-1">Practice</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-600 hover:text-[#c2652a] transition-all duration-150 active:translate-y-0.5" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="text-[11px] font-sans font-semibold tracking-wide uppercase Manrope mt-1">History</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#c2652a] dark:text-[#d4834d] font-bold transition-all duration-150 active:translate-y-0.5" href="#">
+<span class="material-symbols-outlined" data-icon="analytics" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="text-[11px] font-sans font-semibold tracking-wide uppercase Manrope mt-1">Analysis</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-600 hover:text-[#c2652a] transition-all duration-150 active:translate-y-0.5" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="text-[11px] font-sans font-semibold tracking-wide uppercase Manrope mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,107 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+env:
+  FLUTTER_VERSION: '3.27.x'
+
+jobs:
+  # ── Unit & Widget ── runs on every PR, no device needed ─────────────────────
+  unit-widget:
+    name: Unit & Widget Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate code (freezed + riverpod)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Unit & Widget Tests
+        run: |
+          flutter test test/ \
+            --coverage \
+            --reporter=github
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/lcov.info
+          flags: unit-widget
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ── Integration (Web / Chrome) ── runs on merge to main only ────────────────
+  integration-web:
+    name: Integration Tests (Chrome)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    env:
+      SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Integration Tests (headless Chrome)
+        run: |
+          flutter test integration_test/ \
+            --dart-define=SUPABASE_URL=${{ env.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ env.SUPABASE_ANON_KEY }} \
+            --dart-define=FLAVOR=staging \
+            -t lib/main_staging.dart \
+            -d chrome --headless
+
+  # ── Integration (iOS Simulator) ── runs on merge to main only ────────────────
+  integration-ios:
+    name: Integration Tests (iOS Simulator)
+    runs-on: macos-14
+    if: github.ref == 'refs/heads/main'
+    env:
+      SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Boot iOS Simulator
+        run: xcrun simctl boot "iPhone 15 Pro" || true
+
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Integration Tests (iPhone 15 Pro)
+        run: |
+          flutter test integration_test/ \
+            --dart-define=SUPABASE_URL=${{ env.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ env.SUPABASE_ANON_KEY }} \
+            --dart-define=FLAVOR=staging \
+            -t lib/main_staging.dart \
+            -d "iPhone 15 Pro"

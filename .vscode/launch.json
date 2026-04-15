@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dev (mobile)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_dev.dart",
+      "args": ["--dart-define-from-file=env.dev.json"]
+    },
+    {
+      "name": "Dev (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_dev.dart",
+      "deviceId": "chrome",
+      "args": ["--dart-define-from-file=env.dev.json"]
+    },
+    {
+      "name": "Staging",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_staging.dart",
+      "args": ["--dart-define-from-file=env.staging.json"]
+    },
+    {
+      "name": "Prod",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_prod.dart",
+      "args": ["--dart-define-from-file=env.prod.json"]
+    }
+  ]
+}

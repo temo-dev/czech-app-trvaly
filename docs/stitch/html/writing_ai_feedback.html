@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+
+<html class="light" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed-dim": "#cec6be",
+                        "secondary-fixed": "#eae2da",
+                        "surface-container-low": "#f6f0e8",
+                        "on-tertiary-fixed": "#2e1515",
+                        "on-secondary-fixed-variant": "#504840",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed-dim": "#e8a0a0",
+                        "secondary-container": "#eae2da",
+                        "on-background": "#3a302a",
+                        "tertiary-fixed": "#fce0e0",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#8c3c3c",
+                        "inverse-primary": "#f0a878",
+                        "on-surface": "#3a302a",
+                        "on-tertiary-container": "#3a2020",
+                        "surface": "#faf5ee",
+                        "surface-container": "#f2ece4",
+                        "primary-fixed-dim": "#f0a878",
+                        "outline-variant": "#d8d0c8",
+                        "inverse-on-surface": "#faf5ee",
+                        "tertiary-container": "#d47070",
+                        "surface-tint": "#c2652a",
+                        "on-tertiary-fixed-variant": "#6e3030",
+                        "error-container": "#fce4e0",
+                        "primary-container": "#e08850",
+                        "on-primary-fixed": "#401a08",
+                        "surface-variant": "#ece6dc",
+                        "secondary": "#78706a",
+                        "surface-bright": "#faf5ee",
+                        "primary": "#c2652a",
+                        "on-secondary-fixed": "#2a2420",
+                        "on-primary-container": "#fbe8d8",
+                        "outline": "#9a9088",
+                        "on-surface-variant": "#605850",
+                        "inverse-surface": "#3a302a",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#c0392b",
+                        "on-tertiary": "#ffffff",
+                        "background": "#faf5ee",
+                        "surface-dim": "#dcd6cc",
+                        "surface-container-high": "#ece6dc",
+                        "on-error": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["EB Garamond"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Manrope', sans-serif; }
+        h1, h2, h3, .serif-italic { font-family: 'EB Garamond', serif; font-style: italic; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 bg-[#faf5ee] dark:bg-stone-950 border-b border-[#d8d0c8]/60 dark:border-stone-800 shadow-[0_2px_16px_rgba(58,48,42,0.04)] h-16 flex justify-between items-center px-6">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#c2652a] dark:text-orange-400">arrow_back</span>
+<h1 class="text-xl text-[#c2652a] dark:text-orange-400">Writing Feedback</h1>
+</div>
+<span class="material-symbols-outlined text-[#c2652a] dark:text-orange-400">history</span>
+</header>
+<main class="pt-24 px-5 max-w-2xl mx-auto space-y-8">
+<!-- Score Overview Hero -->
+<section class="relative bg-surface-container-lowest rounded-[32px] p-8 overflow-hidden shadow-[0_2px_16px_rgba(58,48,42,0.04)] text-center">
+<div class="absolute -top-12 -right-12 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
+<div class="relative z-10">
+<p class="font-label uppercase tracking-widest text-[11px] text-secondary mb-4">Điểm tổng quát</p>
+<div class="flex items-center justify-center mb-6">
+<div class="relative w-40 h-40 flex items-center justify-center rounded-full border-4 border-primary/10">
+<div class="absolute inset-0 rounded-full border-t-4 border-primary" style="transform: rotate(295deg);"></div>
+<div class="text-center">
+<span class="text-6xl font-headline font-bold text-primary">82</span>
+<span class="text-xl font-headline text-secondary opacity-60">/100</span>
+</div>
+</div>
+</div>
+<div class="flex justify-center gap-8 border-t border-outline-variant/30 pt-6">
+<div class="text-center">
+<p class="text-xs text-secondary font-medium uppercase tracking-tighter">Task Fit</p>
+<p class="text-xl font-headline font-bold text-on-surface">85%</p>
+</div>
+<div class="w-px h-10 bg-outline-variant/40"></div>
+<div class="text-center">
+<p class="text-xs text-secondary font-medium uppercase tracking-tighter">Time</p>
+<p class="text-xl font-headline font-bold text-on-surface">14:20</p>
+</div>
+</div>
+</div>
+</section>
+<!-- AI Summary Card -->
+<section class="bg-primary/5 rounded-2xl p-6 border border-primary/10">
+<div class="flex items-center gap-3 mb-3">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h3 class="text-lg font-headline font-semibold text-primary">Nhận xét từ AI</h3>
+</div>
+<p class="text-on-surface-variant leading-relaxed text-sm">
+                Bài viết của bạn rất rõ ràng và bám sát yêu cầu đề bài. Tuy nhiên, bạn cần chú ý hơn về việc sử dụng các từ nối phức tạp để tăng tính mạch lạc (Coherence) và tránh lặp lại các từ vựng cơ bản.
+            </p>
+</section>
+<!-- Detailed Feedback Bento Grid -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Grammar -->
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/40">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-tertiary">spellcheck</span>
+<span class="bg-tertiary-fixed text-on-tertiary-fixed-variant text-[10px] px-2 py-0.5 rounded-full font-bold">CẦN CẢI THIỆN</span>
+</div>
+<h4 class="font-headline text-xl mb-2">Ngữ pháp</h4>
+<p class="text-xs text-on-surface-variant mb-4">Lỗi hòa hợp giữa chủ ngữ và động từ ở câu thứ 3.</p>
+<div class="bg-surface-container-lowest p-3 rounded-lg border border-tertiary/10">
+<p class="text-xs italic text-secondary line-through">He study every day...</p>
+<p class="text-xs font-bold text-tertiary">He studies every day...</p>
+</div>
+</div>
+<!-- Vocabulary -->
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/40">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary">menu_book</span>
+<span class="bg-primary-fixed text-on-primary-fixed-variant text-[10px] px-2 py-0.5 rounded-full font-bold">KHÁ TỐT</span>
+</div>
+<h4 class="font-headline text-xl mb-2">Từ vựng</h4>
+<p class="text-xs text-on-surface-variant mb-4">Bạn đã sử dụng một số cụm từ academic tốt như "substantially" và "consequently".</p>
+</div>
+<!-- Coherence - Full Width on Mobile -->
+<div class="md:col-span-2 bg-surface-container-low p-6 rounded-2xl border border-outline-variant/40">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant">join_inner</span>
+<h4 class="font-headline text-xl">Tính mạch lạc</h4>
+</div>
+<span class="text-primary font-bold text-sm">7.5/10</span>
+</div>
+<p class="text-sm text-on-surface-variant">Các đoạn văn được phân chia hợp lý, nhưng sự kết nối giữa đoạn 2 và đoạn 3 có thể mượt mà hơn bằng cách sử dụng "Furthermore" hoặc "In addition".</p>
+</div>
+</section>
+<!-- Corrected Version Highlight -->
+<section class="bg-surface-container-highest rounded-[24px] p-1 shadow-sm">
+<div class="bg-surface-container-lowest rounded-[20px] p-6 border border-primary/20">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-2xl font-headline font-bold text-on-surface italic">Bản sửa đề xuất</h3>
+<button class="text-primary text-xs font-bold flex items-center gap-1 uppercase tracking-tighter">
+<span class="material-symbols-outlined text-sm">content_copy</span> Sao chép
+                    </button>
+</div>
+<div class="prose prose-sm text-on-surface-variant leading-loose space-y-4">
+<p>
+                        In recent years, the trend of working from home has become <span class="bg-primary-fixed text-on-primary-fixed px-1 rounded">significantly</span> more popular. This shift is primarily driven by the advancement of digital communication technologies. 
+                    </p>
+<p>
+<span class="border-b-2 border-primary/30 pb-0.5">Furthermore</span>, employees often find that they are more productive when they can manage their own schedules. However, it is essential to maintain a clear boundary between professional tasks and personal life to avoid burnout.
+                    </p>
+</div>
+</div>
+</section>
+<!-- Action Buttons -->
+<section class="space-y-3 pb-8">
+<button class="w-full bg-primary text-on-primary font-bold py-4 rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all">
+                Tiếp tục bài học
+            </button>
+<button class="w-full border-2 border-outline-variant text-on-surface-variant font-bold py-4 rounded-xl active:bg-surface-container-low transition-all">
+                Viết lại
+            </button>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-[#faf5ee] dark:bg-stone-950 border-t border-[#d8d0c8]/60 dark:border-stone-800 shadow-[0_-4px_20px_rgba(58,48,42,0.06)] flex justify-around items-center px-4 py-3 pb-safe">
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-[#c2652a] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="edit_note">edit_note</span>
+<span class="font-sans text-[11px] font-medium uppercase tracking-wider">Practice</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#c2652a] dark:text-orange-400 bg-[#c2652a]/10 dark:bg-orange-400/10 rounded-xl px-4 py-1 scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="analytics" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-sans text-[11px] font-medium uppercase tracking-wider">Feedback</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-[#c2652a] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-sans text-[11px] font-medium uppercase tracking-wider">Library</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-[#c2652a] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-sans text-[11px] font-medium uppercase tracking-wider">Account</span>
+</a>
+</nav>
+</body></html>

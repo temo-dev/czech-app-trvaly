@@ -1,0 +1,31 @@
+{
+  "@@locale": "cs",
+  "appName": "Czech Exam",
+  "continueLabel": "Pokračovat",
+  "cancelLabel": "Zrušit",
+  "confirmLabel": "Potvrdit",
+  "retryLabel": "Zkusit znovu",
+  "loading": "Načítání...",
+  "errorGeneric": "Došlo k chybě. Zkuste to prosím znovu.",
+  "errorOffline": "Žádné připojení k internetu.",
+  "emptyStateDefault": "Žádná data",
+  "loginTitle": "Přihlásit se",
+  "signupTitle": "Vytvořit účet",
+  "emailLabel": "E-mail",
+  "passwordLabel": "Heslo",
+  "forgotPassword": "Zapomněli jste heslo?",
+  "dashboardTitle": "Přehled",
+  "coursesTitle": "Kurzy",
+  "practiceTitle": "Procvičování",
+  "progressTitle": "Pokrok",
+  "profileTitle": "Profil",
+  "streakLabel": "{days} dní v řadě",
+  "@streakLabel": {
+    "placeholders": {
+      "days": { "type": "int" }
+    }
+  },
+  "startMockTest": "Začít zkušební test zdarma",
+  "upgradeLabel": "Upgradovat",
+  "subscribeTitle": "Vyberte si plán"
+}
