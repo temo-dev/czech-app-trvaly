@@ -9,11 +9,15 @@ class SideRailNav extends StatelessWidget {
     required this.tabs,
     required this.selectedIndex,
     required this.onTap,
+    this.chatUnreadCount = 0,
+    this.chatTabIndex = 3,
   });
 
   final List<ShellTab> tabs;
   final int selectedIndex;
   final ValueChanged<int> onTap;
+  final int chatUnreadCount;
+  final int chatTabIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -55,15 +59,30 @@ class SideRailNav extends StatelessWidget {
           ],
         ),
       ),
-      destinations: tabs
-          .map(
-            (tab) => NavigationRailDestination(
-              icon: Icon(tab.icon),
-              selectedIcon: Icon(tab.activeIcon),
-              label: Text(tab.label),
-            ),
-          )
-          .toList(),
+      destinations: tabs.asMap().entries.map((e) {
+        final i = e.key;
+        final tab = e.value;
+        final showBadge = i == chatTabIndex && chatUnreadCount > 0;
+        return NavigationRailDestination(
+          icon: showBadge
+              ? Badge(
+                  label: Text(
+                    chatUnreadCount > 99 ? '99+' : '$chatUnreadCount',
+                  ),
+                  child: Icon(tab.icon),
+                )
+              : Icon(tab.icon),
+          selectedIcon: showBadge
+              ? Badge(
+                  label: Text(
+                    chatUnreadCount > 99 ? '99+' : '$chatUnreadCount',
+                  ),
+                  child: Icon(tab.activeIcon),
+                )
+              : Icon(tab.activeIcon),
+          label: Text(tab.label),
+        );
+      }).toList(),
     );
   }
 }

@@ -41,10 +41,11 @@ final leaderboardProvider =
     FutureProvider.autoDispose<LeaderboardData>((ref) async {
   final userId = supabase.auth.currentUser?.id;
 
-  // Weekly leaderboard
+  // Weekly leaderboard (current week only)
   final weeklyRaw = await supabase
       .from('leaderboard_weekly')
       .select()
+      .eq('week_start', _currentWeekStart())
       .order('weekly_xp', ascending: false)
       .limit(50);
 
@@ -95,3 +96,9 @@ final leaderboardProvider =
     ownAllTimeRank: ownAllTimeRank,
   );
 });
+
+String _currentWeekStart() {
+  final now = DateTime.now().toUtc();
+  final monday = now.subtract(Duration(days: now.weekday - 1));
+  return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
+}

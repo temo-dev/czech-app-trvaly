@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -212,7 +213,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
         body: {
           'lesson_id': lessonId,
           'question_id': questionId,
-          'audio_size': bytes.length,
+          'audio_b64': bytes.isNotEmpty ? base64Encode(bytes) : '',
         },
       );
       final data = response.data as Map<String, dynamic>?;

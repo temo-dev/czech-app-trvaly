@@ -46,12 +46,18 @@ abstract final class AppRoutes {
   static const writingPrompt = '/app/writing/prompt';
   static const writingFeedback = '/app/writing/feedback';
 
+  static const examCatalog = '/app/exams';
+
   static const leaderboard = '/app/leaderboard';
   static const progress = '/app/progress';
   static const notifications = '/app/notifications';
 
   static const teacherInbox = '/app/teacher/inbox';
   static const teacherThread = '/app/teacher/thread/:threadId';
+
+  // ── Chat / DM ──────────────────────────────────────────────────────────────
+  static const inbox = '/app/chat';
+  static const chatRoom = '/app/chat/:roomId';
 
   static const profile = '/app/profile';
   static const settings = '/app/profile/settings';
@@ -84,6 +90,7 @@ abstract final class AppRoutes {
       '/app/simulator/transition/$section';
   static String teacherThreadPath(String threadId) =>
       '/app/teacher/thread/$threadId';
+  static String chatRoomPath(String roomId) => '/app/chat/$roomId';
   static String unlockBonusPath(String lessonId) =>
       '/app/unlock-bonus/$lessonId';
   static String grammarPracticePath(String exerciseId) =>

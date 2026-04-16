@@ -32,6 +32,7 @@ class LandingScreen extends StatelessWidget {
                   ),
                 ),
                 title: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(
                       Icons.menu_book_rounded,
@@ -39,12 +40,15 @@ class LandingScreen extends StatelessWidget {
                       size: 22,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Trvalý Exam',
-                      style: AppTypography.titleMedium.copyWith(
-                        fontFamily: 'EBGaramond',
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.onBackground,
+                    Flexible(
+                      child: Text(
+                        'Trvalý',
+                        style: AppTypography.titleMedium.copyWith(
+                          fontFamily: 'EBGaramond',
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.onBackground,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -63,6 +67,19 @@ class LandingScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8), // 👈 đều 2 bên
+                    child: SizedBox(
+                      width: 120, // hoặc theo design
+                      child: AppButton(
+                        label: 'Đăng Nhập',
+                        icon: Icons.login,
+                        size: AppButtonSize.sm,
+                        onPressed: () => context.push(AppRoutes.login),
+                        fullWidth: false,
+                      ),
+                    ),
+                  ),
                 ],
               ),
 
@@ -77,7 +94,7 @@ class LandingScreen extends StatelessWidget {
                     _ResultPreviewSection(),
                     _LearningPathSection(),
                     _TestimonialsSection(),
-                    _GuaranteeSection(),
+                    // _GuaranteeSection(),
                     _FaqSection(),
                     const SizedBox(height: 80), // space for sticky CTA
                   ],

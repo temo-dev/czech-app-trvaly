@@ -124,13 +124,17 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
       'sections': sections.map((s) => s.toJson()).toList(),
     });
 
-    // Restore buffered answers from prefs (offline fallback)
+    // Restore buffered answers from prefs (offline fallback).
+    // If prefs are empty (new install / cleared), fall back to DB-stored answers.
     final buffered = _loadBufferedAnswers(attemptId);
+    final currentAnswers = buffered.isNotEmpty
+        ? buffered
+        : attempt.answers.map((k, v) => MapEntry(k, v.toString()));
 
     return ExamSessionState(
       attempt: attempt,
       meta: meta,
-      currentAnswers: buffered,
+      currentAnswers: currentAnswers,
     );
   }
 
@@ -206,21 +210,17 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
         'remaining_seconds': 0,
       }).eq('id', current.attempt.id);
 
-      // 2. Calculate stub scores (real scoring wired when questions are loaded)
-      final stubScores = _calculateStubScores(current);
+      // 2. Grade exam via edge function (computes scores + inserts exam_results row)
+      try {
+        await supabase.functions.invoke(
+          'grade-exam',
+          body: {'attempt_id': current.attempt.id},
+        );
+      } catch (_) {
+        // Non-fatal: result screen will show loading state until function is live
+      }
 
-      // 3. Insert result row
-      final userId = supabase.auth.currentUser?.id;
-      await supabase.from('exam_results').insert({
-        'attempt_id': current.attempt.id,
-        if (userId != null) 'user_id': userId,
-        'total_score': stubScores.$1,
-        'pass_threshold': 60,
-        'section_scores': stubScores.$2,
-        'weak_skills': stubScores.$3,
-      });
-
-      // 4. Clear offline buffer
+      // 3. Clear offline buffer
       _clearBufferedAnswers(current.attempt.id);
 
       state = AsyncData(current.copyWith(status: ExamSessionStatus.submitted));
@@ -232,46 +232,6 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
       ));
       return null;
     }
-  }
-
-  /// Stub score: answered% per section → total.
-  /// Real scoring replaces this once questions + correct answers are in DB.
-  (int, Map<String, dynamic>, List<String>) _calculateStubScores(
-      ExamSessionState s) {
-    var totalAnswered = 0;
-    var totalQuestions = 0;
-    final sectionScores = <String, dynamic>{};
-    final weakSkills = <String>[];
-
-    for (final section in s.meta.sections) {
-      final sectionTotal = section.questionCount;
-      // Count answered for this section based on index range
-      final offset = s.meta.sections
-          .takeWhile((sec) => sec.id != section.id)
-          .fold(0, (sum, sec) => sum + sec.questionCount);
-      var sectionAnswered = 0;
-      for (var i = 0; i < sectionTotal; i++) {
-        if (s.currentAnswers.containsKey('q_${offset + i}')) {
-          sectionAnswered++;
-        }
-      }
-
-      final sectionScore =
-          sectionTotal > 0 ? ((sectionAnswered / sectionTotal) * 100).round() : 0;
-      sectionScores[section.skill] = {
-        'score': sectionScore,
-        'total': 100,
-      };
-
-      totalAnswered += sectionAnswered;
-      totalQuestions += sectionTotal;
-
-      if (sectionScore < 60) weakSkills.add(section.skill);
-    }
-
-    final total =
-        totalQuestions > 0 ? ((totalAnswered / totalQuestions) * 100).round() : 0;
-    return (total, sectionScores, weakSkills);
   }
 
   // ── Timer sync ────────────────────────────────────────────────────────────

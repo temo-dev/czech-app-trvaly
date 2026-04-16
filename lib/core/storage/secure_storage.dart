@@ -23,5 +23,4 @@ class SecureStorage {
 
 abstract final class SecureStorageKeys {
   static const onboardingComplete = 'onboarding_complete';
-  static const themeModePreference = 'theme_mode';
 }

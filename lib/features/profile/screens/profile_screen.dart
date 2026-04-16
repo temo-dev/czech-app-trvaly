@@ -20,7 +20,6 @@ class ProfileScreen extends ConsumerWidget {
       backgroundColor: AppColors.surface,
       body: Column(
         children: [
-          _AppBar(),
           Expanded(
             child: userAsync.when(
               loading: () => const ShimmerCardList(count: 5),

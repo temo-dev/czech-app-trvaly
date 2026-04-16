@@ -68,17 +68,27 @@ class _MockTestResultScreenState
           onRetry: () =>
               ref.invalidate(examResultProvider(widget.attemptId)),
         ),
-        data: (result) => _ResultBody(
-          result: result,
-          isAuthenticated: _isAuthenticated,
-          onSignup: () {
-            // attemptId is stored in prefs; signup screen will link it
-            context.push(AppRoutes.signup);
-          },
-          onLogin: () => context.push(AppRoutes.login),
-          onRetake: () => context.go(AppRoutes.mockTestIntro),
-          onGoToDashboard: () => context.go(AppRoutes.dashboard),
-        ),
+        data: (result) {
+          final examIdAsync =
+              ref.watch(attemptExamIdProvider(widget.attemptId));
+          return _ResultBody(
+            result: result,
+            isAuthenticated: _isAuthenticated,
+            onSignup: () {
+              // attemptId is stored in prefs; signup screen will link it
+              context.push(AppRoutes.signup);
+            },
+            onLogin: () => context.push(AppRoutes.login),
+            onRetake: () {
+              final examId = examIdAsync.valueOrNull;
+              final path = examId != null
+                  ? '${AppRoutes.mockTestIntro}?examId=$examId'
+                  : AppRoutes.mockTestIntro;
+              context.go(path);
+            },
+            onGoToDashboard: () => context.go(AppRoutes.dashboard),
+          );
+        },
       ),
     );
   }

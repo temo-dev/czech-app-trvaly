@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:app_czech/core/supabase/supabase_config.dart';
 import 'package:app_czech/core/storage/prefs_storage.dart';
@@ -69,3 +70,19 @@ Future<void> linkPendingAttempt(String userId) async {
     // Non-fatal: attempt stays anonymous, user can still see result
   }
 }
+
+/// Fetches the examId for a given attemptId from exam_attempts.
+/// No codegen needed — uses classic Riverpod family API.
+final attemptExamIdProvider =
+    FutureProvider.autoDispose.family<String?, String>((ref, attemptId) async {
+  try {
+    final row = await supabase
+        .from('exam_attempts')
+        .select('exam_id')
+        .eq('id', attemptId)
+        .single();
+    return row['exam_id'] as String?;
+  } catch (_) {
+    return null;
+  }
+});

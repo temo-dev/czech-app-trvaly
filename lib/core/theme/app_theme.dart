@@ -12,14 +12,11 @@ import 'app_radius.dart';
 ///   - Inputs: rounded-lg (8px), white fill, focus ring primary
 ///   - Cards: rounded-xl (12px), border outlineVariant/60, shadow card
 abstract final class AppTheme {
-  static ThemeData get light => _buildTheme(Brightness.light);
-  static ThemeData get dark => _buildTheme(Brightness.dark);
+  static ThemeData get light => _buildTheme();
 
-  static ThemeData _buildTheme(Brightness brightness) {
-    final isLight = brightness == Brightness.light;
-
+  static ThemeData _buildTheme() {
     final colorScheme = ColorScheme(
-      brightness: brightness,
+      brightness: Brightness.light,
       primary: AppColors.primary,
       onPrimary: AppColors.onPrimary,
       primaryContainer: AppColors.primaryContainer,
@@ -36,34 +33,18 @@ abstract final class AppTheme {
       onError: AppColors.onError,
       errorContainer: AppColors.errorContainer,
       onErrorContainer: AppColors.onErrorContainer,
-      surface: isLight ? AppColors.surface : AppColors.surfaceDark,
-      onSurface: isLight ? AppColors.onSurface : AppColors.onSurfaceDark,
-      surfaceContainerHighest: isLight
-          ? AppColors.surfaceContainerHighest
-          : AppColors.surfaceVariantDark,
-      surfaceContainerHigh: isLight
-          ? AppColors.surfaceContainerHigh
-          : AppColors.surfaceVariantDark,
-      surfaceContainer: isLight
-          ? AppColors.surfaceContainer
-          : AppColors.surfaceVariantDark,
-      surfaceContainerLow: isLight
-          ? AppColors.surfaceContainerLow
-          : AppColors.surfaceDark,
-      surfaceContainerLowest: isLight
-          ? AppColors.surfaceContainerLowest
-          : AppColors.backgroundDark,
-      onSurfaceVariant: isLight
-          ? AppColors.onSurfaceVariant
-          : AppColors.onSurfaceMutedDark,
-      outline: isLight ? AppColors.outline : AppColors.outlineDark,
-      outlineVariant: isLight ? AppColors.outlineVariant : AppColors.borderDark,
-      inverseSurface: isLight
-          ? AppColors.inverseSurfaceLight
-          : AppColors.inverseSurfaceDark,
-      onInverseSurface: isLight
-          ? AppColors.inverseOnSurfaceLight
-          : AppColors.inverseOnSurfaceDark,
+      surface: AppColors.surface,
+      onSurface: AppColors.onSurface,
+      surfaceContainerHighest: AppColors.surfaceContainerHighest,
+      surfaceContainerHigh: AppColors.surfaceContainerHigh,
+      surfaceContainer: AppColors.surfaceContainer,
+      surfaceContainerLow: AppColors.surfaceContainerLow,
+      surfaceContainerLowest: AppColors.surfaceContainerLowest,
+      onSurfaceVariant: AppColors.onSurfaceVariant,
+      outline: AppColors.outline,
+      outlineVariant: AppColors.outlineVariant,
+      inverseSurface: AppColors.inverseSurfaceLight,
+      onInverseSurface: AppColors.inverseOnSurfaceLight,
       inversePrimary: AppColors.inversePrimary,
       scrim: AppColors.scrim,
       surfaceTint: AppColors.surfaceTint,
@@ -77,50 +58,42 @@ abstract final class AppTheme {
         displayColor: colorScheme.onSurface,
       ),
       // KEY: warm linen bg — never white
-      scaffoldBackgroundColor: isLight
-          ? AppColors.surface
-          : AppColors.backgroundDark,
+      scaffoldBackgroundColor: AppColors.surface,
 
       // ── AppBar — flat, warm, border-b ────────────────────────────────────
       appBarTheme: AppBarTheme(
-        backgroundColor: isLight ? AppColors.surface : AppColors.surfaceDark,
-        foregroundColor: isLight ? AppColors.onSurface : AppColors.onSurfaceDark,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.onSurface,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: AppTypography.titleMedium.copyWith(
-          color: isLight ? AppColors.onSurface : AppColors.onSurfaceDark,
+          color: AppColors.onSurface,
         ),
-        iconTheme: IconThemeData(
-          color: isLight ? AppColors.onSurface : AppColors.onSurfaceDark,
+        iconTheme: const IconThemeData(
+          color: AppColors.onSurface,
           size: 24,
         ),
-        shape: isLight
-            ? Border(
-                bottom: BorderSide(
-                  color: AppColors.outlineVariant.withOpacity(0.6),
-                  width: 1,
-                ),
-              )
-            : null,
+        shape: Border(
+          bottom: BorderSide(
+            color: AppColors.outlineVariant.withOpacity(0.6),
+            width: 1,
+          ),
+        ),
       ),
 
       // ── Cards — rounded-xl (12px), soft border, card shadow ──────────────
       cardTheme: CardThemeData(
-        color: isLight
-            ? AppColors.surfaceContainerLowest
-            : AppColors.surfaceDark,
+        color: AppColors.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md), // 12px
           side: BorderSide(
-            color: isLight
-                ? AppColors.outlineVariant.withOpacity(0.6)
-                : AppColors.borderDark,
+            color: AppColors.outlineVariant.withOpacity(0.6),
             width: 1,
           ),
         ),
@@ -172,20 +145,14 @@ abstract final class AppTheme {
       // ── Inputs — rounded-lg (8px), white fill, primary focus ─────────────
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isLight
-            ? AppColors.surfaceContainerLowest
-            : AppColors.surfaceVariantDark,
+        fillColor: AppColors.surfaceContainerLowest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm), // 8px
-          borderSide: BorderSide(
-            color: isLight ? AppColors.outlineVariant : AppColors.borderDark,
-          ),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: BorderSide(
-            color: isLight ? AppColors.outlineVariant : AppColors.borderDark,
-          ),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -204,9 +171,7 @@ abstract final class AppTheme {
           vertical: 14, // py-3.5
         ),
         hintStyle: AppTypography.bodyMedium.copyWith(
-          color: isLight
-              ? AppColors.onSurfaceVariant
-              : AppColors.onSurfaceMutedDark,
+          color: AppColors.onSurfaceVariant,
         ),
         labelStyle: AppTypography.bodyMedium,
         floatingLabelStyle:
@@ -215,29 +180,21 @@ abstract final class AppTheme {
 
       // ── Dividers ──────────────────────────────────────────────────────────
       dividerTheme: DividerThemeData(
-        color: isLight
-            ? AppColors.outlineVariant.withOpacity(0.4)
-            : AppColors.borderDark,
+        color: AppColors.outlineVariant.withOpacity(0.4),
         thickness: 1,
         space: 1,
       ),
 
       // ── Navigation bar (fallback — we use custom BottomNavBar widget) ─────
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor:
-            isLight ? AppColors.surface : AppColors.surfaceDark,
+        backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         indicatorColor: AppColors.primary.withOpacity(0.12),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.primary, size: 24);
           }
-          return IconThemeData(
-            color: isLight
-                ? AppColors.onSurfaceVariant
-                : AppColors.onSurfaceMutedDark,
-            size: 24,
-          );
+          return const IconThemeData(color: AppColors.onSurfaceVariant, size: 24);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -247,9 +204,7 @@ abstract final class AppTheme {
             );
           }
           return AppTypography.labelSmall.copyWith(
-            color: isLight
-                ? AppColors.onSurfaceVariant
-                : AppColors.onSurfaceMutedDark,
+            color: AppColors.onSurfaceVariant,
           );
         }),
         elevation: 0,
@@ -259,23 +214,18 @@ abstract final class AppTheme {
 
       // ── Navigation rail (web sidebar) ────────────────────────────────────
       navigationRailTheme: NavigationRailThemeData(
-        backgroundColor:
-            isLight ? AppColors.surface : AppColors.surfaceDark,
+        backgroundColor: AppColors.surface,
         selectedIconTheme:
             const IconThemeData(color: AppColors.primary, size: 24),
-        unselectedIconTheme: IconThemeData(
-          color: isLight
-              ? AppColors.onSurfaceVariant
-              : AppColors.onSurfaceMutedDark,
+        unselectedIconTheme: const IconThemeData(
+          color: AppColors.onSurfaceVariant,
           size: 24,
         ),
         indicatorColor: AppColors.primary.withOpacity(0.12),
         selectedLabelTextStyle: AppTypography.labelSmall
             .copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
         unselectedLabelTextStyle: AppTypography.labelSmall.copyWith(
-          color: isLight
-              ? AppColors.onSurfaceVariant
-              : AppColors.onSurfaceMutedDark,
+          color: AppColors.onSurfaceVariant,
         ),
         elevation: 0,
       ),
@@ -283,13 +233,9 @@ abstract final class AppTheme {
       // ── Snackbars ─────────────────────────────────────────────────────────
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isLight
-            ? AppColors.inverseSurfaceLight
-            : AppColors.inverseSurfaceDark,
+        backgroundColor: AppColors.inverseSurfaceLight,
         contentTextStyle: AppTypography.bodyMedium.copyWith(
-          color: isLight
-              ? AppColors.inverseOnSurfaceLight
-              : AppColors.inverseOnSurfaceDark,
+          color: AppColors.inverseOnSurfaceLight,
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -299,13 +245,11 @@ abstract final class AppTheme {
 
       // ── Chips — rounded-full pills ────────────────────────────────────────
       chipTheme: ChipThemeData(
-        backgroundColor: isLight
-            ? AppColors.surfaceContainer
-            : AppColors.surfaceVariantDark,
+        backgroundColor: AppColors.surfaceContainer,
         selectedColor: AppColors.primaryFixed,
         labelStyle: AppTypography.labelMedium,
         side: BorderSide(
-          color: isLight ? AppColors.outlineVariant : AppColors.borderDark,
+          color: AppColors.outlineVariant,
           width: 1,
         ),
         shape: const RoundedRectangleBorder(
@@ -321,20 +265,16 @@ abstract final class AppTheme {
         minLeadingWidth: 0,
         style: ListTileStyle.list,
         titleTextStyle: AppTypography.bodyMedium.copyWith(
-          color: isLight ? AppColors.onSurface : AppColors.onSurfaceDark,
+          color: AppColors.onSurface,
         ),
         subtitleTextStyle: AppTypography.bodySmall.copyWith(
-          color: isLight
-              ? AppColors.onSurfaceVariant
-              : AppColors.onSurfaceMutedDark,
+          color: AppColors.onSurfaceVariant,
         ),
       ),
 
       // ── Bottom sheet ──────────────────────────────────────────────────────
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: isLight
-            ? AppColors.surfaceContainerLowest
-            : AppColors.surfaceDark,
+        backgroundColor: AppColors.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
@@ -345,16 +285,14 @@ abstract final class AppTheme {
 
       // ── Dialog ───────────────────────────────────────────────────────────
       dialogTheme: DialogThemeData(
-        backgroundColor: isLight
-            ? AppColors.surfaceContainerLowest
-            : AppColors.surfaceDark,
+        backgroundColor: AppColors.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         elevation: 8,
         titleTextStyle: AppTypography.titleLarge.copyWith(
-          color: isLight ? AppColors.onSurface : AppColors.onSurfaceDark,
+          color: AppColors.onSurface,
         ),
       ),
 

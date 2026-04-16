@@ -14,11 +14,13 @@ class BottomNavItem {
     required this.icon,
     required this.activeIcon,
     required this.label,
+    this.badgeCount,
   });
 
   final IconData icon;
   final IconData activeIcon;
   final String label;
+  final int? badgeCount;
 }
 
 class AppBottomNavBar extends StatelessWidget {
@@ -71,6 +73,7 @@ class AppBottomNavBar extends StatelessWidget {
                   activeIcon: item.activeIcon,
                   label: item.label,
                   isActive: isActive,
+                  badgeCount: item.badgeCount,
                   onTap: () => onTap(i),
                 ),
               );
@@ -89,6 +92,7 @@ class _NavItem extends StatefulWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
+    this.badgeCount,
   });
 
   final IconData icon;
@@ -96,6 +100,7 @@ class _NavItem extends StatefulWidget {
   final String label;
   final bool isActive;
   final VoidCallback onTap;
+  final int? badgeCount;
 
   @override
   State<_NavItem> createState() => _NavItemState();
@@ -143,25 +148,59 @@ class _NavItemState extends State<_NavItem>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
-                padding: widget.isActive
-                    ? const EdgeInsets.symmetric(horizontal: 16, vertical: 4)
-                    : const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: widget.isActive
-                      ? AppColors.primary.withOpacity(0.10)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: Icon(
-                  widget.isActive ? widget.activeIcon : widget.icon,
-                  size: 22,
-                  color: widget.isActive
-                      ? AppColors.primary
-                      : AppColors.onSurfaceVariant,
-                ),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    padding: widget.isActive
+                        ? const EdgeInsets.symmetric(horizontal: 16, vertical: 4)
+                        : const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: widget.isActive
+                          ? AppColors.primary.withOpacity(0.10)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                    ),
+                    child: Icon(
+                      widget.isActive ? widget.activeIcon : widget.icon,
+                      size: 22,
+                      color: widget.isActive
+                          ? AppColors.primary
+                          : AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                  if (widget.badgeCount != null && widget.badgeCount! > 0)
+                    Positioned(
+                      top: -4,
+                      right: -4,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 16),
+                        height: 16,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.surfaceContainerLowest,
+                            width: 1.5,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          widget.badgeCount! > 99
+                              ? '99+'
+                              : '${widget.badgeCount}',
+                          style: const TextStyle(
+                            color: AppColors.onPrimary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 2),
               AnimatedDefaultTextStyle(
@@ -201,9 +240,9 @@ const List<BottomNavItem> kDefaultNavItems = [
     label: 'Luyện đề',
   ),
   BottomNavItem(
-    icon: Icons.leaderboard_outlined,
-    activeIcon: Icons.leaderboard_rounded,
-    label: 'Xếp hạng',
+    icon: Icons.chat_bubble_outline_rounded,
+    activeIcon: Icons.chat_bubble_rounded,
+    label: 'Tin nhắn',
   ),
   BottomNavItem(
     icon: Icons.person_outline_rounded,

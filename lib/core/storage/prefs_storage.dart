@@ -32,11 +32,6 @@ class PrefsStorage {
   Future<void> setLocale(String locale) =>
       _prefs.setString(PrefsKeys.locale, locale);
 
-  bool get darkMode => _prefs.getBool(PrefsKeys.darkMode) ?? false;
-
-  Future<void> setDarkMode(bool value) =>
-      _prefs.setBool(PrefsKeys.darkMode, value);
-
   String? get pendingAttemptId =>
       _prefs.getString(PrefsKeys.pendingAttemptId);
 
@@ -52,6 +47,5 @@ class PrefsStorage {
 abstract final class PrefsKeys {
   static const onboardingComplete = 'onboarding_complete';
   static const locale = 'locale';
-  static const darkMode = 'dark_mode';
   static const pendingAttemptId = 'pending_attempt_id';
 }

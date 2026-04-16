@@ -204,10 +204,13 @@ create table if not exists exercises (
   created_at   timestamptz not null default now()
 );
 
--- Add FK constraint now that exercises table exists
-alter table lesson_blocks
-  add constraint fk_lesson_blocks_exercise
-  foreign key (exercise_id) references exercises(id) on delete set null;
+-- Add FK constraint now that exercises table exists (idempotent)
+do $$ begin
+  alter table lesson_blocks
+    add constraint fk_lesson_blocks_exercise
+    foreign key (exercise_id) references exercises(id) on delete set null;
+exception when duplicate_object then null;
+end $$;
 
 create table if not exists exercise_attempts (
   id              uuid primary key default uuid_generate_v4(),

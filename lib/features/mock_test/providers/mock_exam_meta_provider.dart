@@ -50,6 +50,44 @@ Future<ExamMeta> mockExamMeta(MockExamMetaRef ref) async {
   });
 }
 
+/// Fetches a specific exam by ID (or first active if examId is null),
+/// including its sections. Used by MockTestIntroScreen when launched
+/// from the authenticated ExamCatalogScreen with a known examId.
+@riverpod
+Future<ExamMeta> examMeta(ExamMetaRef ref, String? examId) async {
+  final Map<String, dynamic> examData;
+  if (examId != null) {
+    examData = await supabase
+        .from('exams')
+        .select()
+        .eq('id', examId)
+        .single();
+  } else {
+    examData = await supabase
+        .from('exams')
+        .select()
+        .eq('is_active', true)
+        .order('created_at')
+        .limit(1)
+        .single();
+  }
+
+  final sectionsData = await supabase
+      .from('exam_sections')
+      .select()
+      .eq('exam_id', examData['id'] as String)
+      .order('order_index');
+
+  final sections = (sectionsData as List)
+      .map((s) => SectionMeta.fromJson(_mapSectionJson(s as Map<String, dynamic>)))
+      .toList();
+
+  return ExamMeta.fromJson({
+    ..._mapExamJson(examData),
+    'sections': sections.map((s) => s.toJson()).toList(),
+  });
+}
+
 /// Creates an exam attempt row and returns its ID.
 /// Called when the user taps "Bắt đầu" on MockTestIntroScreen.
 @riverpod

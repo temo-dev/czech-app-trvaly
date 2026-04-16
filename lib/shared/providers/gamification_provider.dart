@@ -26,16 +26,20 @@ Future<void> awardXp(WidgetRef ref, int xpAmount) async {
       'p_amount': xpAmount,
     });
   } catch (_) {
-    // Fallback: fetch current XP and add
+    // Fallback: fetch current XP and add (must update weekly_xp too so the
+    // leaderboard trigger fires)
     try {
       final row = await supabase
           .from('profiles')
-          .select('total_xp')
+          .select('total_xp, weekly_xp')
           .eq('id', userId)
           .single();
-      final existing = (row as Map)['total_xp'] as int? ?? 0;
+      final m = row as Map;
+      final existingTotal = m['total_xp'] as int? ?? 0;
+      final existingWeekly = m['weekly_xp'] as int? ?? 0;
       await supabase.from('profiles').update({
-        'total_xp': existing + xpAmount,
+        'total_xp': existingTotal + xpAmount,
+        'weekly_xp': existingWeekly + xpAmount,
       }).eq('id', userId);
     } catch (_) {
       // Silently ignore — the optimistic update already reflected locally

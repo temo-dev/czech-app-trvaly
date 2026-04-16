@@ -24,7 +24,6 @@ class CourseDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: _CourseAppBar(courseAsync: courseAsync),
       body: courseAsync.when(
         loading: () => const ShimmerBentoGrid(),
         error: (e, _) => ErrorState(
@@ -32,66 +31,6 @@ class CourseDetailScreen extends ConsumerWidget {
           onRetry: () => ref.refresh(courseDetailProvider(courseId)),
         ),
         data: (course) => _CourseBody(course: course, courseId: courseId),
-      ),
-    );
-  }
-}
-
-class _CourseAppBar extends ConsumerWidget implements PreferredSizeWidget {
-  const _CourseAppBar({required this.courseAsync});
-  final AsyncValue<CourseDetail> courseAsync;
-
-  @override
-  Size get preferredSize => const Size.fromHeight(64);
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.outlineVariant.withOpacity(0.6),
-          ),
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.menu_rounded),
-                color: AppColors.primary,
-                onPressed: () {},
-              ),
-              const SizedBox(width: 4),
-              Text(
-                courseAsync.maybeWhen(
-                  data: (c) => c.title,
-                  orElse: () => 'Trvalý Pobyt Prep',
-                ),
-                style: AppTypography.headlineSmall.copyWith(fontSize: 20),
-              ),
-              const Spacer(),
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerHigh,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.outlineVariant),
-                ),
-                child: const Icon(
-                  Icons.person_rounded,
-                  size: 22,
-                  color: AppColors.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

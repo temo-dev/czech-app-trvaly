@@ -12,6 +12,7 @@ import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import 'package:app_czech/features/dashboard/models/dashboard_models.dart';
 import 'package:app_czech/features/dashboard/providers/dashboard_provider.dart';
 import 'package:app_czech/features/dashboard/widgets/recommended_lesson_card.dart';
+import 'package:app_czech/features/mock_test/providers/exam_result_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -25,7 +26,6 @@ class DashboardScreen extends ConsumerWidget {
       backgroundColor: AppColors.surface,
       body: Column(
         children: [
-          const _DashboardAppBar(),
           Expanded(
             child: dashAsync.when(
               loading: () => const _DashboardSkeleton(),
@@ -88,13 +88,18 @@ class _DashboardAppBar extends StatelessWidget {
 
 // ── Body ──────────────────────────────────────────────────────────────────────
 
-class _DashboardBody extends StatelessWidget {
+class _DashboardBody extends ConsumerWidget {
   const _DashboardBody({required this.data});
 
   final DashboardData data;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Pre-load examId so it's ready when user taps "Thi thử lại"
+    if (data.latestResult?.attemptId != null) {
+      ref.watch(attemptExamIdProvider(data.latestResult!.attemptId));
+    }
+
     return RefreshIndicator(
       onRefresh: () async {},
       child: SingleChildScrollView(
@@ -194,7 +199,20 @@ class _DashboardBody extends StatelessWidget {
                       Expanded(
                         child: _LatestTestCard(
                           score: data.latestResult?.totalScore,
-                          onTap: () {},
+                          onTap: () {
+                            final attemptId = data.latestResult?.attemptId;
+                            if (attemptId != null) {
+                              final examId = ref
+                                  .read(attemptExamIdProvider(attemptId))
+                                  .valueOrNull;
+                              final path = examId != null
+                                  ? '${AppRoutes.mockTestIntro}?examId=$examId'
+                                  : AppRoutes.mockTestIntro;
+                              context.push(path);
+                            } else {
+                              context.push(AppRoutes.mockTestIntro);
+                            }
+                          },
                         ),
                       ),
                     ],
@@ -223,6 +241,7 @@ class _DashboardBody extends StatelessWidget {
                           value: data.ownRank != null
                               ? '#${data.ownRank}'
                               : '--',
+                          onTap: () => context.push(AppRoutes.leaderboard),
                         ),
                       ),
                     ],
@@ -412,6 +431,7 @@ class _QuickStatCard extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.onTap,
   });
 
   final Color iconBg;
@@ -419,49 +439,53 @@ class _QuickStatCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.onSecond,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.onSecond,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
             ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppTypography.labelUppercase.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  fontSize: 9,
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTypography.labelUppercase.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 9,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: AppTypography.titleMedium.copyWith(
-                  color: AppColors.onBackground,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 18,
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: AppTypography.titleMedium.copyWith(
+                    color: AppColors.onBackground,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

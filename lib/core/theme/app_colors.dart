@@ -60,18 +60,6 @@ abstract final class AppColors {
   static const outlineLight       = Color(0xFF9A9088);
   static const borderLight        = Color(0xFFD8D0C8);
 
-  // ── Dark surfaces (warm-shifted) ──────────────────────────────────────────
-  static const backgroundDark     = Color(0xFF18140F);
-  static const surfaceDark        = Color(0xFF221C16);
-  static const surfaceVariantDark = Color(0xFF2A2420);
-  static const borderDark         = Color(0xFF3A3028);
-  static const outlineDark        = Color(0xFF6A6058);
-  static const onBackgroundDark   = Color(0xFFF0EBE2);
-  static const onSurfaceDark      = Color(0xFFE8E0D8);
-  static const onSurfaceMutedDark = Color(0xFF9A9088);
-  static const inverseSurfaceDark = Color(0xFFF0EBE2);
-  static const inverseOnSurfaceDark = Color(0xFF18140F);
-
   // ── Semantic ──────────────────────────────────────────────────────────────
   static const error              = Color(0xFFC0392B);
   static const onError            = Color(0xFFFFFFFF);

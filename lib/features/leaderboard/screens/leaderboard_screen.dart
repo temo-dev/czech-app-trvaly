@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:app_czech/core/router/app_routes.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/features/leaderboard/providers/leaderboard_provider.dart';
+import 'package:app_czech/features/leaderboard/widgets/leaderboard_user_sheet.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 
@@ -20,7 +22,7 @@ class LeaderboardScreen extends ConsumerWidget {
       backgroundColor: AppColors.surface,
       body: Column(
         children: [
-          _AppBar(),
+          // _AppBar(),
           Expanded(
             child: async.when(
               loading: () => const ShimmerCardList(count: 5),
@@ -46,7 +48,9 @@ class _AppBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(
-          bottom: BorderSide(color: AppColors.outlineVariant.withOpacity(0.6)),
+          bottom: BorderSide(
+            color: AppColors.outlineVariant.withOpacity(0.6),
+          ),
         ),
         boxShadow: [
           BoxShadow(
@@ -62,12 +66,22 @@ class _AppBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Row(
             children: [
-              GestureDetector(
-                onTap: () => Navigator.of(context).maybePop(),
-                child: const Icon(Icons.arrow_back_rounded,
-                    color: AppColors.primary, size: 24),
+              IconButton(
+                onPressed: () {
+                  debugPrint('canPop: ${context.canPop()}');
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(AppRoutes.dashboard);
+                  }
+                },
+                icon: const Icon(
+                  Icons.arrow_back_rounded,
+                  color: AppColors.primary,
+                  size: 24,
+                ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 8),
               Text(
                 'Global Leaderboard',
                 style: AppTypography.headlineSmall.copyWith(fontSize: 22),
@@ -75,15 +89,20 @@ class _AppBar extends StatelessWidget {
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.timer_rounded,
-                        color: AppColors.primary, size: 14),
+                    const Icon(
+                      Icons.timer_rounded,
+                      color: AppColors.primary,
+                      size: 14,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'RESETS IN 2D 14H',
@@ -383,7 +402,9 @@ class _PodiumSlot extends StatelessWidget {
   Widget build(BuildContext context) {
     final avatarSize = isFirst ? 48.0 : 32.0;
 
-    return Column(
+    return GestureDetector(
+      onTap: () => LeaderboardUserSheet.show(context, entry),
+      child: Column(
       children: [
         if (isFirst)
           const Icon(Icons.workspace_premium_rounded,
@@ -441,6 +462,7 @@ class _PodiumSlot extends StatelessWidget {
           ),
         ),
       ],
+    ),
     );
   }
 
@@ -462,7 +484,9 @@ class _EntryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isYou = entry.isCurrentUser;
 
-    return Container(
+    return GestureDetector(
+      onTap: isYou ? null : () => LeaderboardUserSheet.show(context, entry),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: isYou ? AppColors.primary.withOpacity(0.05) : AppColors.surfaceContainerLow,
@@ -590,6 +614,7 @@ class _EntryTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

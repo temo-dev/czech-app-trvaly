@@ -26,6 +26,7 @@ import 'package:app_czech/features/exercise/screens/practice_screen.dart';
 import 'package:app_czech/features/simulator/screens/simulator_intro_screen.dart';
 import 'package:app_czech/features/simulator/screens/simulator_question_screen.dart';
 import 'package:app_czech/features/simulator/screens/simulator_result_screen.dart';
+import 'package:app_czech/features/mock_test/screens/exam_catalog_screen.dart';
 import 'package:app_czech/features/mock_test/screens/mock_test_intro_screen.dart';
 import 'package:app_czech/features/mock_test/screens/mock_test_question_screen.dart';
 import 'package:app_czech/features/mock_test/screens/mock_test_result_screen.dart';
@@ -39,6 +40,8 @@ import 'package:app_czech/features/progress/screens/progress_screen.dart';
 import 'package:app_czech/features/notifications/screens/notifications_screen.dart';
 import 'package:app_czech/features/teacher_feedback/screens/teacher_inbox_screen.dart';
 import 'package:app_czech/features/teacher_feedback/screens/teacher_thread_screen.dart';
+import 'package:app_czech/features/chat/screens/inbox_screen.dart';
+import 'package:app_czech/features/chat/screens/chat_room_screen.dart';
 import 'package:app_czech/features/profile/screens/profile_screen.dart';
 import 'package:app_czech/features/profile/screens/settings_screen.dart';
 import 'package:app_czech/features/subscription/screens/subscription_screen.dart';
@@ -118,8 +121,11 @@ GoRouter appRouter(Ref ref) {
 
       // ── Free mock test (no auth required) ─────────────────────────────────
       GoRoute(
-          path: AppRoutes.mockTestIntro,
-          builder: (_, __) => const MockTestIntroScreen()),
+        path: AppRoutes.mockTestIntro,
+        builder: (_, state) => MockTestIntroScreen(
+          examId: state.uri.queryParameters['examId'],
+        ),
+      ),
       GoRoute(
         path: AppRoutes.mockTestQuestion,
         builder: (_, state) => MockTestQuestionScreen(
@@ -171,6 +177,12 @@ GoRouter appRouter(Ref ref) {
                 ],
               ),
             ],
+          ),
+
+          // Exam catalog (Luyện đề tab)
+          GoRoute(
+            path: AppRoutes.examCatalog,
+            builder: (_, __) => const ExamCatalogScreen(),
           ),
 
           // Single-exercise practice (from lesson player)
@@ -244,6 +256,25 @@ GoRouter appRouter(Ref ref) {
           GoRoute(
               path: AppRoutes.notifications,
               builder: (_, __) => const NotificationsScreen()),
+
+          // Chat / DM
+          GoRoute(
+            path: AppRoutes.inbox,
+            builder: (_, __) => const InboxScreen(),
+            routes: [
+              GoRoute(
+                path: ':roomId',
+                builder: (_, state) {
+                  final extra = state.extra as Map<String, dynamic>?;
+                  return ChatRoomScreen(
+                    roomId: state.pathParameters['roomId']!,
+                    peerName: extra?['peerName'] as String?,
+                    peerAvatarUrl: extra?['peerAvatarUrl'] as String?,
+                  );
+                },
+              ),
+            ],
+          ),
 
           // Teacher feedback
           GoRoute(

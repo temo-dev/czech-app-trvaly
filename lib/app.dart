@@ -18,8 +18,7 @@ class App extends ConsumerWidget {
       title: 'Czech Exam',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light,
       routerConfig: router,
       localizationsDelegates: const [
         AppLocalizations.delegate,

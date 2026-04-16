@@ -12,11 +12,14 @@ import '../models/exam_meta.dart';
 import '../providers/mock_exam_meta_provider.dart';
 
 class MockTestIntroScreen extends ConsumerWidget {
-  const MockTestIntroScreen({super.key});
+  const MockTestIntroScreen({super.key, this.examId});
+
+  /// Specific exam to load. Null → first active exam (guest path from landing).
+  final String? examId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final metaAsync = ref.watch(mockExamMetaProvider);
+    final metaAsync = ref.watch(examMetaProvider(examId));
     final creatorState = ref.watch(examAttemptCreatorProvider);
 
     return Scaffold(
@@ -46,7 +49,7 @@ class MockTestIntroScreen extends ConsumerWidget {
         loading: () => const _IntroSkeleton(),
         error: (e, _) => ErrorState(
           message: 'Lỗi: $e',
-          onRetry: () => ref.invalidate(mockExamMetaProvider),
+          onRetry: () => ref.invalidate(examMetaProvider(examId)),
         ),
         data: (meta) => _IntroBody(
           meta: meta,

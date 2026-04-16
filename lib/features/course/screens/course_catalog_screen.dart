@@ -21,18 +21,6 @@ class CourseCatalogScreen extends ConsumerWidget {
 
     return Scaffold(
       primary: false,
-      appBar: AppBar(
-        primary: false,
-        centerTitle: true,
-        title: Text(
-          'CzechGo',
-          style: AppTypography.headlineSmall.copyWith(
-            color: AppColors.primary,
-            fontSize: 30,
-            fontStyle: FontStyle.normal,
-          ),
-        ),
-      ),
       body: coursesAsync.when(
         loading: () => const CourseSkeleton(),
         error: (e, _) => Center(
