@@ -5,6 +5,7 @@ import 'package:app_czech/core/router/app_routes.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/features/course/providers/course_providers.dart';
 import 'package:app_czech/features/writing_ai/providers/writing_provider.dart';
 import 'package:app_czech/shared/widgets/circular_progress_ring.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
@@ -18,12 +19,24 @@ class WritingFeedbackScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     final attemptId = extra?['attemptId'] as String?;
+    final lessonId = extra?['lessonId'] as String? ?? '';
+    final lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
 
     if (attemptId == null) {
       return _buildShell(context, child: _ScoringInProgress());
     }
 
     final state = ref.watch(writingSessionProvider);
+
+    // Mark block complete when AI scoring finishes
+    ref.listen(writingSessionProvider, (_, next) {
+      if (next.status == WritingFeedbackStatus.completed &&
+          lessonId.isNotEmpty &&
+          lessonBlockId.isNotEmpty) {
+        markBlockComplete(lessonId: lessonId, lessonBlockId: lessonBlockId);
+        ref.invalidate(lessonDetailProvider(lessonId));
+      }
+    });
 
     return _buildShell(
       context,

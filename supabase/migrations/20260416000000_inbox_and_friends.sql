@@ -62,6 +62,11 @@ CREATE INDEX IF NOT EXISTS idx_dm_members_user  ON public.dm_members (user_id);
 -- ══════════════════════════════════════════════════════════
 ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "view own friendships"       ON public.friendships;
+DROP POLICY IF EXISTS "send friend request"         ON public.friendships;
+DROP POLICY IF EXISTS "update friendship status"    ON public.friendships;
+DROP POLICY IF EXISTS "delete own friendship"       ON public.friendships;
+
 CREATE POLICY "view own friendships"
   ON public.friendships FOR SELECT
   USING (requester_id = auth.uid() OR addressee_id = auth.uid());
@@ -85,6 +90,12 @@ CREATE POLICY "delete own friendship"
 ALTER TABLE public.dm_rooms    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dm_members  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dm_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "members view dm rooms"         ON public.dm_rooms;
+DROP POLICY IF EXISTS "members view dm_members"       ON public.dm_members;
+DROP POLICY IF EXISTS "members update own last_read_at" ON public.dm_members;
+DROP POLICY IF EXISTS "members read messages"          ON public.dm_messages;
+DROP POLICY IF EXISTS "members send messages"          ON public.dm_messages;
 
 CREATE POLICY "members view dm rooms"
   ON public.dm_rooms FOR SELECT
@@ -125,9 +136,15 @@ CREATE POLICY "members send messages"
 -- ══════════════════════════════════════════════════════════
 -- Realtime
 -- ══════════════════════════════════════════════════════════
-ALTER PUBLICATION supabase_realtime ADD TABLE public.dm_messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.dm_members;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.friendships;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.dm_messages;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.dm_members;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.friendships;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ══════════════════════════════════════════════════════════
 -- RPC: find_or_create_dm

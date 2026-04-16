@@ -121,13 +121,14 @@ class _ModuleBody extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Description
-              Text(
-                'Học cách chào hỏi, giới thiệu bản thân và các tình huống giao tiếp cơ bản tại Czechia.',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  height: 1.7,
+              if (module.description != null && module.description!.isNotEmpty)
+                Text(
+                  module.description!,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    height: 1.7,
+                  ),
                 ),
-              ),
               const SizedBox(height: 24),
 
               // Progress card
@@ -418,7 +419,7 @@ class _LessonCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '15 min',
+                          '${lesson.durationMinutes} phút',
                           style: AppTypography.labelSmall.copyWith(
                             color: AppColors.onSurfaceVariant
                                 .withOpacity(_isLocked ? 0.7 : 1),

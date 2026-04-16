@@ -59,7 +59,7 @@ class _CourseBody extends StatelessWidget {
               const SizedBox(height: 24),
               _ModuleList(course: course, courseId: courseId),
               const SizedBox(height: 80),
-              _InstructorSection(),
+              _InstructorSection(course: course),
               const SizedBox(height: 80),
             ],
           ),
@@ -221,7 +221,7 @@ class _ProgressCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${30 - (course.overallProgress * 30).round()} ngày còn lại',
+                '${(course.durationDays - course.overallProgress * course.durationDays).round()} ngày còn lại',
                 style: AppTypography.labelSmall.copyWith(
                   color: AppColors.onSurfaceVariant,
                   fontWeight: FontWeight.w700,
@@ -273,7 +273,7 @@ class _BentoGrid extends StatelessWidget {
           const SizedBox(width: 24),
           SizedBox(
             width: 200,
-            child: _GoalCard(),
+            child: _GoalCard(course: course),
           ),
         ],
       );
@@ -283,7 +283,7 @@ class _BentoGrid extends StatelessWidget {
       children: [
         _CtaCard(activeModule: active, courseId: courseId),
         const SizedBox(height: 16),
-        _GoalCard(),
+        _GoalCard(course: course),
       ],
     );
   }
@@ -413,6 +413,9 @@ class _CtaCard extends StatelessWidget {
 }
 
 class _GoalCard extends StatelessWidget {
+  const _GoalCard({required this.course});
+  final CourseDetail course;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -447,7 +450,7 @@ class _GoalCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Hoàn thành 2 bài học & 1 bài kiểm tra',
+            'Học mỗi ngày để hoàn thành trong ${course.durationDays} ngày',
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.onSurfaceVariant,
             ),
@@ -854,8 +857,14 @@ class _LessonTile extends StatelessWidget {
 // ── Instructor Section ────────────────────────────────────────────────────────
 
 class _InstructorSection extends StatelessWidget {
+  const _InstructorSection({required this.course});
+  final CourseDetail course;
+
   @override
   Widget build(BuildContext context) {
+    if (course.instructorName == null && course.instructorBio == null) {
+      return const SizedBox.shrink();
+    }
     final isWide = MediaQuery.sizeOf(context).width >= 600;
 
     return Column(
@@ -866,17 +875,17 @@ class _InstructorSection extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _InstructorAvatar(),
+              const _InstructorAvatar(),
               const SizedBox(width: 40),
-              Expanded(child: _InstructorBio()),
+              Expanded(child: _InstructorBio(course: course)),
             ],
           )
         else
           Column(
             children: [
-              _InstructorAvatar(),
+              const _InstructorAvatar(),
               const SizedBox(height: 24),
-              _InstructorBio(),
+              _InstructorBio(course: course),
             ],
           ),
       ],
@@ -885,6 +894,8 @@ class _InstructorSection extends StatelessWidget {
 }
 
 class _InstructorAvatar extends StatelessWidget {
+  const _InstructorAvatar();
+
   @override
   Widget build(BuildContext context) {
     return Transform.rotate(
@@ -915,47 +926,28 @@ class _InstructorAvatar extends StatelessWidget {
 }
 
 class _InstructorBio extends StatelessWidget {
+  const _InstructorBio({required this.course});
+  final CourseDetail course;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Giảng viên: Hana Nguyen',
+          'Giảng viên: ${course.instructorName ?? 'Giảng viên'}',
           style: AppTypography.headlineMedium.copyWith(fontSize: 24),
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Chuyên gia đào tạo ngôn ngữ với hơn 10 năm kinh nghiệm luyện thi Trvalý. Đã giúp hơn 5,000 học viên đạt chứng chỉ A2 và B1 thành công.',
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.onSurfaceVariant,
-            height: 1.6,
+        if (course.instructorBio != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            course.instructorBio!,
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.onSurfaceVariant,
+              height: 1.6,
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            TextButton(
-              onPressed: () {},
-              child: Text(
-                'HỎI ĐÁP GIẢNG VIÊN',
-                style: AppTypography.labelUppercase.copyWith(
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: () {},
-              child: Text(
-                'TÀI LIỆU BỔ TRỢ',
-                style: AppTypography.labelUppercase.copyWith(
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-          ],
-        ),
+        ],
       ],
     );
   }

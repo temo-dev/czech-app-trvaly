@@ -247,7 +247,7 @@ class _HeroCard extends StatelessWidget {
                       size: 16, color: AppColors.onSurfaceVariant),
                   const SizedBox(width: 4),
                   Text(
-                    '15 phút',
+                    '${detail.lesson.durationMinutes} phút',
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.onSurfaceVariant,
                     ),
@@ -435,20 +435,42 @@ class _BlockCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        // Navigate to the appropriate practice screen
+        // Speaking and writing blocks route to AI screens with exercise context
+        if (block.type == BlockType.speaking) {
+          context.push(
+            AppRoutes.speakingPrompt,
+            extra: {
+              'prompt': block.prompt ?? '',
+              'questionId': block.exerciseId,
+              'lessonId': block.lessonId,
+              'lessonBlockId': block.id,
+            },
+          );
+          return;
+        }
+        if (block.type == BlockType.writing) {
+          context.push(
+            AppRoutes.writingPrompt,
+            extra: {
+              'prompt': block.prompt ?? '',
+              'questionId': block.exerciseId,
+              'lessonId': block.lessonId,
+              'lessonBlockId': block.id,
+            },
+          );
+          return;
+        }
+        // All other types go to PracticeScreen
         final route = switch (block.type) {
           BlockType.grammar =>
             AppRoutes.grammarPracticePath(block.exerciseId),
           BlockType.listening =>
             AppRoutes.listeningPracticePath(block.exerciseId),
-          BlockType.speaking =>
-            AppRoutes.speakingPracticePath(block.exerciseId),
           BlockType.reading =>
             AppRoutes.readingPracticePath(block.exerciseId),
-          BlockType.writing =>
-            AppRoutes.writingPracticePath(block.exerciseId),
           BlockType.vocab =>
             AppRoutes.flashcardPracticePath(block.exerciseId),
+          _ => AppRoutes.practiceExercisePath(block.exerciseId),
         };
         context.push(route);
       },
@@ -584,12 +606,12 @@ class _BonusSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Daily Dialogue: The Bistro',
+                        'Bài tập nâng cao',
                         style: AppTypography.titleSmall.copyWith(fontSize: 17),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Interactive roleplay exercise',
+                        'Nội dung luyện tập chuyên sâu mô phỏng tình huống thực tế',
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.onSurfaceVariant,
                         ),

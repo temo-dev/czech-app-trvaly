@@ -22,6 +22,9 @@ class CourseDetail {
     required this.modules,
     required this.overallProgress,
     this.thumbnailUrl,
+    this.instructorName,
+    this.instructorBio,
+    this.durationDays = 30,
   });
 
   final String id;
@@ -33,6 +36,9 @@ class CourseDetail {
   final List<ModuleSummary> modules;
   final double overallProgress; // 0.0 – 1.0
   final String? thumbnailUrl;
+  final String? instructorName;
+  final String? instructorBio;
+  final int durationDays;
 }
 
 // ── Module summary (card in CourseOverviewScreen) ─────────────────────────────
@@ -46,6 +52,7 @@ class ModuleSummary {
     required this.lessonCount,
     required this.completedCount,
     this.isLocked = false,
+    this.description,
   });
 
   final String id;
@@ -55,6 +62,7 @@ class ModuleSummary {
   final int lessonCount;
   final int completedCount;
   final bool isLocked;
+  final String? description;
 
   double get progressFraction =>
       lessonCount > 0 ? completedCount / lessonCount : 0;
@@ -83,6 +91,7 @@ class LessonSummary {
     required this.title,
     required this.orderIndex,
     required this.status,
+    this.durationMinutes = 15,
   });
 
   final String id;
@@ -90,6 +99,7 @@ class LessonSummary {
   final String title;
   final int orderIndex;
   final LessonStatus status;
+  final int durationMinutes;
 }
 
 // ── Lesson detail (LessonPlayerScreen) ───────────────────────────────────────
@@ -131,6 +141,8 @@ class LessonInfo {
     required this.title,
     required this.skill,
     required this.orderIndex,
+    this.description,
+    this.durationMinutes = 15,
   });
 
   final String id;
@@ -138,6 +150,8 @@ class LessonInfo {
   final String title;
   final String skill;
   final int orderIndex;
+  final String? description;
+  final int durationMinutes;
 }
 
 // ── Lesson block (card in LessonPlayerScreen) ─────────────────────────────────
@@ -150,6 +164,7 @@ class LessonBlock {
     required this.exerciseId,
     required this.orderIndex,
     this.status = BlockStatus.pending,
+    this.prompt,
   });
 
   final String id;
@@ -158,6 +173,8 @@ class LessonBlock {
   final String exerciseId;
   final int orderIndex;
   final BlockStatus status;
+  /// Prompt text fetched from exercises.content_json — used for speaking/writing AI screens.
+  final String? prompt;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

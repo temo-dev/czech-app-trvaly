@@ -26,6 +26,7 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
   String _prompt = '';
   String _questionId = '';
   String _lessonId = '';
+  String _lessonBlockId = '';
 
   static const _minWords = 30;
   static const _maxWords = 250;
@@ -38,6 +39,7 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
     _prompt = extra?['prompt'] as String? ?? '';
     _questionId = extra?['questionId'] as String? ?? '';
     _lessonId = extra?['lessonId'] as String? ?? '';
+    _lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
   }
 
   @override
@@ -67,6 +69,7 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
           extra: {
             'attemptId': next.attemptId,
             'lessonId': _lessonId,
+            'lessonBlockId': _lessonBlockId,
             'originalText': _controller.text,
           },
         );

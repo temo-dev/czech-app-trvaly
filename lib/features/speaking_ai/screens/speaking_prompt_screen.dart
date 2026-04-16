@@ -18,6 +18,7 @@ class SpeakingPromptScreen extends StatelessWidget {
     final prompt = extra?['prompt'] as String? ?? '';
     final questionId = extra?['questionId'] as String? ?? '';
     final lessonId = extra?['lessonId'] as String? ?? '';
+    final lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
 
     final cs = Theme.of(context).colorScheme;
 
@@ -130,6 +131,7 @@ class SpeakingPromptScreen extends StatelessWidget {
                       'prompt': prompt,
                       'questionId': questionId,
                       'lessonId': lessonId,
+                      'lessonBlockId': lessonBlockId,
                     },
                   ),
                 ),

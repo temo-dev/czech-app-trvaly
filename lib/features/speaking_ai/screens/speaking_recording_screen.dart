@@ -26,6 +26,7 @@ class _SpeakingRecordingScreenState
   String _prompt = '';
   String _questionId = '';
   String _lessonId = '';
+  String _lessonBlockId = '';
 
   @override
   void initState() {
@@ -44,6 +45,7 @@ class _SpeakingRecordingScreenState
     _prompt = extra?['prompt'] as String? ?? '';
     _questionId = extra?['questionId'] as String? ?? '';
     _lessonId = extra?['lessonId'] as String? ?? '';
+    _lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
   }
 
   @override
@@ -76,6 +78,7 @@ class _SpeakingRecordingScreenState
           extra: {
             'attemptId': next.attemptId,
             'lessonId': _lessonId,
+            'lessonBlockId': _lessonBlockId,
           },
         );
       }

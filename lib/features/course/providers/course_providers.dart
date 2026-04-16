@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:app_czech/core/supabase/supabase_config.dart';
 import 'package:app_czech/features/course/models/course_models.dart';
+import 'package:app_czech/shared/providers/auth_provider.dart';
 
 // ── Course detail ─────────────────────────────────────────────────────────────
 
@@ -93,6 +94,7 @@ final courseDetailProvider = FutureProvider.autoDispose
       lessonCount: lessonCountPerModule[mId] ?? 0,
       completedCount: completedCountPerModule[mId] ?? 0,
       isLocked: mm['is_locked'] as bool? ?? false,
+      description: mm['description'] as String?,
     );
   }).toList();
 
@@ -109,6 +111,9 @@ final courseDetailProvider = FutureProvider.autoDispose
     thumbnailUrl: course['thumbnail_url'] as String?,
     modules: modules,
     overallProgress: total > 0 ? done / total : 0,
+    instructorName: course['instructor_name'] as String?,
+    instructorBio: course['instructor_bio'] as String?,
+    durationDays: course['duration_days'] as int? ?? 30,
   );
 });
 
@@ -209,6 +214,7 @@ final moduleDetailProvider = FutureProvider.autoDispose
         total,
         isLocked: isModuleLocked,
       ),
+      durationMinutes: lm['duration_minutes'] as int? ?? 15,
     );
   }).toList();
 
@@ -223,6 +229,7 @@ final moduleDetailProvider = FutureProvider.autoDispose
           .where((l) => l.status == LessonStatus.completed)
           .length,
       isLocked: isModuleLocked,
+      description: module['description'] as String?,
     ),
     courseTitle: courseTitle,
     lessons: lessons,
@@ -263,10 +270,10 @@ final lessonDetailProvider = FutureProvider.autoDispose
       .single();
   final courseMeta = Map<String, dynamic>.from(courseRaw as Map);
 
-  // Fetch blocks ordered
+  // Fetch blocks ordered, joining exercises to get prompt for AI screens
   final blocksRaw = await supabase
       .from('lesson_blocks')
-      .select()
+      .select('*, exercises(content_json)')
       .eq('lesson_id', lessonId)
       .order('order_index');
 
@@ -290,6 +297,10 @@ final lessonDetailProvider = FutureProvider.autoDispose
   final blocks = (blocksRaw as List).asMap().entries.map((e) {
     final bm = Map<String, dynamic>.from(e.value as Map);
     final blockId = bm['id'] as String;
+    // Extract prompt from joined exercise content_json
+    final exerciseData = bm['exercises'] as Map?;
+    final contentJson = exerciseData?['content_json'] as Map?;
+    final prompt = contentJson?['prompt'] as String?;
     return LessonBlock(
       id: blockId,
       lessonId: lessonId,
@@ -299,6 +310,7 @@ final lessonDetailProvider = FutureProvider.autoDispose
       status: completedBlockIds.contains(blockId)
           ? BlockStatus.completed
           : BlockStatus.pending,
+      prompt: prompt,
     );
   }).toList();
 
@@ -312,6 +324,8 @@ final lessonDetailProvider = FutureProvider.autoDispose
       title: lesson['title'] as String,
       skill: courseMeta['skill'] as String? ?? '',
       orderIndex: lesson['order_index'] as int? ?? 0,
+      description: lesson['description'] as String?,
+      durationMinutes: lesson['duration_minutes'] as int? ?? 15,
     ),
     courseId: courseId,
     courseTitle: courseMeta['title'] as String? ?? '',
@@ -356,4 +370,23 @@ final courseListProvider =
   return (data as List)
       .map((c) => Map<String, dynamic>.from(c as Map))
       .toList();
+});
+
+// ── Unlock bonus ──────────────────────────────────────────────────────────────
+
+/// Calls the unlock_lesson_bonus RPC: deducts XP and marks lesson.bonus_unlocked = true.
+/// Throws 'insufficient_xp' if user doesn't have enough XP.
+/// After success, invalidates lessonDetailProvider and currentUserProvider.
+final unlockBonusProvider =
+    FutureProvider.autoDispose.family<void, String>((ref, lessonId) async {
+  final userId = supabase.auth.currentUser?.id;
+  if (userId == null) throw Exception('Chưa đăng nhập.');
+
+  await supabase.rpc('unlock_lesson_bonus', params: {
+    'p_lesson_id': lessonId,
+    'p_user_id': userId,
+  });
+
+  ref.invalidate(lessonDetailProvider(lessonId));
+  ref.invalidate(currentUserProvider);
 });
