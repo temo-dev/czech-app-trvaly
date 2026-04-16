@@ -4,6 +4,7 @@ import 'package:app_czech/shared/models/question_model.dart';
 import 'package:app_czech/features/exercise/widgets/fill_blank_exercise.dart';
 import 'package:app_czech/features/exercise/widgets/listening_exercise.dart';
 import 'package:app_czech/features/exercise/widgets/mcq_exercise.dart';
+import 'package:app_czech/features/exercise/widgets/question_intro.dart';
 import 'package:app_czech/features/exercise/widgets/reading_passage_exercise.dart';
 import 'package:app_czech/features/exercise/widgets/speaking_recorder_exercise.dart';
 import 'package:app_czech/features/exercise/widgets/writing_input_exercise.dart';
@@ -57,10 +58,20 @@ class QuestionShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasIntro = question.introText != null || question.introImageUrl != null;
     return Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.x4, vertical: AppSpacing.x4),
-      child: _buildRenderer(),
+      child: hasIntro
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                QuestionIntro(question: question),
+                const SizedBox(height: AppSpacing.x4),
+                _buildRenderer(),
+              ],
+            )
+          : _buildRenderer(),
     );
   }
 

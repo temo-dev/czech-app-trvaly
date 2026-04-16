@@ -122,7 +122,10 @@ class _SegmentedPrompt extends StatelessWidget {
       if (segments[i].isNotEmpty) {
         children.add(TextSpan(
           text: segments[i],
-          style: AppTypography.bodyLarge.copyWith(color: cs.onSurface),
+          style: AppTypography.bodyLarge.copyWith(
+            color: cs.onSurface,
+            fontWeight: FontWeight.w700,
+          ),
         ));
       }
 
@@ -145,7 +148,7 @@ class _SegmentedPrompt extends StatelessWidget {
 
     return Text.rich(
       TextSpan(children: children),
-      style: AppTypography.bodyLarge,
+      style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
     );
   }
 }

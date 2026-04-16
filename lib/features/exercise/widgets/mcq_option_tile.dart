@@ -86,6 +86,7 @@ class McqOptionTile extends StatelessWidget {
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Letter circle
             Container(
@@ -109,19 +110,49 @@ class McqOptionTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            // Option text
+            // Option content (text + optional image)
             Expanded(
-              child: Text(
-                option.text,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: textColor,
-                  fontWeight: isSelected || isCorrect || isIncorrect
-                      ? FontWeight.w700
-                      : FontWeight.w500,
-                  fontSize: 17,
-                ),
-              ),
+              child: option.imageUrl != null
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (option.text.isNotEmpty) ...[
+                          Text(
+                            option.text,
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: textColor,
+                              fontWeight: isSelected || isCorrect || isIncorrect
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              fontSize: 17,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          child: Image.network(
+                            option.imageUrl!,
+                            height: 120,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      option.text,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: textColor,
+                        fontWeight: isSelected || isCorrect || isIncorrect
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        fontSize: 17,
+                      ),
+                    ),
             ),
+            const SizedBox(width: 8),
             // Trailing icon
             if (isSelected)
               const Icon(Icons.check_circle_rounded,

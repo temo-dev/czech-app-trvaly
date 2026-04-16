@@ -12,6 +12,7 @@ import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
 import '../models/mock_test_result.dart';
 import '../providers/exam_result_provider.dart';
+import '../widgets/question_review_list.dart';
 import '../widgets/result_cta_section.dart';
 import '../widgets/skill_breakdown_chart.dart';
 import '../widgets/total_score_hero.dart';
@@ -144,6 +145,10 @@ class _ResultBody extends StatelessWidget {
 
             // Recommendation card
             _RecommendationCard(weakSkills: result.weakSkills),
+            const SizedBox(height: AppSpacing.x5),
+
+            // Review section
+            QuestionReviewList(attemptId: result.attemptId),
             const SizedBox(height: AppSpacing.x6),
 
             // CTA section

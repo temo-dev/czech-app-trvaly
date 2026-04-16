@@ -435,13 +435,16 @@ class _BlockCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
+        if (!block.hasExercises) return;
+        final firstExerciseId = block.exerciseIds.first;
+
         // Speaking and writing blocks route to AI screens with exercise context
         if (block.type == BlockType.speaking) {
           context.push(
             AppRoutes.speakingPrompt,
             extra: {
               'prompt': block.prompt ?? '',
-              'questionId': block.exerciseId,
+              'questionId': firstExerciseId,
               'lessonId': block.lessonId,
               'lessonBlockId': block.id,
             },
@@ -453,7 +456,7 @@ class _BlockCard extends StatelessWidget {
             AppRoutes.writingPrompt,
             extra: {
               'prompt': block.prompt ?? '',
-              'questionId': block.exerciseId,
+              'questionId': firstExerciseId,
               'lessonId': block.lessonId,
               'lessonBlockId': block.id,
             },
@@ -463,14 +466,14 @@ class _BlockCard extends StatelessWidget {
         // All other types go to PracticeScreen
         final route = switch (block.type) {
           BlockType.grammar =>
-            AppRoutes.grammarPracticePath(block.exerciseId),
+            AppRoutes.grammarPracticePath(firstExerciseId),
           BlockType.listening =>
-            AppRoutes.listeningPracticePath(block.exerciseId),
+            AppRoutes.listeningPracticePath(firstExerciseId),
           BlockType.reading =>
-            AppRoutes.readingPracticePath(block.exerciseId),
+            AppRoutes.readingPracticePath(firstExerciseId),
           BlockType.vocab =>
-            AppRoutes.flashcardPracticePath(block.exerciseId),
-          _ => AppRoutes.practiceExercisePath(block.exerciseId),
+            AppRoutes.flashcardPracticePath(firstExerciseId),
+          _ => AppRoutes.practiceExercisePath(firstExerciseId),
         };
         context.push(route);
       },

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/shared/models/question_model.dart';
@@ -37,8 +38,25 @@ class McqExercise extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Question image
+        if (question.imageUrl != null) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            child: Image.network(
+              question.imageUrl!,
+              width: double.infinity,
+              height: 200,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x4),
+        ],
         // Prompt
-        Text(question.prompt, style: AppTypography.bodyLarge),
+        Text(
+          question.prompt,
+          style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: AppSpacing.x5),
         // Options
         ...question.options.asMap().entries.map(

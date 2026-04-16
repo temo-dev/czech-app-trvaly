@@ -16,9 +16,11 @@ class Question with _$Question {
     required QuestionType type,
     required SkillArea skill,
     required Difficulty difficulty,
+    String? introText,                     // context shown above the prompt
+    String? introImageUrl,                 // image shown above the prompt
     required String prompt,               // question text (may contain {blank})
     String? audioUrl,                     // for listening questions
-    String? imageUrl,                     // for reading exhibit questions
+    String? imageUrl,                     // for question-level image (inline)
     @Default([]) List<QuestionOption> options,   // MCQ options
     @Default([]) List<MatchPair> matchPairs,     // matching pairs
     @Default([]) List<String> orderItems,        // ordering items

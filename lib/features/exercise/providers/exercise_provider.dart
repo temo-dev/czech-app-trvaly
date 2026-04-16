@@ -34,6 +34,8 @@ Question _parseExercise(Map<String, dynamic> row) {
       : <String, dynamic>{};
 
   final prompt = content['prompt'] as String? ?? '';
+  final introText = content['intro_text'] as String?;
+  final introImageUrl = content['intro_image_url'] as String?;
   final explanation = content['explanation'] as String? ?? '';
   final correctAnswer = content['correct_answer'] as String?;
   final audioUrl = content['audio_url'] as String?;
@@ -56,6 +58,8 @@ Question _parseExercise(Map<String, dynamic> row) {
     type: _parseType(typeStr),
     skill: _parseSkill(skillStr),
     difficulty: _parseDifficulty(diffStr),
+    introText: introText,
+    introImageUrl: introImageUrl,
     prompt: prompt,
     explanation: explanation,
     correctAnswer: correctAnswer,

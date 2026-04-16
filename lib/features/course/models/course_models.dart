@@ -161,7 +161,7 @@ class LessonBlock {
     required this.id,
     required this.lessonId,
     required this.type,
-    required this.exerciseId,
+    required this.exerciseIds,
     required this.orderIndex,
     this.status = BlockStatus.pending,
     this.prompt,
@@ -170,11 +170,14 @@ class LessonBlock {
   final String id;
   final String lessonId;
   final BlockType type;
-  final String exerciseId;
+  /// Ordered list of exercise IDs belonging to this block.
+  final List<String> exerciseIds;
   final int orderIndex;
   final BlockStatus status;
-  /// Prompt text fetched from exercises.content_json — used for speaking/writing AI screens.
+  /// Prompt from the first exercise — used for speaking/writing AI screens.
   final String? prompt;
+
+  bool get hasExercises => exerciseIds.isNotEmpty;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

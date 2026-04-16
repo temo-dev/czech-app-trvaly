@@ -270,18 +270,45 @@ final lessonDetailProvider = FutureProvider.autoDispose
       .single();
   final courseMeta = Map<String, dynamic>.from(courseRaw as Map);
 
-  // Fetch blocks ordered, joining exercises to get prompt for AI screens
+  // Fetch blocks ordered
   final blocksRaw = await supabase
       .from('lesson_blocks')
-      .select('*, exercises(content_json)')
+      .select('id, lesson_id, type, order_index')
       .eq('lesson_id', lessonId)
       .order('order_index');
 
+  // Fetch exercises per block via junction table (includes first exercise prompt)
+  final blockIds = (blocksRaw as List)
+      .map((b) => (b as Map)['id'] as String)
+      .toList();
+
+  final Map<String, List<String>> exerciseIdsPerBlock = {};
+  final Map<String, String?> promptPerBlock = {};
+
+  if (blockIds.isNotEmpty) {
+    final blockExercisesRaw = await supabase
+        .from('lesson_block_exercises')
+        .select('block_id, exercise_id, exercises(content_json)')
+        .inFilter('block_id', blockIds)
+        .order('order_index');
+
+    for (final row in (blockExercisesRaw as List)) {
+      final rm = Map<String, dynamic>.from(row as Map);
+      final bId = rm['block_id'] as String;
+      final exId = rm['exercise_id'] as String;
+      exerciseIdsPerBlock.putIfAbsent(bId, () => []).add(exId);
+      // Capture prompt from first exercise only
+      if (!promptPerBlock.containsKey(bId)) {
+        final exData = rm['exercises'] as Map?;
+        final cj = exData?['content_json'] as Map?;
+        promptPerBlock[bId] = cj?['prompt'] as String?;
+      }
+    }
+  }
+
   // Fetch user block progress
   final Set<String> completedBlockIds = {};
-  if (userId != null && (blocksRaw as List).isNotEmpty) {
-    final blockIds =
-        blocksRaw.map((b) => (b as Map)['id'] as String).toList();
+  if (userId != null && blockIds.isNotEmpty) {
     final progressRaw = await supabase
         .from('user_progress')
         .select('lesson_block_id')
@@ -297,20 +324,16 @@ final lessonDetailProvider = FutureProvider.autoDispose
   final blocks = (blocksRaw as List).asMap().entries.map((e) {
     final bm = Map<String, dynamic>.from(e.value as Map);
     final blockId = bm['id'] as String;
-    // Extract prompt from joined exercise content_json
-    final exerciseData = bm['exercises'] as Map?;
-    final contentJson = exerciseData?['content_json'] as Map?;
-    final prompt = contentJson?['prompt'] as String?;
     return LessonBlock(
       id: blockId,
       lessonId: lessonId,
       type: blockTypeFromString(bm['type'] as String? ?? 'reading'),
-      exerciseId: bm['exercise_id'] as String? ?? '',
+      exerciseIds: exerciseIdsPerBlock[blockId] ?? [],
       orderIndex: bm['order_index'] as int? ?? e.key + 1,
       status: completedBlockIds.contains(blockId)
           ? BlockStatus.completed
           : BlockStatus.pending,
-      prompt: prompt,
+      prompt: promptPerBlock[blockId],
     );
   }).toList();
 
