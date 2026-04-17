@@ -43,6 +43,8 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>App cần truy cập micro để ghi âm bài nói của bạn.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>App cần truy cập thư viện ảnh để bạn tải lên ảnh đại diện hoặc tài liệu học tập.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
