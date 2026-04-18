@@ -83,8 +83,8 @@ Build query: fetches `currentUserProvider`, latest `exam_results` row, `leaderbo
 | `examListProvider` | `AsyncNotifier<List<ExamMeta>>` | Active exams with sections |
 | `mockExamMetaProvider` | `AsyncNotifier<ExamMeta>` | Single exam by ID (arg) |
 | `examQuestionsProvider` | `AsyncNotifier<List<Question>>` | Questions for all sections of an attempt |
-| `examResultProvider` | `AsyncNotifier<MockTestResult>` | Result by attemptId (arg) |
-| `questionFeedbackProvider` | `AsyncNotifier<QuestionFeedbackData>` | AI feedback via `question-feedback` edge function |
+| `examResultProvider` | `AsyncNotifier<MockTestResult>` | Result by attemptId (arg) — includes `aiGradingPending` flag |
+| `questionFeedbackProvider` | `AsyncNotifier<QuestionAiFeedback?>` | **Auto-fetch** AI feedback via `question-feedback` edge function; kết quả lấy từ cache `question_ai_feedback` nếu đã tồn tại |
 | `examSessionNotifier` | `Notifier<ExamSessionState>` | **See state machine below** |
 
 #### `ExamSessionState` (Freezed)
@@ -125,6 +125,18 @@ Key methods: `answerQuestion(globalIndex, QuestionAnswer)`, `flagQuestion(global
 | `courseDetailProvider` | `AsyncNotifier<CourseDetail>` | Course by ID (arg) |
 | `moduleDetailProvider` | `AsyncNotifier<ModuleDetail>` | Module with lesson list (arg) |
 | `lessonDetailProvider` | `AsyncNotifier<LessonDetail>` | Lesson with blocks + exercises (arg) |
+
+---
+
+### `exercise` (Lesson Feedback) — `lib/features/exercise/providers/lesson_feedback_provider.dart`
+
+| Provider | Type | Returns |
+|---|---|---|
+| `lessonQuestionFeedbackProvider(params)` | `FutureProvider.autoDispose.family<QuestionAiFeedback?, LessonFeedbackParams>` | AI feedback cho câu trả lời sai trong lesson; chỉ fetch với MCQ/fill_blank; hit cache từ `question_ai_feedback` |
+
+`LessonFeedbackParams { questionId, questionText, options, correctAnswerText, userAnswerText, sectionSkill, questionType }`
+
+`QuestionAiFeedback { errorAnalysis, correctExplanation, shortTip, keyConceptLabel, matchingFeedback? }`
 
 ---
 
@@ -265,6 +277,23 @@ poll every 3s (result edge fn) → { status: 'pending' | 'ready' | 'error' }
 ready → update state to SpeakingState.ready / WritingState.ready
 error → update state to *.error(message), show retry CTA
 timeout (10 retries exhausted) → *.error('scoring_timeout')
+```
+
+**Mock test context:** Khi submit speaking/writing trong mock test, `exam_attempt_id` phải được truyền vào `speaking-upload` / `writing-submit`. Sau khi user nộp bài, `grade-exam` JOIN các bảng AI attempt để lấy `overall_score` thực thay vì 50% placeholder. Nếu AI chưa xong → `exam_results.ai_grading_pending = true` → result screen hiển thị banner.
+
+## Question Feedback Pattern (Lesson + Review)
+
+```
+MCQ/fill_blank/matching/ordering trả lời sai
+    ↓
+gọi question-feedback edge function (với question_id + user_answer_text)
+    ↓
+edge function check cache (question_ai_feedback table)
+    ├─ cache hit → trả về ngay (from_cache: true)
+    └─ cache miss → gọi GPT → upsert vào cache → trả về
+    ↓
+Lesson flow: hiển thị LessonAnswerFeedbackSheet (bottom sheet) trước khi sang câu tiếp
+Mock test review: tự động hiển thị inline trong QuestionReviewList (không cần tap button)
 ```
 
 ---

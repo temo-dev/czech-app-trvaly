@@ -494,10 +494,13 @@ class _ExpandedContent extends StatelessWidget {
             ),
           ],
 
-          // AI analysis for wrong objective answers
-          if (!_isSubjective &&
-              item.isAnswered &&
-              !item.isCorrect) ...[
+          // AI analysis for wrong objective/matching/ordering answers
+          if (item.isAnswered &&
+              !item.isCorrect &&
+              (item.question.type == QuestionType.mcq ||
+               item.question.type == QuestionType.fillBlank ||
+               item.question.type == QuestionType.matching ||
+               item.question.type == QuestionType.ordering)) ...[
             const SizedBox(height: AppSpacing.x3),
             _AiQuestionFeedback(item: item),
           ],
@@ -1156,23 +1159,72 @@ class _AiQuestionFeedback extends ConsumerStatefulWidget {
 }
 
 class _AiQuestionFeedbackState extends ConsumerState<_AiQuestionFeedback> {
-  bool _requested = false;
-
   QuestionFeedbackParams? get _params {
     final q = widget.item.question;
-    final correctOption = widget.item.correctOption;
-    final selectedOption = widget.item.selectedOption;
-    if (correctOption == null || selectedOption == null) return null;
-
     final sectionSkill = widget.item.sectionSkill;
-    return QuestionFeedbackParams(
-      questionId: q.id,
-      questionText: q.prompt,
-      options: q.options,
-      correctAnswerText: correctOption.text,
-      userAnswerText: selectedOption.text,
-      sectionSkill: sectionSkill,
-    );
+
+    switch (q.type) {
+      case QuestionType.mcq:
+        final correctOption = widget.item.correctOption;
+        final selectedOption = widget.item.selectedOption;
+        if (correctOption == null || selectedOption == null) return null;
+        return QuestionFeedbackParams(
+          questionId: q.id,
+          questionText: q.prompt,
+          questionType: q.type,
+          options: q.options,
+          correctAnswerText: correctOption.text,
+          userAnswerText: selectedOption.text,
+          sectionSkill: sectionSkill,
+        );
+
+      case QuestionType.fillBlank:
+        final userAnswer = widget.item.userAnswer;
+        final correctAnswer = q.correctAnswer;
+        if (userAnswer == null || correctAnswer == null) return null;
+        return QuestionFeedbackParams(
+          questionId: q.id,
+          questionText: q.prompt,
+          questionType: q.type,
+          options: const [],
+          correctAnswerText: correctAnswer,
+          userAnswerText: userAnswer,
+          sectionSkill: sectionSkill,
+        );
+
+      case QuestionType.matching:
+        final userAnswer = widget.item.userAnswer ?? '';
+        final correctAnswer = q.matchPairs
+            .map((p) => '${p.leftText} → ${p.rightText}')
+            .join(', ');
+        return QuestionFeedbackParams(
+          questionId: q.id,
+          questionText: q.prompt,
+          questionType: q.type,
+          options: const [],
+          correctAnswerText: correctAnswer,
+          userAnswerText: userAnswer.isNotEmpty ? userAnswer : '(chưa trả lời)',
+          sectionSkill: sectionSkill,
+          matchPairs: q.matchPairs,
+        );
+
+      case QuestionType.ordering:
+        final userAnswer = widget.item.userAnswer ?? '';
+        final correctAnswer = q.orderItems.join(' → ');
+        return QuestionFeedbackParams(
+          questionId: q.id,
+          questionText: q.prompt,
+          questionType: q.type,
+          options: const [],
+          correctAnswerText: correctAnswer,
+          userAnswerText: userAnswer.isNotEmpty ? userAnswer : '(chưa trả lời)',
+          sectionSkill: sectionSkill,
+          correctOrder: q.orderItems,
+        );
+
+      default:
+        return null;
+    }
   }
 
   @override
@@ -1181,25 +1233,7 @@ class _AiQuestionFeedbackState extends ConsumerState<_AiQuestionFeedback> {
     final params = _params;
     if (params == null) return const SizedBox.shrink();
 
-    if (!_requested) {
-      return OutlinedButton.icon(
-        onPressed: () {
-          setState(() => _requested = true);
-          ref.read(questionFeedbackProvider(params).notifier).fetchFeedback();
-        },
-        icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
-        label: const Text('Xem phân tích AI'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
-          textStyle: AppTypography.labelSmall
-              .copyWith(fontWeight: FontWeight.w700),
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.x3, vertical: AppSpacing.x2),
-        ),
-      );
-    }
-
+    // Auto-fetch via provider (cached in DB — cheap on repeat views)
     final feedbackAsync = ref.watch(questionFeedbackProvider(params));
 
     return feedbackAsync.when(
@@ -1312,6 +1346,30 @@ class _AiFeedbackCard extends StatelessWidget {
               text: feedback.correctExplanation,
             ),
             const SizedBox(height: AppSpacing.x2),
+          ],
+
+          // Matching/ordering item-level feedback
+          if (feedback.matchingFeedback.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.x2),
+            ...feedback.matchingFeedback.map(
+              (mf) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.x1 + 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.arrow_right_rounded,
+                        size: 14, color: AppColors.error),
+                    const SizedBox(width: 2),
+                    Expanded(
+                      child: Text(
+                        '${mf.item}: ${mf.issue}',
+                        style: AppTypography.labelSmall.copyWith(height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
 
           // Short tip

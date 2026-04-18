@@ -83,14 +83,53 @@ Deno.serve(async (req) => {
 
     const questions = (questionsRaw ?? []) as QuestionRow[];
 
-    // 4. Group questions by section, maintaining order
+    // 4. Fetch real AI scores for speaking/writing answers in this exam attempt
+    const [speakingRes, writingRes, pendingSpeakingRes, pendingWritingRes] = await Promise.all([
+      supabase
+        .from('ai_speaking_attempts')
+        .select('question_id, overall_score')
+        .eq('exam_attempt_id', attempt_id)
+        .eq('status', 'ready'),
+      supabase
+        .from('ai_writing_attempts')
+        .select('question_id, overall_score')
+        .eq('exam_attempt_id', attempt_id)
+        .eq('status', 'ready'),
+      supabase
+        .from('ai_speaking_attempts')
+        .select('id')
+        .eq('exam_attempt_id', attempt_id)
+        .eq('status', 'processing')
+        .limit(1),
+      supabase
+        .from('ai_writing_attempts')
+        .select('id')
+        .eq('exam_attempt_id', attempt_id)
+        .eq('status', 'processing')
+        .limit(1),
+    ]);
+
+    const aiGradingPending =
+      (pendingSpeakingRes.data?.length ?? 0) > 0 ||
+      (pendingWritingRes.data?.length ?? 0) > 0;
+
+    const speakingScoreMap = new Map<string, number>();
+    for (const r of speakingRes.data ?? []) {
+      if (r.question_id) speakingScoreMap.set(r.question_id, r.overall_score ?? 0);
+    }
+    const writingScoreMap = new Map<string, number>();
+    for (const r of writingRes.data ?? []) {
+      if (r.question_id) writingScoreMap.set(r.question_id, r.overall_score ?? 0);
+    }
+
+    // 5. Group questions by section, maintaining order
     const bySection = new Map<string, QuestionRow[]>();
     for (const s of sections) bySection.set(s.id, []);
     for (const q of questions) {
       bySection.get(q.section_id)?.push(q);
     }
 
-    // 5. Grade each question
+    // 6. Grade each question
     const sectionScores: Record<string, { score: number; total: number }> = {};
     const weakSkills: string[] = [];
     let globalIdx = 0;
@@ -111,7 +150,6 @@ Deno.serve(async (req) => {
         let earned = 0;
 
         if (q.type === 'mcq' || q.type === 'reading_mcq' || q.type === 'listening_mcq') {
-          // studentAnswer is the UUID of the selected option
           if (studentAnswer) {
             const selectedOption = q.question_options.find((o) => o.id === studentAnswer);
             if (selectedOption?.is_correct) {
@@ -119,7 +157,6 @@ Deno.serve(async (req) => {
             }
           }
         } else if (q.type === 'fill_blank' || q.type === 'fillBlank') {
-          // Case-insensitive exact match
           if (
             studentAnswer &&
             q.correct_answer &&
@@ -128,14 +165,36 @@ Deno.serve(async (req) => {
             earned = points;
           }
         } else if (q.type === 'matching' || q.type === 'ordering') {
-          // Give partial credit if answered
+          // Proportional credit: compare submitted order against correct order position-by-position
           if (studentAnswer && studentAnswer.length > 0) {
+            try {
+              const submitted: string[] = JSON.parse(studentAnswer);
+              const correctOrder = [...q.question_options]
+                .sort((a, b) => a.order_index - b.order_index)
+                .map((o) => o.id);
+              if (correctOrder.length > 0) {
+                const matchCount = submitted.filter((id, i) => id === correctOrder[i]).length;
+                earned = Math.round(points * (matchCount / correctOrder.length));
+              } else {
+                earned = Math.round(points * 0.5);
+              }
+            } catch {
+              earned = Math.round(points * 0.5);
+            }
+          }
+        } else if (q.type === 'speaking') {
+          const aiScore = speakingScoreMap.get(q.id);
+          if (aiScore !== undefined) {
+            earned = Math.round(points * (aiScore / 100));
+          } else if (studentAnswer && studentAnswer.length > 0) {
+            // AI not yet ready — partial credit placeholder
             earned = Math.round(points * 0.5);
           }
-        } else if (q.type === 'writing' || q.type === 'speaking') {
-          // AI-scored separately via speaking/writing functions.
-          // Give partial credit (50%) if student submitted an answer.
-          if (studentAnswer && studentAnswer.length > 0) {
+        } else if (q.type === 'writing') {
+          const aiScore = writingScoreMap.get(q.id);
+          if (aiScore !== undefined) {
+            earned = Math.round(points * (aiScore / 100));
+          } else if (studentAnswer && studentAnswer.length > 0) {
             earned = Math.round(points * 0.5);
           }
         }
@@ -160,7 +219,7 @@ Deno.serve(async (req) => {
       ? Math.round((totalEarned / totalPossible) * 100)
       : 0;
 
-    // 6. Delete any existing stub result row, then insert real result
+    // 7. Delete any existing result row, then insert updated result
     await supabase
       .from('exam_results')
       .delete()
@@ -175,6 +234,7 @@ Deno.serve(async (req) => {
         pass_threshold: 60,
         section_scores: sectionScores,
         weak_skills: weakSkills,
+        ai_grading_pending: aiGradingPending,
       });
 
     if (insertErr) {
@@ -188,6 +248,7 @@ Deno.serve(async (req) => {
         total_score: totalScore,
         section_scores: sectionScores,
         weak_skills: weakSkills,
+        ai_grading_pending: aiGradingPending,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

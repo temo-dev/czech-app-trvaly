@@ -7,6 +7,7 @@ import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/features/course/providers/course_providers.dart';
 import 'package:app_czech/features/exercise/providers/exercise_provider.dart';
 import 'package:app_czech/features/exercise/widgets/explanation_panel.dart';
+import 'package:app_czech/features/exercise/widgets/lesson_answer_feedback_sheet.dart';
 import 'package:app_czech/features/exercise/widgets/question_shell.dart';
 import 'package:app_czech/shared/models/question_model.dart';
 import 'package:app_czech/shared/providers/gamification_provider.dart';
@@ -151,6 +152,48 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
       isCorrect: _isCorrect,
       onContinue: () {},
     );
+
+    if (!mounted) return;
+
+    // Show AI feedback sheet for wrong objective answers
+    if (!_isCorrect) {
+      final correctAnswerText = _correctAnswerText(question);
+      final userAnswerText = _userAnswerText(question, _answer!);
+      if (correctAnswerText != null && userAnswerText != null) {
+        await LessonAnswerFeedbackSheet.show(
+          context,
+          ref: ref,
+          question: question,
+          userAnswerText: userAnswerText,
+          correctAnswerText: correctAnswerText,
+          onContinue: () {},
+        );
+      }
+    }
+  }
+
+  String? _correctAnswerText(Question question) {
+    switch (question.type) {
+      case QuestionType.mcq:
+        return question.options.where((o) => o.isCorrect).firstOrNull?.text;
+      case QuestionType.fillBlank:
+        return question.correctAnswer;
+      default:
+        return null;
+    }
+  }
+
+  String? _userAnswerText(Question question, QuestionAnswer answer) {
+    switch (question.type) {
+      case QuestionType.mcq:
+        final optionId = answer.selectedOptionId;
+        if (optionId == null) return null;
+        return question.options.where((o) => o.id == optionId).firstOrNull?.text;
+      case QuestionType.fillBlank:
+        return answer.writtenAnswer;
+      default:
+        return null;
+    }
   }
 
   bool _evaluate(Question question, QuestionAnswer answer) {
@@ -352,7 +395,7 @@ class _FeedbackCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final explanation = question.explanation ?? '';
+    final explanation = question.explanation;
 
     return Container(
       padding: const EdgeInsets.all(24),

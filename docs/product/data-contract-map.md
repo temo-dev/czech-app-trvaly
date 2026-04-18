@@ -130,6 +130,7 @@ Indexes: `idx_exam_attempts_user_id`, `idx_exam_attempts_exam_id`. RLS: own or a
 | pass_threshold | int NOT NULL | `60` | |
 | section_scores | jsonb NOT NULL | `'{}'` | `{ skill: { score, total } }` |
 | weak_skills | text[] NOT NULL | `'{}'` | skills below 60% |
+| ai_grading_pending | bool NOT NULL | `false` | true khi còn speaking/writing đang chờ AI chấm — result screen hiển thị banner |
 | created_at | timestamptz NOT NULL | `now()` | |
 
 Indexes: `idx_exam_results_user_id`, `idx_exam_results_attempt_id`. RLS: own/anon read; admin read.
@@ -276,10 +277,12 @@ Indexes: `idx_user_progress_user`, `idx_user_progress_lesson`. RLS: own rows.
 | id | uuid PK | | |
 | user_id | uuid | | FK → profiles(id) ON DELETE SET NULL; nullable (anon) |
 | exercise_id | uuid | | FK → exercises(id) ON DELETE SET NULL |
+| question_id | uuid | | FK → questions(id) ON DELETE SET NULL — set when submitted during mock test |
+| exam_attempt_id | uuid | | FK → exam_attempts(id) ON DELETE SET NULL — used by grade-exam to JOIN real AI score |
 | audio_key | text | | Storage path |
 | status | text NOT NULL | `'processing'` | CHECK IN ('processing','ready','error') |
 | overall_score | int | | 0–100 |
-| metrics | jsonb | | `{pronunciation,fluency,vocabulary,task_achievement, *_feedback,*_tip, overall_feedback, short_tips}` |
+| metrics | jsonb | | `{pronunciation,fluency,vocabulary,task_achievement, pronunciation_feedback,pronunciation_tip, fluency_feedback,fluency_tip, vocabulary_feedback,vocabulary_tip, grammar_feedback,grammar_tip, overall_feedback, short_tips}` |
 | transcript | text | | |
 | issues | jsonb | | `[{word, type?, suggestion}]` |
 | strengths | text[] | | |
@@ -289,7 +292,7 @@ Indexes: `idx_user_progress_user`, `idx_user_progress_lesson`. RLS: own rows.
 | created_at | timestamptz NOT NULL | `now()` | |
 | updated_at | timestamptz NOT NULL | `now()` | |
 
-Index: `idx_ai_speaking_user`. RLS: own rows; service_role full access.
+Indexes: `idx_ai_speaking_user`, `idx_ai_speaking_exam` on `(exam_attempt_id)`. RLS: own rows; service_role full access.
 
 ---
 
@@ -300,12 +303,14 @@ Index: `idx_ai_speaking_user`. RLS: own rows; service_role full access.
 | id | uuid PK | | |
 | user_id | uuid | | FK → profiles(id) ON DELETE SET NULL; nullable |
 | exercise_id | uuid | | FK → exercises(id) ON DELETE SET NULL |
+| question_id | uuid | | FK → questions(id) ON DELETE SET NULL — set when submitted during mock test |
+| exam_attempt_id | uuid | | FK → exam_attempts(id) ON DELETE SET NULL — used by grade-exam to JOIN real AI score |
 | prompt_text | text | | |
 | answer_text | text | | |
 | rubric_type | text | | CHECK IN ('letter','essay','form') |
 | status | text NOT NULL | `'processing'` | CHECK IN ('processing','ready','error') |
 | overall_score | int | | 0–100 |
-| metrics | jsonb | | `{grammar,vocabulary,coherence,task_achievement, *_feedback, overall_feedback, short_tips}` |
+| metrics | jsonb | | `{grammar,vocabulary,coherence,task_achievement, grammar_feedback,vocabulary_feedback, coherence_feedback,content_feedback, overall_feedback, short_tips}` |
 | grammar_notes | jsonb | | annotated_spans `[{text, issue_type, correction?, explanation?, tip?}]` |
 | vocabulary_notes | jsonb | | `[{overall_feedback}]` |
 | corrected_essay | text | | |
@@ -313,7 +318,29 @@ Index: `idx_ai_speaking_user`. RLS: own rows; service_role full access.
 | created_at | timestamptz NOT NULL | `now()` | |
 | updated_at | timestamptz NOT NULL | `now()` | |
 
-Index: `idx_ai_writing_user`. RLS: own rows; service_role full access.
+Indexes: `idx_ai_writing_user`, `idx_ai_writing_exam` on `(exam_attempt_id)`. RLS: own rows; service_role full access.
+
+---
+
+### `question_ai_feedback`
+
+Cache AI feedback cho từng câu hỏi. Keyed by `(question_id, user_answer_hash)` — không tái tạo nếu đã có.
+
+| Column | Type | Default | Notes |
+|---|---|---|---|
+| id | uuid PK | | |
+| question_id | uuid NOT NULL | | FK → questions(id) ON DELETE CASCADE |
+| user_answer_hash | text NOT NULL | | SHA-256 hex của `trim(lower(user_answer_text))` |
+| question_type | text NOT NULL | `'mcq'` | 'mcq' \| 'fill_blank' \| 'matching' \| 'ordering' |
+| error_analysis | text NOT NULL | `''` | 1-2 câu giải thích tại sao sai (tiếng Việt) |
+| correct_explanation | text NOT NULL | `''` | 1-2 câu giải thích đáp án đúng |
+| short_tip | text NOT NULL | `''` | Gợi ý nhớ, tối đa 15 từ |
+| key_concept | text NOT NULL | `''` | Tên khái niệm ngữ pháp/từ vựng |
+| matching_feedback | jsonb | | `[{ item, issue }]` — chỉ dùng cho matching/ordering |
+| created_at | timestamptz NOT NULL | `now()` | |
+| UNIQUE | (question_id, user_answer_hash) | | Cache key |
+
+RLS: public SELECT; service_role INSERT/UPDATE.
 
 ---
 
@@ -538,6 +565,7 @@ int totalScore             // 0–100
 int passThreshold
 Map<String, SectionResult> sectionScores
 List<String> weakSkills
+bool aiGradingPending      // true khi speaking/writing vẫn đang chờ AI — result screen hiển thị banner
 DateTime createdAt
 // computed: passed, band
 ```
@@ -592,23 +620,47 @@ All functions are Deno-based, deployed at `/functions/v1/<name>`. Authentication
 
 ### `grade-exam`
 **POST** `{ attempt_id: string }`
-**Response** `{ success, attempt_id, total_score, section_scores: {[skill]: {score, total}}, weak_skills: string[] }`
+**Response** `{ success, attempt_id, total_score, section_scores: {[skill]: {score, total}}, weak_skills: string[], ai_grading_pending: boolean }`
 
-Grading rules: MCQ → option UUID match; fill_blank → case-insensitive trim; matching/ordering → 50% credit; speaking/writing → 50% if answered.
+Grading rules:
+- **MCQ / reading_mcq / listening_mcq**: option UUID match → full points
+- **fill_blank**: case-insensitive trim match → full points
+- **matching / ordering**: parse JSON answer, compare position-by-position → proportional credit (correct_positions / total)
+- **speaking**: JOIN `ai_speaking_attempts` by `exam_attempt_id` + `question_id` → `round(points * overall_score/100)`; fallback 50% if AI not ready
+- **writing**: JOIN `ai_writing_attempts` by `exam_attempt_id` + `question_id` → `round(points * overall_score/100)`; fallback 50% if AI not ready
+
+`ai_grading_pending = true` khi còn attempt nào có `status = 'processing'` — result screen hiển thị banner chờ.
 
 ---
 
 ### `question-feedback`
-**POST** `{ question_text, options?, correct_answer_text, user_answer_text, section_skill? }`
-**Response** `{ error_analysis, correct_explanation, short_tip, key_concept }` (all in Vietnamese)
+**POST**
+```json
+{
+  "question_id": "uuid",
+  "question_text": "string",
+  "question_type": "mcq | fill_blank | matching | ordering",
+  "options": [{ "id": "...", "text": "..." }],
+  "correct_answer_text": "string",
+  "user_answer_text": "string",
+  "section_skill": "string?",
+  "match_pairs": [{ "left_id": "...", "left_text": "...", "right_id": "...", "right_text": "..." }],
+  "correct_order": ["id1", "id2", "..."]
+}
+```
+**Response** `{ error_analysis, correct_explanation, short_tip, key_concept, matching_feedback?, from_cache: boolean }` (all in Vietnamese)
+
+Cache: kết quả được lưu vào `question_ai_feedback` theo `(question_id, sha256(user_answer_text))`. Nếu cache hit → trả về ngay, không gọi GPT.
+Matching/ordering: `matching_feedback: [{ item, issue }]` chỉ có trong response khi `question_type` là matching/ordering.
 
 ---
 
 ### `speaking-upload`
-**POST** `{ lesson_id?, question_id, audio_b64? }`
+**POST** `{ lesson_id?, question_id, audio_b64?, exam_attempt_id? }`
 **Response** `{ attempt_id: string }`
 
 Creates `ai_speaking_attempts` row, transcribes via Whisper, scores via GPT-4.1-mini. Czech enforcement: if Whisper language ≠ Czech OR GPT `is_czech=false` → all scores zero.
+`exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
 Poll `speaking-result` for final result.
 
 ---
@@ -641,10 +693,11 @@ Poll `speaking-result` for final result.
 ---
 
 ### `writing-submit`
-**POST** `{ text, question_id, lesson_id? }`
+**POST** `{ text, question_id, lesson_id?, exam_attempt_id? }`
 **Response** `{ attempt_id: string }`
 
 Detects rubric_type: 'letter' (dopis/email/napište), 'form' (formulář/form), else 'essay'.
+`exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
 Poll `writing-result` for final result.
 
 ---

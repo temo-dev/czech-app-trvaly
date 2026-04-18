@@ -61,9 +61,10 @@ Deno.serve(async (req) => {
       text?: string;
       question_id?: string;
       lesson_id?: string;
+      exam_attempt_id?: string;
     };
 
-    const { text, question_id } = body;
+    const { text, question_id, exam_attempt_id } = body;
 
     if (!text || !question_id) {
       return new Response(
@@ -98,6 +99,8 @@ Deno.serve(async (req) => {
       .insert({
         user_id: userId,
         exercise_id: null,
+        question_id: question_id ?? null,
+        exam_attempt_id: exam_attempt_id ?? null,
         prompt_text: promptText,
         answer_text: text,
         rubric_type: rubricType,

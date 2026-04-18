@@ -44,6 +44,7 @@ Future<MockTestResult> examResult(ExamResultRef ref, String attemptId) async {
     passThreshold: raw['pass_threshold'] as int? ?? 60,
     sectionScores: sectionScores,
     weakSkills: weakSkills,
+    aiGradingPending: raw['ai_grading_pending'] as bool? ?? false,
     createdAt: DateTime.parse(raw['created_at'] as String),
   );
 }

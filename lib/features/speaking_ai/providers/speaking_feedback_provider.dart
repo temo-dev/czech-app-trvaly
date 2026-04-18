@@ -233,26 +233,72 @@ class SpeakingFeedbackNotifier
   }
 
   SpeakingFeedbackResult _parseRow(Map<String, dynamic> row) {
-    // Minimal parse from ai_speaking_attempts row
     final scoreRaw = row['overall_score'] as num?;
     final transcript = row['transcript'] as String? ?? '';
     final metricsDb = (row['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
-    final feedback = metricsDb['overall_feedback'] as String? ?? '';
+
+    final metrics = [
+      SpeakingMetric(
+        label: 'Phát âm',
+        score: (metricsDb['pronunciation'] as num?)?.toDouble() ?? 0,
+        maxScore: 100,
+        feedback: metricsDb['pronunciation_feedback'] as String?,
+        tip: metricsDb['pronunciation_tip'] as String?,
+      ),
+      SpeakingMetric(
+        label: 'Lưu loát',
+        score: (metricsDb['fluency'] as num?)?.toDouble() ?? 0,
+        maxScore: 100,
+        feedback: (metricsDb['fluency_feedback'] ?? metricsDb['content_feedback']) as String?,
+        tip: (metricsDb['fluency_tip'] ?? metricsDb['content_tip']) as String?,
+      ),
+      SpeakingMetric(
+        label: 'Từ vựng',
+        score: (metricsDb['vocabulary'] as num?)?.toDouble() ?? 0,
+        maxScore: 100,
+        feedback: metricsDb['vocabulary_feedback'] as String?,
+        tip: metricsDb['vocabulary_tip'] as String?,
+      ),
+      SpeakingMetric(
+        label: 'Ngữ pháp',
+        score: (metricsDb['task_achievement'] as num?)?.toDouble() ?? 0,
+        maxScore: 100,
+        feedback: metricsDb['grammar_feedback'] as String?,
+        tip: metricsDb['grammar_tip'] as String?,
+      ),
+    ];
+
+    // Build transcript words from issues list
+    final issuesRaw = (row['issues'] as List?)?.cast<Map>() ?? [];
+    final issueMap = <String, Map>{};
+    for (final issue in issuesRaw) {
+      final word = (issue['word'] as String? ?? '').toLowerCase();
+      if (word.isNotEmpty) issueMap[word] = Map<String, dynamic>.from(issue);
+    }
+    final transcriptWords = transcript.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).map((word) {
+      final clean = word.replaceAll(RegExp(r'[.,!?;:"]+'), '').toLowerCase();
+      final matched = issueMap[clean];
+      return matched != null
+          ? TranscriptWord(
+              word: word,
+              issue: matched['type'] as String? ?? 'pronunciation',
+              suggestion: matched['suggestion'] as String?,
+            )
+          : TranscriptWord(word: word);
+    }).toList();
+
+    final shortTips = (metricsDb['short_tips'] as List?)?.map((t) => t as String).toList() ?? [];
 
     return SpeakingFeedbackResult(
       attemptId: attemptId,
       totalScore: scoreRaw?.toDouble() ?? 0,
       maxScore: 100,
-      metrics: [],
+      metrics: metrics,
       transcript: transcript,
-      transcriptWords: transcript.isEmpty
-          ? []
-          : transcript
-              .split(' ')
-              .map((w) => TranscriptWord(word: w))
-              .toList(),
-      overallFeedback: feedback,
+      transcriptWords: transcriptWords,
+      overallFeedback: metricsDb['overall_feedback'] as String? ?? '',
       corrections: [],
+      shortTips: shortTips,
     );
   }
 

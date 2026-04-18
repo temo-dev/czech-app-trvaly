@@ -124,6 +124,37 @@ class _ResultBody extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // AI grading pending banner
+            if (result.aiGradingPending) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x4, vertical: AppSpacing.x3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppColors.primary.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: AppSpacing.x3),
+                    Expanded(
+                      child: Text(
+                        'Điểm bài nói/viết đang được AI chấm — kết quả sẽ cập nhật sau ít phút.',
+                        style: AppTypography.bodySmall
+                            .copyWith(color: AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.x4),
+            ],
+
             // Score hero
             Center(child: TotalScoreHero(result: result)),
             const SizedBox(height: AppSpacing.x6),

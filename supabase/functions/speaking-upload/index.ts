@@ -40,8 +40,12 @@ Hãy trả về JSON theo đúng định dạng sau (không có văn bản nào 
     "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về từ vựng.>",
     "tip": "<Lời khuyên ngắn 1 câu về từ vựng. Để trống nếu không phải tiếng Séc.>"
   },
+  "fluency_feedback": {
+    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về độ lưu loát: nhịp nói, ngắt câu, ngập ngừng.>",
+    "tip": "<Lời khuyên ngắn 1 câu về cách nói lưu loát hơn. Để trống nếu không phải tiếng Séc.>"
+  },
   "content_feedback": {
-    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét về nội dung.>",
+    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét về nội dung và mức độ trả lời đúng câu hỏi.>",
     "tip": "<Lời khuyên ngắn 1 câu về nội dung/cách trả lời. Để trống nếu không phải tiếng Séc.>"
   },
   "short_tips": ["<tip1 ngắn gọn>", "<tip2 ngắn gọn>", "<tip3 ngắn gọn>"],
@@ -67,9 +71,10 @@ Deno.serve(async (req) => {
       lesson_id?: string;
       question_id?: string;
       audio_b64?: string;
+      exam_attempt_id?: string;
     };
 
-    const { lesson_id, question_id, audio_b64 } = body;
+    const { lesson_id, question_id, audio_b64, exam_attempt_id } = body;
 
     if (!question_id) {
       return new Response(JSON.stringify({ error: 'question_id is required' }), {
@@ -101,6 +106,8 @@ Deno.serve(async (req) => {
       .insert({
         user_id: userId,
         exercise_id: null,
+        question_id: question_id ?? null,
+        exam_attempt_id: exam_attempt_id ?? null,
         audio_key: `speaking/${question_id}/${Date.now()}.m4a`,
         status: 'processing',
       })
@@ -170,6 +177,8 @@ Deno.serve(async (req) => {
       pronunciation_feedback: isCzech ? getFeedbackDetail(scored['pronunciation_feedback']) : '',
       pronunciation_tip: isCzech ? getFeedbackTip(scored['pronunciation_feedback']) : '',
       fluency: isCzech ? Number(scored['fluency'] ?? 0) : 0,
+      fluency_feedback: isCzech ? getFeedbackDetail(scored['fluency_feedback']) : '',
+      fluency_tip: isCzech ? getFeedbackTip(scored['fluency_feedback']) : '',
       vocabulary: isCzech ? Number(scored['vocabulary'] ?? 0) : 0,
       vocabulary_feedback: isCzech ? getFeedbackDetail(scored['vocabulary_feedback']) : '',
       vocabulary_tip: isCzech ? getFeedbackTip(scored['vocabulary_feedback']) : '',

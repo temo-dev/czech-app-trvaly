@@ -30,6 +30,7 @@ class MockTestResult with _$MockTestResult {
     required int passThreshold,
     @Default({}) Map<String, SectionResult> sectionScores,
     @Default([]) List<String> weakSkills,
+    @Default(false) bool aiGradingPending,
     required DateTime createdAt,
   }) = _MockTestResult;
 

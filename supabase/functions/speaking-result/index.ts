@@ -71,8 +71,8 @@ Deno.serve(async (req) => {
         label: 'Lưu loát',
         score: Number(metricsDb['fluency'] ?? 0),
         max_score: 100,
-        feedback: String(metricsDb['content_feedback'] ?? ''),
-        tip: String(metricsDb['content_tip'] ?? ''),
+        feedback: String(metricsDb['fluency_feedback'] ?? metricsDb['content_feedback'] ?? ''),
+        tip: String(metricsDb['fluency_tip'] ?? metricsDb['content_tip'] ?? ''),
       },
       {
         label: 'Từ vựng',

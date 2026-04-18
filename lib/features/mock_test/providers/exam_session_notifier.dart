@@ -210,14 +210,13 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
         'remaining_seconds': 0,
       }).eq('id', current.attempt.id);
 
-      // 2. Grade exam via edge function (computes scores + inserts exam_results row)
+      // 2. Grade exam — wait up to 20s; partial result acceptable if AI still processing
       try {
-        await supabase.functions.invoke(
-          'grade-exam',
-          body: {'attempt_id': current.attempt.id},
-        );
+        await supabase.functions
+            .invoke('grade-exam', body: {'attempt_id': current.attempt.id})
+            .timeout(const Duration(seconds: 20));
       } catch (_) {
-        // Non-fatal: result screen will show loading state until function is live
+        // Non-fatal: result screen displays ai_grading_pending banner if needed
       }
 
       // 3. Clear offline buffer
