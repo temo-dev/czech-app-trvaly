@@ -1,177 +1,122 @@
-# Route Map — Trvalý Prep MVP
-> GoRouter · Flutter Web + iOS · Guards defined below
+# Route Map
+
+Canonical route list for GoRouter. All constants live in `lib/core/router/app_routes.dart`. Router defined in `lib/core/router/app_router.dart`.
 
 ---
 
-## Route constants file
-`lib/core/router/app_routes.dart`
+## Auth & Redirect Logic
+
+1. `/` (splash) → if unauthenticated: `/landing`; if authenticated: `/app/dashboard`
+2. Authenticated user visiting `/auth/**` or `/landing` → redirect to `/app/dashboard`
+3. Any `/app/**` route → `authGuard()`: if no session → `/auth/login?from=<encoded_path>`
+
+`_RouterNotifier` bridges `subscriptionStatusProvider` + `supabase.auth.onAuthStateChange` → GoRouter `refreshListenable`.
 
 ---
 
-## Public routes (no auth required)
+## Public Routes (no auth required)
 
-| Constant | Path | Screen |
-|----------|------|--------|
-| `AppRoutes.landing` | `/` | LandingScreen |
-| `AppRoutes.mockTestIntro` | `/mock-test/intro` | MockTestIntroScreen |
-| `AppRoutes.mockTestSession` | `/mock-test/session/:attemptId` | ExamSessionScreen |
-| `AppRoutes.mockTestResult` | `/mock-test/result/:attemptId` | ExamResultScreen |
-| `AppRoutes.login` | `/auth/login` | LoginScreen |
-| `AppRoutes.signup` | `/auth/signup` | SignupScreen |
-| `AppRoutes.forgotPassword` | `/auth/forgot-password` | ForgotPasswordScreen |
-| `AppRoutes.resetPassword` | `/auth/reset-password` | ResetPasswordScreen (deep link `?token=`) |
-
----
-
-## Authenticated routes (ShellRoute — persistent nav)
-
-| Constant | Path | Screen | Guard |
-|----------|------|--------|-------|
-| `AppRoutes.dashboard` | `/dashboard` | DashboardScreen | `authGuard` |
-| `AppRoutes.courseDetail` | `/course/:courseSlug` | CourseOverviewScreen | `authGuard` |
-| `AppRoutes.moduleDetail` | `/module/:moduleId` | ModuleDetailScreen | `authGuard` |
-| `AppRoutes.lessonDetail` | `/lesson/:lessonId` | LessonDetailScreen | `authGuard` |
-| `AppRoutes.practice` | `/practice/:exerciseId` | PracticeScreen | `authGuard` |
-| `AppRoutes.speakingFeedback` | `/ai-feedback/speaking/:attemptId` | SpeakingFeedbackScreen | `authGuard` |
-| `AppRoutes.writingFeedback` | `/ai-feedback/writing/:attemptId` | WritingFeedbackScreen | `authGuard` |
-| `AppRoutes.leaderboard` | `/leaderboard` | LeaderboardScreen | `authGuard` |
-| `AppRoutes.progress` | `/progress` | ProgressScreen | `authGuard` |
-| `AppRoutes.notificationSettings` | `/settings/notifications` | NotificationSettingsScreen | `authGuard` |
-| `AppRoutes.profile` | `/profile` | ProfileScreen | `authGuard` |
-| `AppRoutes.teacherFeedback` | `/teacher-feedback/:reviewId` | TeacherFeedbackScreen | `authGuard` |
+| Path | Screen | Notes |
+|---|---|---|
+| `/` | (splash redirect) | Bootstrap only — immediately redirects |
+| `/landing` | `LandingScreen` | |
+| `/auth/login` | `LoginScreen` | |
+| `/auth/signup` | `SignupScreen` | |
+| `/auth/forgot-password` | `ForgotPasswordScreen` | |
+| `/auth/reset-password` | (deep link) | `?token=` query param |
+| `/onboarding` | `OnboardingScreen` | |
+| `/mock-test/intro` | `MockTestIntroScreen` | `?examId=` query param |
+| `/mock-test/question/:attemptId` | `MockTestQuestionScreen` | guest accessible |
+| `/mock-test/result/:attemptId` | `MockTestResultScreen` | guest accessible |
 
 ---
 
-## Route guard rules
+## Authenticated Shell Routes (`/app/**`)
 
-```
-anonymous user
-  → can access: /, /mock-test/**, /auth/**
-  → redirect to /auth/login if hitting /dashboard or any authenticated route
+Wrapped by `ShellRoute` → `AppShell`. Bottom nav shown unless on full-screen flows.
 
-authenticated user hitting /auth/**
-  → redirect to /dashboard
+### Dashboard
+| Path | Screen |
+|---|---|
+| `/app/dashboard` | `DashboardScreen` |
 
-unknown route
-  → GoRouter errorBuilder → ErrorScreen with back button
+### Courses
+| Path | Screen | Notes |
+|---|---|---|
+| `/app/courses` | `CourseCatalogScreen` | |
+| `/app/courses/:courseId` | `CourseDetailScreen` | |
+| `/app/courses/:courseId/modules/:moduleId` | `ModuleDetailScreen` | |
+| `/app/courses/:courseId/modules/:moduleId/lessons/:lessonId` | `LessonPlayerScreen` | hides bottom nav |
 
-deep link /auth/reset-password?token=<jwt>
-  → extract token, call supabase.auth.verifyOTP
-  → on success: redirect to /dashboard
-```
+### Exam Catalog
+| Path | Screen |
+|---|---|
+| `/app/exams` | `ExamCatalogScreen` |
 
----
+### Practice (Exercise Flow)
+| Path | Screen | Notes |
+|---|---|---|
+| `/app/practice/exercise/:exerciseId` | `PracticeScreen` | extra: `{lessonId, lessonBlockId}` |
+| `/app/practice/intro` | `ExerciseIntroScreen` | hides bottom nav |
+| `/app/practice/question/:index` | `ExerciseQuestionScreen` | hides bottom nav |
+| `/app/practice/explanation` | `ExerciseExplanationScreen` | hides bottom nav |
 
-## GoRouter configuration (reference)
+### Full Simulator (subscription-gated)
+| Path | Screen | Notes |
+|---|---|---|
+| `/app/simulator/intro` | `SimulatorIntroScreen` | subscription check at screen level |
+| `/app/simulator/question/:index` | `SimulatorQuestionScreen` | hides bottom nav |
+| `/app/simulator/result` | `SimulatorResultScreen` | |
 
-```dart
-// lib/core/router/app_router.dart
+### Speaking AI (subscription-gated)
+| Path | Screen | Notes |
+|---|---|---|
+| `/app/speaking/prompt` | `SpeakingPromptScreen` | subscription check at screen level |
+| `/app/speaking/recording` | `SpeakingRecordingScreen` | hides bottom nav |
+| `/app/speaking/feedback` | `SpeakingFeedbackScreen` | standalone — no shell nav |
 
-GoRouter(
-  initialLocation: '/',
-  refreshListenable: _RouterNotifier(ref),
-  redirect: (context, state) {
-    final authed = supabase.auth.currentSession != null;
-    final loc = state.uri.toString();
+### Writing AI (subscription-gated)
+| Path | Screen | Notes |
+|---|---|---|
+| `/app/writing/prompt` | `WritingPromptScreen` | subscription check at screen level |
+| `/app/writing/feedback` | `WritingFeedbackScreen` | standalone — no shell nav |
 
-    // Redirect authed user away from auth screens
-    if (authed && (loc.startsWith('/auth') || loc == '/')) {
-      return '/dashboard';
-    }
+### Social & Chat
+| Path | Screen | Notes |
+|---|---|---|
+| `/app/leaderboard` | `LeaderboardScreen` | |
+| `/app/chat` | `InboxScreen` | |
+| `/app/chat/:roomId` | `ChatRoomScreen` | extra: `{peerName, peerAvatarUrl}` |
+| `/app/teacher/inbox` | `TeacherInboxScreen` | |
+| `/app/teacher/thread/:threadId` | `TeacherThreadScreen` | |
 
-    // Protect all non-public routes
-    final publicPrefixes = ['/', '/mock-test', '/auth'];
-    final isPublic = publicPrefixes.any((p) => loc.startsWith(p));
-    if (!authed && !isPublic) {
-      return '/auth/login?from=${Uri.encodeComponent(loc)}';
-    }
+### Progress & Profile
+| Path | Screen |
+|---|---|
+| `/app/progress` | `ProgressScreen` |
+| `/app/notifications` | `NotificationsScreen` |
+| `/app/profile` | `ProfileScreen` |
+| `/app/profile/settings` | `SettingsScreen` |
+| `/app/subscribe` | `SubscriptionScreen` |
+| `/app/unlock-bonus/:lessonId` | `UnlockBonusScreen` |
 
-    return null;
-  },
-  routes: [
-    // ── Public
-    GoRoute(path: '/', builder: ...),
-    GoRoute(path: '/mock-test/intro', builder: ...),
-    GoRoute(path: '/mock-test/session/:attemptId', builder: ...),
-    GoRoute(path: '/mock-test/result/:attemptId', builder: ...),
-    GoRoute(path: '/auth/login', builder: ...),
-    GoRoute(path: '/auth/signup', builder: ...),
-    GoRoute(path: '/auth/forgot-password', builder: ...),
-    GoRoute(path: '/auth/reset-password', builder: ...),
-
-    // ── Authenticated (wrapped in ShellRoute for persistent nav)
-    ShellRoute(
-      builder: (_, __, child) => AppShell(child: child),
-      routes: [
-        GoRoute(path: '/dashboard', builder: ...),
-        GoRoute(path: '/course/:courseSlug', builder: ...),
-        GoRoute(path: '/module/:moduleId', builder: ...),
-        GoRoute(path: '/lesson/:lessonId', builder: ...),
-        GoRoute(path: '/practice/:exerciseId', builder: ...),
-        GoRoute(path: '/ai-feedback/speaking/:attemptId', builder: ...),
-        GoRoute(path: '/ai-feedback/writing/:attemptId', builder: ...),
-        GoRoute(path: '/leaderboard', builder: ...),
-        GoRoute(path: '/progress', builder: ...),
-        GoRoute(path: '/settings/notifications', builder: ...),
-        GoRoute(path: '/profile', builder: ...),
-        GoRoute(path: '/teacher-feedback/:reviewId', builder: ...),
-      ],
-    ),
-  ],
-)
-```
+### Error
+| Path | Notes |
+|---|---|
+| `/error` | `errorBuilder` fallback |
 
 ---
 
-## Path helpers
+## Shell Navigation Items
 
-```dart
-abstract final class AppRoutes {
-  static const landing = '/';
-  static const mockTestIntro = '/mock-test/intro';
-  static String mockTestSession(String id) => '/mock-test/session/$id';
-  static String mockTestResult(String id) => '/mock-test/result/$id';
-  static const login = '/auth/login';
-  static const signup = '/auth/signup';
-  static const forgotPassword = '/auth/forgot-password';
-  static const resetPassword = '/auth/reset-password';
-  static const dashboard = '/dashboard';
-  static String courseDetail(String slug) => '/course/$slug';
-  static String moduleDetail(String id) => '/module/$id';
-  static String lessonDetail(String id) => '/lesson/$id';
-  static String practice(String id) => '/practice/$id';
-  static String speakingFeedback(String id) => '/ai-feedback/speaking/$id';
-  static String writingFeedback(String id) => '/ai-feedback/writing/$id';
-  static const leaderboard = '/leaderboard';
-  static const progress = '/progress';
-  static const notificationSettings = '/settings/notifications';
-  static const profile = '/profile';
-  static String teacherFeedback(String id) => '/teacher-feedback/$id';
-}
-```
+Bottom nav (< 900px) / Side rail (≥ 900px):
 
----
+| Tab | Path | Icon |
+|---|---|---|
+| Học | `/app/dashboard` | home |
+| Khóa học | `/app/courses` | menu_book |
+| Thi thử | `/app/exams` | quiz |
+| Bảng xếp hạng | `/app/leaderboard` | leaderboard |
+| Hồ sơ | `/app/profile` | person |
 
-## Navigation shell tabs
-
-| Tab index | Label (vi) | Route |
-|-----------|-----------|-------|
-| 0 | Trang chủ | `/dashboard` |
-| 1 | Học | `/course/:lastSlug` or course list |
-| 2 | Luyện tập | `/practice` (intro picker) |
-| 3 | Tiến trình | `/progress` |
-| 4 | Hồ sơ | `/profile` |
-
-Bottom nav visible on: `/dashboard`, `/progress`, `/leaderboard`, `/profile`  
-Bottom nav hidden on: exam session, practice, lesson player, AI feedback screens
-
----
-
-## Deep link + web URL behaviour
-
-| Scenario | URL | Behaviour |
-|----------|-----|-----------|
-| Share result | `/mock-test/result/:id` | Render result read-only for public |
-| Teacher review link | `/teacher-feedback/:id` | Requires auth; redirect to login with `?from=` |
-| Email reset | `/auth/reset-password?token=x` | Supabase JWT exchange |
-| App reopen (iOS) | Last known path from prefs | GoRouter restores state |
+Bottom nav is hidden on: lesson player, simulator question/result, speaking recording, writing/speaking feedback, exercise question/explanation.

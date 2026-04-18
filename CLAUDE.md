@@ -9,12 +9,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Trvalý Prep** — Vietnamese-first exam prep app for the Czech permanent residency (Trvalý pobyt) exam. Flutter Web + iOS, same codebase.
 
 Full implementation documentation lives in `docs/product/`:
-- `screen-map.md` — per-screen contracts (file, provider, states, data shapes)
+- `architecture.md` — stack, startup sequence, routing, DB access patterns, subscription gating
+- `data-contract-map.md` — Supabase tables, Dart models, Edge Function API shapes
 - `route-map.md` — canonical route list and GoRouter config
+- `screen-map.md` — per-screen contracts (file, provider, states, interactions)
+- `state-map.md` — Riverpod provider + Freezed state class definitions
 - `component-map.md` — widget inventory with file paths and props
-- `state-map.md` — Riverpod provider + freezed state class definitions
-- `data-contract-map.md` — Dart models, Supabase tables, AI service API shapes
-- `build-order-14-days.md` — day-by-day build plan with acceptance criteria
 
 ---
 
@@ -43,7 +43,11 @@ make clean                  # flutter clean + pub get + gen
 
 # Tests
 flutter test                                          # all tests
-flutter test test/features/auth/                      # single directory
+make test-unit                                        # unit tests only
+make test-widget                                      # widget tests only
+make test-integration-web                             # integration tests on Chrome (headless, staging)
+make test-integration-ios                             # integration tests on iPhone 15 Pro simulator
+make test-coverage                                    # run tests + open HTML coverage report
 flutter test test/features/auth/login_test.dart       # single file
 
 # Lint
@@ -132,7 +136,12 @@ Key shared models: `AppUser`, `Question`, `QuestionAnswer`, `ExamResult` — see
 ### Supabase integration
 `lib/core/supabase/supabase_config.dart` exposes a top-level `supabase` getter (`Supabase.instance.client`). Use this throughout — no need to pass the client as a dependency.
 
-All AI service calls (speaking scoring, writing correction) go through Supabase Edge Functions — API keys are never on the client.
+All AI service calls (speaking scoring, writing correction) go through Supabase Edge Functions in `supabase/functions/` — API keys are never on the client. Edge functions: `speaking-upload`, `speaking-result`, `writing-submit`, `writing-result`, `grade-exam`, `question-feedback`.
+
+### Local storage
+- `PrefsStorage` (`lib/core/storage/prefs_storage.dart`) — wraps `shared_preferences` for non-sensitive data (e.g. `pendingAttemptId`)
+- `SecureStorage` (`lib/core/storage/secure_storage.dart`) — wraps `flutter_secure_storage` for tokens/sensitive values
+- Hive — offline caching for questions and progress
 
 ### Localisation
 `lib/core/l10n/` contains ARB files for `vi` (primary), `cs`, `en`. Generated via `flutter gen-l10n` (configured in `l10n.yaml`). Access strings with `AppLocalizations.of(context)`.
