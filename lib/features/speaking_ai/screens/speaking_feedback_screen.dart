@@ -96,7 +96,7 @@ class SpeakingFeedbackScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Speaking Analysis',
+                    'Kết quả Nói',
                     style: AppTypography.headlineSmall.copyWith(
                       color: AppColors.primary,
                       fontSize: 22,
@@ -218,6 +218,12 @@ class _FeedbackBody extends StatelessWidget {
               _ScoreHero(score: pct),
               const SizedBox(height: 32),
 
+              // Short tips card
+              if (result.shortTips.isNotEmpty) ...[
+                _ShortTipsCard(tips: result.shortTips),
+                const SizedBox(height: 24),
+              ],
+
               // Metrics bento grid
               if (result.metrics.isNotEmpty) ...[
                 _MetricsGrid(metrics: result.metrics),
@@ -230,10 +236,8 @@ class _FeedbackBody extends StatelessWidget {
                 const SizedBox(height: 24),
               ],
 
-              // Strengths / Improvements 2-col
-              _StrengthsImprovements(
-                corrections: result.corrections,
-              ),
+              // Error categories from AI feedback
+              _ErrorCategories(result: result),
               const SizedBox(height: 24),
 
               // Sample answer card
@@ -318,9 +322,10 @@ class _MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pct = (metric.fraction * 100).round();
+    final hasTip = metric.tip != null && metric.tip!.isNotEmpty;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.xl),
@@ -347,6 +352,89 @@ class _MetricCard extends StatelessWidget {
               fontSize: 9,
             ),
             textAlign: TextAlign.center,
+          ),
+          if (hasTip) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFFFE082)),
+              ),
+              child: Text(
+                metric.tip!,
+                style: AppTypography.bodySmall.copyWith(
+                  color: const Color(0xFF7B5E00),
+                  fontSize: 10,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Short Tips Card ───────────────────────────────────────────────────────────
+
+class _ShortTipsCard extends StatelessWidget {
+  const _ShortTipsCard({required this.tips});
+  final List<String> tips;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDE7),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: const Color(0xFFFFE57F)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tips_and_updates_rounded,
+                  color: Color(0xFFF9A825), size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'Gợi ý nhanh từ AI',
+                style: AppTypography.headlineSmall.copyWith(
+                  fontSize: 16,
+                  color: const Color(0xFF7B5E00),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...tips.map(
+            (tip) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('💡 ',
+                      style: TextStyle(fontSize: 13)),
+                  Expanded(
+                    child: Text(
+                      tip,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: const Color(0xFF7B5E00),
+                        fontWeight: FontWeight.w600,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -400,84 +488,113 @@ class _AiFeedbackCard extends StatelessWidget {
   }
 }
 
-// ── Strengths & Improvements ──────────────────────────────────────────────────
+// ── Error Categories ──────────────────────────────────────────────────────────
 
-class _StrengthsImprovements extends StatelessWidget {
-  const _StrengthsImprovements({required this.corrections});
-  final List<String> corrections;
+class _ErrorCategories extends StatelessWidget {
+  const _ErrorCategories({required this.result});
+  final SpeakingFeedbackResult result;
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.sizeOf(context).width >= 600;
+    // Pronunciation errors: metric feedback + transcript words
+    final pronunciationErrors = <String>[];
+    for (final m in result.metrics) {
+      final l = m.label.toLowerCase();
+      if ((l.contains('pronun') || l.contains('phát âm')) &&
+          m.feedback != null &&
+          m.feedback!.isNotEmpty) {
+        pronunciationErrors.add(m.feedback!);
+      }
+    }
+    pronunciationErrors.addAll(result.transcriptWords
+        .where((w) => w.issue == 'pronunciation')
+        .map((w) => w.suggestion != null
+            ? '"${w.word}" → ${w.suggestion}'
+            : '"${w.word}"'));
 
-    const strengths = [
-      'Sử dụng từ vựng chuyên ngành chính xác trong ngữ cảnh.',
-      'Ngữ điệu tự nhiên, có sự nhấn nhá ở các từ khóa quan trọng.',
-    ];
+    // Grammar + vocab errors: metric feedback + transcript words + corrections
+    final grammarVocabErrors = <String>[];
+    for (final m in result.metrics) {
+      final l = m.label.toLowerCase();
+      if ((l.contains('grammar') ||
+              l.contains('ngữ pháp') ||
+              l.contains('vocab') ||
+              l.contains('từ vựng')) &&
+          m.feedback != null &&
+          m.feedback!.isNotEmpty) {
+        grammarVocabErrors.add(m.feedback!);
+      }
+    }
+    grammarVocabErrors.addAll(result.transcriptWords
+        .where((w) => w.issue == 'grammar' || w.issue == 'vocabulary')
+        .map((w) => w.suggestion != null
+            ? '"${w.word}" → ${w.suggestion}'
+            : '"${w.word}"'));
+    grammarVocabErrors.addAll(result.corrections);
 
-    final improvements = corrections.isNotEmpty
-        ? corrections
-        : [
-            'Phát âm âm cuối (ending sounds) như /s/ và /t/ chưa đều.',
-            'Lỗi chia động từ ở các câu điều kiện loại 2.',
-          ];
-
-    if (isWide) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-              child: _FeedbackSection(
-                  title: 'Ưu điểm',
-                  icon: Icons.task_alt_rounded,
-                  color: AppColors.primary,
-                  items: strengths)),
-          const SizedBox(width: 24),
-          Expanded(
-              child: _FeedbackSection(
-                  title: 'Cần cải thiện',
-                  icon: Icons.error_outline_rounded,
-                  color: AppColors.tertiary,
-                  items: improvements)),
-        ],
-      );
+    // Content errors: fluency/content metric feedback
+    final contentErrors = <String>[];
+    for (final m in result.metrics) {
+      final l = m.label.toLowerCase();
+      if ((l.contains('content') ||
+              l.contains('nội dung') ||
+              l.contains('fluency') ||
+              l.contains('lưu loát') ||
+              l.contains('trả lời') ||
+              l.contains('coheren')) &&
+          m.feedback != null &&
+          m.feedback!.isNotEmpty) {
+        contentErrors.add(m.feedback!);
+      }
     }
 
     return Column(
       children: [
-        _FeedbackSection(
-            title: 'Ưu điểm',
-            icon: Icons.task_alt_rounded,
-            color: AppColors.primary,
-            items: strengths),
-        const SizedBox(height: 16),
-        _FeedbackSection(
-            title: 'Cần cải thiện',
-            icon: Icons.error_outline_rounded,
-            color: AppColors.tertiary,
-            items: improvements),
+        _ErrorCategoryCard(
+          title: 'Lỗi nội dung',
+          icon: Icons.topic_rounded,
+          items: contentErrors,
+          emptyLabel: 'Nội dung bài nói phù hợp với yêu cầu.',
+        ),
+        const SizedBox(height: 12),
+        _ErrorCategoryCard(
+          title: 'Lỗi ngữ pháp + từ vựng',
+          icon: Icons.spellcheck_rounded,
+          items: grammarVocabErrors,
+          emptyLabel: 'Không có lỗi ngữ pháp hoặc từ vựng đáng chú ý.',
+        ),
+        const SizedBox(height: 12),
+        _ErrorCategoryCard(
+          title: 'Lỗi phát âm',
+          icon: Icons.record_voice_over_rounded,
+          items: pronunciationErrors,
+          emptyLabel: 'Phát âm tốt, không có lỗi đáng kể.',
+        ),
       ],
     );
   }
 }
 
-class _FeedbackSection extends StatelessWidget {
-  const _FeedbackSection({
+class _ErrorCategoryCard extends StatelessWidget {
+  const _ErrorCategoryCard({
     required this.title,
     required this.icon,
-    required this.color,
     required this.items,
+    required this.emptyLabel,
   });
 
   final String title;
   final IconData icon;
-  final Color color;
   final List<String> items;
+  final String emptyLabel;
 
   @override
   Widget build(BuildContext context) {
+    final hasErrors = items.isNotEmpty;
+    final color = hasErrors ? AppColors.tertiary : AppColors.primary;
+
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.xxl),
@@ -496,17 +613,48 @@ class _FeedbackSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: AppTypography.headlineSmall.copyWith(fontSize: 20),
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTypography.headlineSmall.copyWith(fontSize: 18),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: hasErrors
+                      ? AppColors.tertiaryFixed
+                      : AppColors.primaryFixed,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+                child: Text(
+                  hasErrors ? '${items.length} lỗi' : 'Tốt',
+                  style: AppTypography.labelUppercase.copyWith(
+                    color: hasErrors
+                        ? AppColors.onTertiaryFixed
+                        : AppColors.onBackground,
+                    fontSize: 9,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          ...items.map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
+          const SizedBox(height: 12),
+          if (!hasErrors)
+            Text(
+              emptyLabel,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.onSurfaceVariant,
+                height: 1.5,
+              ),
+            )
+          else
+            ...items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -514,15 +662,15 @@ class _FeedbackSection extends StatelessWidget {
                       '●',
                       style: TextStyle(
                         color: color,
-                        fontSize: 12,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         item,
-                        style: AppTypography.bodyMedium.copyWith(
+                        style: AppTypography.bodySmall.copyWith(
                           color: AppColors.onSurfaceVariant,
                           fontWeight: FontWeight.w500,
                           height: 1.5,
@@ -531,7 +679,8 @@ class _FeedbackSection extends StatelessWidget {
                     ),
                   ],
                 ),
-              )),
+              ),
+            ),
         ],
       ),
     );

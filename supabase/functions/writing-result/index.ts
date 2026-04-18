@@ -53,25 +53,44 @@ Deno.serve(async (req) => {
       );
     }
 
-    const metricsDb = (r['metrics'] as Record<string, number>) ?? {};
+    const metricsDb = (r['metrics'] as Record<string, unknown>) ?? {};
 
     // metrics list expected by Flutter: [{ label, score, max_score, feedback? }]
     const metricsList = [
-      { label: 'Ngữ pháp', score: metricsDb['grammar'] ?? 0, max_score: 100 },
-      { label: 'Từ vựng', score: metricsDb['vocabulary'] ?? 0, max_score: 100 },
-      { label: 'Mạch lạc', score: metricsDb['coherence'] ?? 0, max_score: 100 },
-      { label: 'Hoàn thành đề', score: metricsDb['task_achievement'] ?? 0, max_score: 100 },
+      {
+        label: 'Ngữ pháp',
+        score: Number(metricsDb['grammar'] ?? 0),
+        max_score: 100,
+        feedback: String(metricsDb['grammar_feedback'] ?? ''),
+      },
+      {
+        label: 'Từ vựng',
+        score: Number(metricsDb['vocabulary'] ?? 0),
+        max_score: 100,
+        feedback: String(metricsDb['vocabulary_feedback'] ?? ''),
+      },
+      {
+        label: 'Mạch lạc & Hình thức',
+        score: Number(metricsDb['coherence'] ?? 0),
+        max_score: 100,
+        feedback: String(metricsDb['format_feedback'] ?? ''),
+      },
+      {
+        label: 'Nội dung',
+        score: Number(metricsDb['task_achievement'] ?? 0),
+        max_score: 100,
+        feedback: String(metricsDb['content_feedback'] ?? ''),
+      },
     ];
 
-    // annotated_spans were stored in grammar_notes column
     const annotatedSpans = (r['grammar_notes'] as unknown[]) ?? [
       { text: r['answer_text'] as string ?? '', issue_type: null },
     ];
 
-    // overall_feedback was stored in vocabulary_notes as [{ overall_feedback: "..." }]
-    const vocabNotes = (r['vocabulary_notes'] as Array<Record<string, string>>) ?? [];
-    const overallFeedback = vocabNotes[0]?.['overall_feedback']
-      ?? buildOverallFeedback(metricsDb);
+    const overallFeedback = String(metricsDb['overall_feedback'] ?? '')
+      || buildOverallFeedback(metricsDb);
+
+    const shortTips = (metricsDb['short_tips'] as string[] | undefined) ?? [];
 
     return new Response(
       JSON.stringify({
@@ -81,6 +100,7 @@ Deno.serve(async (req) => {
         max_score: 100,
         metrics: metricsList,
         annotated_spans: annotatedSpans,
+        short_tips: shortTips,
         corrected_version: r['corrected_essay'] ?? '',
         overall_feedback: overallFeedback,
       }),
@@ -95,9 +115,9 @@ Deno.serve(async (req) => {
   }
 });
 
-function buildOverallFeedback(metrics: Record<string, number>): string {
-  const values = Object.values(metrics);
-  if (values.length === 0) return 'Tiếp tục luyện tập để cải thiện kỹ năng viết!';
+function buildOverallFeedback(metrics: Record<string, unknown>): string {
+  const numericKeys = ['grammar', 'vocabulary', 'coherence', 'task_achievement'];
+  const values = numericKeys.map((k) => Number(metrics[k] ?? 0));
   const avg = values.reduce((a, b) => a + b, 0) / values.length;
   if (avg >= 80) return 'Bài viết rất tốt! Ngữ pháp và từ vựng phong phú.';
   if (avg >= 60) return 'Bài viết khá tốt. Chú ý thêm về biến cách danh từ và cấu trúc câu.';

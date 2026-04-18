@@ -17,6 +17,9 @@ class ExamResult with _$ExamResult {
     required Map<String, int> sectionTotals,
     required List<QuestionAnswer> answers,
     required DateTime completedAt,
+    @Default(60) int passThreshold,            // minimum passing score
+    @Default([]) List<String> weakSkills,      // skills below threshold
+    String? recommendation,                    // suggested next lesson/module
     int? totalTimeSeconds,
   }) = _ExamResult;
 
@@ -27,7 +30,7 @@ class ExamResult with _$ExamResult {
 enum ExamType { mockTest, fullSimulator, practiceSet }
 
 extension ExamResultX on ExamResult {
-  bool get passed => totalScore >= 60;
+  bool get passed => totalScore >= passThreshold;
 
   /// Score band for color-coding
   ScoreBand get band {

@@ -6,6 +6,7 @@ import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/features/mock_test/models/mock_test_result.dart';
+import 'package:app_czech/shared/utils/skill_labels.dart';
 import 'package:app_czech/shared/widgets/progress_ring.dart';
 
 /// Card showing the user's most recent exam result.
@@ -129,12 +130,6 @@ class _SectionMiniBar extends StatelessWidget {
   const _SectionMiniBar({required this.sectionScores});
   final Map<String, SectionResult> sectionScores;
 
-  static const _skillNames = {
-    'reading': 'Đọc',
-    'listening': 'Nghe',
-    'writing': 'Viết',
-    'speaking': 'Nói',
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +142,7 @@ class _SectionMiniBar extends StatelessWidget {
       children: entries.map((e) {
         final pct = e.value.percentage * 100;
         return Text(
-          '${_skillNames[e.key] ?? e.key}: ${pct.round()}%',
+          '${SkillLabels.forKey(e.key)}: ${pct.round()}%',
           style: AppTypography.labelSmall.copyWith(
             color: cs.onSurfaceVariant,
           ),

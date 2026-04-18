@@ -10,6 +10,7 @@ import 'package:app_czech/shared/widgets/app_button.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import '../../exercise/widgets/question_shell.dart';
+import '../../speaking_ai/providers/speaking_provider.dart';
 import '../providers/exam_questions_provider.dart';
 import '../providers/exam_session_notifier.dart';
 import '../widgets/confirm_submit_dialog.dart';
@@ -130,8 +131,6 @@ class _MockTestQuestionScreenState
       child: sessionAsync.when(
         loading: () => const _SessionLoadingScreen(),
         error: (e, st) {
-          // ignore: avoid_print
-          print('[examSession ERROR] $e\n$st');
           return ErrorState(
             message: 'Lỗi session: $e',
             onRetry: () => ref.invalidate(
@@ -236,6 +235,9 @@ class _MockTestQuestionScreenState
                         ),
                         isSubmitting:
                             session.status == ExamSessionStatus.submitting,
+                        isSpeakingUploading: ref.watch(speakingSessionProvider)
+                                .status ==
+                            SpeakingStatus.uploading,
                       ),
                     ],
                   ),
@@ -298,6 +300,7 @@ class _BottomBar extends StatelessWidget {
     required this.onNext,
     required this.onSubmit,
     required this.isSubmitting,
+    required this.isSpeakingUploading,
   });
 
   final ExamSessionState session;
@@ -305,6 +308,7 @@ class _BottomBar extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onSubmit;
   final bool isSubmitting;
+  final bool isSpeakingUploading;
 
   bool get _isFirst =>
       session.currentSectionIndex == 0 &&
@@ -330,34 +334,62 @@ class _BottomBar extends StatelessWidget {
         color: cs.surface,
         border: Border(top: BorderSide(color: cs.outlineVariant)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          OutlinedButton.icon(
-            onPressed: _isFirst ? null : onPrev,
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 52),
+          if (isSpeakingUploading)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.x2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.x2),
+                  Text(
+                    'Đang nộp bài ghi âm, vui lòng chờ...',
+                    style: AppTypography.labelSmall
+                        .copyWith(color: AppColors.primary),
+                  ),
+                ],
+              ),
             ),
-            icon: const Icon(Icons.chevron_left_rounded, size: 20),
-            label: const Text('Trước'),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _isLast
-                ? AppButton(
-              label: 'Nộp bài',
-              loading: isSubmitting,
-              onPressed: isSubmitting ? null : onSubmit,
-              fullWidth: true,
-              icon: Icons.check_rounded,
-              size: AppButtonSize.md,
-            )
-                : AppButton(
-              label: 'Tiếp',
-              onPressed: onNext,
-              fullWidth: true,
-              trailingIcon: Icons.chevron_right_rounded,
-              size: AppButtonSize.md,
-            ),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _isFirst ? null : onPrev,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 52),
+                ),
+                icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                label: const Text('Trước'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _isLast
+                    ? AppButton(
+                  label: 'Nộp bài',
+                  loading: isSubmitting,
+                  onPressed: isSubmitting ? null : onSubmit,
+                  fullWidth: true,
+                  icon: Icons.check_rounded,
+                  size: AppButtonSize.md,
+                )
+                    : AppButton(
+                  label: 'Tiếp',
+                  onPressed: isSpeakingUploading ? null : onNext,
+                  fullWidth: true,
+                  trailingIcon: Icons.chevron_right_rounded,
+                  size: AppButtonSize.md,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -411,6 +443,13 @@ class _QuestionBody extends ConsumerWidget {
                 ? QuestionAnswer(questionId: question.id, writtenAnswer: raw)
                 : QuestionAnswer(questionId: question.id, selectedOptionId: raw);
 
+        // Pre-read the notifier so the closure does not capture [ref].
+        // Capturing ref is unsafe: async callbacks (e.g. speaking upload
+        // completing after navigation) may fire after this widget disposes,
+        // at which point ref.read throws "Cannot use ref after disposal".
+        final sessionNotifier =
+            ref.read(examSessionNotifierProvider(attemptId).notifier);
+
         return SingleChildScrollView(
           // Key by question.id so StatefulWidget descendants (e.g.
           // WritingInputExercise's TextEditingController) are fully
@@ -420,12 +459,10 @@ class _QuestionBody extends ConsumerWidget {
             question: question,
             currentAnswer: currentAnswer,
             isSubmitted: false,
-            onAnswerChanged: (qa) => ref
-                .read(examSessionNotifierProvider(attemptId).notifier)
-                .answer(
-                  'q_$globalIdx',
-                  qa.selectedOptionId ?? qa.writtenAnswer ?? '',
-                ),
+            onAnswerChanged: (qa) => sessionNotifier.answer(
+              'q_$globalIdx',
+              qa.selectedOptionId ?? qa.writtenAnswer ?? '',
+            ),
           ),
         );
       },

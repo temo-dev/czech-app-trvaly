@@ -16,6 +16,8 @@ class AppUser with _$AppUser {
     @Default(0) int dailyGoalMinutes,
     @Default(0) int currentStreakDays,
     @Default(0) int totalXp,
+    @Default(0) int weeklyXp,
+    DateTime? lastActivityDate,
     @Default(SubscriptionTier.free) SubscriptionTier subscriptionTier,
     DateTime? subscriptionExpiresAt,
     DateTime? createdAt,

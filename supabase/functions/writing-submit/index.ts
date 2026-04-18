@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const WRITING_SYSTEM_PROMPT = `
 Bạn là giáo viên chấm bài viết tiếng Séc cho người học người Việt Nam.
 Người học đang luyện thi kỳ thi trình độ A2 để xin Trvalý pobyt (cư trú lâu dài) tại Cộng hòa Séc.
+Nhiệm vụ là chấm điểm và nhận xét CHI TIẾT từng loại lỗi.
 
 Tiêu chí chấm:
 - grammar (ngữ pháp): 0–100 — độ chính xác về biến cách, chia động từ, trật tự từ
@@ -24,16 +25,25 @@ Trả về JSON chính xác theo định dạng sau (không có văn bản nào 
   "task_achievement": <int 0-100>,
   "annotated_spans": [
     { "text": "<đoạn văn không có lỗi>", "issue_type": null },
-    { "text": "<từ hoặc cụm từ có lỗi>", "issue_type": "grammar", "correction": "<sửa>", "explanation": "<giải thích ngắn>" }
+    { "text": "<từ hoặc cụm từ có lỗi>", "issue_type": "grammar|vocabulary|spelling", "correction": "<sửa đúng>", "explanation": "<giải thích rõ tại sao sai và cách sửa>", "tip": "<Lời khuyên ngắn 1 câu tối đa 15 từ để tránh lỗi này lần sau>" }
   ],
-  "corrected_essay": "<toàn bộ bài viết đã được sửa hoàn chỉnh>",
-  "overall_feedback": "<nhận xét tổng quan 2-3 câu bằng tiếng Việt>"
+  "grammar_feedback": "<Nhận xét CHI TIẾT ngữ pháp: liệt kê lỗi biến cách (pád mấy bị sai), lỗi chia động từ nào, lỗi trật tự từ. Trích dẫn câu/cụm từ cụ thể và cách sửa.>",
+  "vocabulary_feedback": "<Nhận xét CHI TIẾT từ vựng: từ nào dùng sai nghĩa hoặc không phù hợp văn cảnh, gợi ý thay thế. Nếu tốt thì nêu điểm hay.>",
+  "content_feedback": "<Nhận xét về nội dung: bài có đáp ứng đúng yêu cầu đề bài không, thiếu ý gì, có ý thừa không.>",
+  "format_feedback": "<Nhận xét về hình thức: cấu trúc bài (mở/thân/kết), độ dài, văn phong có phù hợp thể loại (thư/đơn/bài luận) không.>",
+  "short_tips": ["<tip1 ngắn gọn, tối đa 15 từ>", "<tip2>", "<tip3>"],
+  "corrected_essay": "<Toàn bộ bài viết đã được sửa hoàn chỉnh, đúng ngữ pháp tiếng Séc>",
+  "overall_feedback": "<Nhận xét tổng quan 2-3 câu bằng tiếng Việt, tóm tắt điểm mạnh và lỗi cần ưu tiên sửa nhất.>"
 }
 
 Lưu ý quan trọng về annotated_spans:
 - Phải bao phủ TOÀN BỘ văn bản gốc theo thứ tự
-- Các đoạn không có lỗi dùng issue_type = null
+- Các đoạn không có lỗi dùng issue_type = null và KHÔNG có trường tip
 - issue_type có thể là: "grammar", "vocabulary", "spelling"
+- explanation phải giải thích RÕ RÀNG tại sao sai và cách sửa đúng
+- tip là lời khuyên ngắn gọn để học sinh nhớ quy tắc, tối đa 15 từ
+
+short_tips là tối đa 3 lời khuyên quan trọng nhất từ toàn bộ bài, mỗi tip tối đa 15 từ tiếng Việt.
 `.trim();
 
 Deno.serve(async (req) => {
@@ -110,15 +120,19 @@ Deno.serve(async (req) => {
     const overallScore = Number(scored['overall_score'] ?? 0);
     const metrics = {
       grammar: Number(scored['grammar'] ?? 0),
+      grammar_feedback: String(scored['grammar_feedback'] ?? ''),
       vocabulary: Number(scored['vocabulary'] ?? 0),
+      vocabulary_feedback: String(scored['vocabulary_feedback'] ?? ''),
       coherence: Number(scored['coherence'] ?? 0),
+      format_feedback: String(scored['format_feedback'] ?? ''),
       task_achievement: Number(scored['task_achievement'] ?? 0),
+      content_feedback: String(scored['content_feedback'] ?? ''),
+      overall_feedback: String(scored['overall_feedback'] ?? ''),
+      short_tips: (scored['short_tips'] as string[]) ?? [],
     };
 
-    // Store annotated_spans in grammar_notes (flexible JSONB column)
     const annotatedSpans = (scored['annotated_spans'] as unknown[]) ?? [{ text, issue_type: null }];
     const correctedEssay = String(scored['corrected_essay'] ?? '');
-    const overallFeedback = String(scored['overall_feedback'] ?? '');
 
     await supabase
       .from('ai_writing_attempts')
@@ -126,8 +140,8 @@ Deno.serve(async (req) => {
         status: 'ready',
         overall_score: overallScore,
         metrics,
-        grammar_notes: annotatedSpans,         // annotated_spans stored here
-        vocabulary_notes: [{ overall_feedback: overallFeedback }], // overall feedback stored here
+        grammar_notes: annotatedSpans,
+        vocabulary_notes: [{ overall_feedback: metrics.overall_feedback }],
         corrected_essay: correctedEssay,
         updated_at: new Date().toISOString(),
       })

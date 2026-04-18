@@ -5,9 +5,15 @@ import 'package:flutter/material.dart';
 ///
 /// KEY RULE: ALL headlines use EB Garamond with fontStyle: italic.
 /// Body/labels/buttons use Manrope (normal style).
+/// Font family name constants — use instead of raw strings.
+abstract final class AppFonts {
+  static const headline = 'EBGaramond'; // Serif — italic display & headlines
+  static const body = 'Manrope';        // Sans — body, titles, labels, buttons
+}
+
 abstract final class AppTypography {
-  static const _headline = 'EBGaramond'; // Serif — italic display & headlines
-  static const _body = 'Manrope';        // Sans — body, titles, labels, buttons
+  static const _headline = AppFonts.headline;
+  static const _body = AppFonts.body;
 
   // ── Display (EB Garamond Italic — large editorial) ─────────────────────────
   static const displayLarge = TextStyle(

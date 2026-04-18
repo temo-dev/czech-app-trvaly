@@ -28,12 +28,14 @@ class AnnotatedSpan {
     this.issueType,
     this.correction,
     this.explanation,
+    this.tip,
   });
 
   final String text;
   final String? issueType; // 'grammar' | 'vocabulary' | 'spelling' | null
   final String? correction;
   final String? explanation;
+  final String? tip;
 
   bool get hasIssue => issueType != null;
 }
@@ -48,6 +50,7 @@ class WritingFeedbackResult {
     required this.annotatedSpans,
     required this.correctedVersion,
     required this.overallFeedback,
+    this.shortTips = const [],
   });
 
   final String attemptId;
@@ -58,6 +61,7 @@ class WritingFeedbackResult {
   final List<AnnotatedSpan> annotatedSpans;
   final String correctedVersion;
   final String overallFeedback;
+  final List<String> shortTips;
 
   double get fraction =>
       maxScore > 0 ? (totalScore / maxScore).clamp(0.0, 1.0) : 0;
@@ -130,19 +134,13 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
       }
 
       if (attemptId == null) {
-        final userId = supabase.auth.currentUser?.id;
-        final row = await supabase
-            .from('writing_attempts')
-            .insert({
-              'question_id': questionId,
-              'lesson_id': lessonId,
-              if (userId != null) 'user_id': userId,
-              'original_text': text,
-              'status': 'pending',
-            })
-            .select()
-            .maybeSingle();
-        if (row != null) attemptId = (row as Map)['id'] as String;
+        // writing-submit failed — there's no backend scorer for a direct DB
+        // insert, so show an error immediately instead of polling forever.
+        state = state.copyWith(
+          status: WritingFeedbackStatus.error,
+          errorMessage: 'Không thể gửi bài lên AI. Vui lòng thử lại.',
+        );
+        return;
       }
 
       state = state.copyWith(
@@ -150,14 +148,7 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
         attemptId: attemptId,
       );
 
-      if (attemptId != null) {
-        _startPolling(attemptId, originalText: text);
-      } else {
-        state = state.copyWith(
-          status: WritingFeedbackStatus.error,
-          errorMessage: 'Không thể tạo bài nộp.',
-        );
-      }
+      _startPolling(attemptId, originalText: text);
     } catch (e) {
       state = state.copyWith(
         status: WritingFeedbackStatus.error,
@@ -214,25 +205,90 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
       return _parseEdgeResponse(attemptId, data, originalText);
     } catch (_) {}
 
-    // Fallback: check writing_attempts table
+    // Fallback: read ai_writing_attempts directly (handles writing-result outage)
     try {
       final row = await supabase
-          .from('writing_attempts')
+          .from('ai_writing_attempts')
           .select()
           .eq('id', attemptId)
           .maybeSingle();
       if (row == null) return null;
       final rm = Map<String, dynamic>.from(row as Map);
-      final status = rm['status'] as String? ?? 'pending';
-      if (status == 'completed') return _parseRow(attemptId, rm, originalText);
+      final status = rm['status'] as String? ?? 'processing';
+      if (status == 'ready') return _parseAiRow(attemptId, rm, originalText);
       if (status == 'error') {
         state = state.copyWith(
           status: WritingFeedbackStatus.error,
-          errorMessage: 'Không thể chấm điểm bài viết.',
+          errorMessage: rm['error_message'] as String? ??
+              'Không thể chấm điểm bài viết.',
         );
       }
     } catch (_) {}
     return null;
+  }
+
+  WritingFeedbackResult _parseAiRow(
+      String attemptId, Map<String, dynamic> row, String originalText) {
+    final metricsDb =
+        (row['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
+    final spansRaw = (row['grammar_notes'] as List?) ?? [];
+    final spans = spansRaw.isEmpty
+        ? [AnnotatedSpan(text: originalText)]
+        : spansRaw.map((s) {
+            final sm = Map<String, dynamic>.from(s as Map);
+            return AnnotatedSpan(
+              text: sm['text'] as String? ?? '',
+              issueType: sm['issue_type'] as String?,
+              correction: sm['correction'] as String?,
+              explanation: sm['explanation'] as String?,
+              tip: sm['tip'] as String?,
+            );
+          }).toList();
+
+    final shortTips =
+        (metricsDb['short_tips'] as List?)?.map((t) => t as String).toList() ??
+            [];
+
+    return WritingFeedbackResult(
+      attemptId: attemptId,
+      totalScore: (row['overall_score'] as num?)?.toDouble() ?? 0,
+      maxScore: 100,
+      metrics: [
+        if (metricsDb['grammar'] != null)
+          WritingMetric(
+            label: 'Ngữ pháp',
+            score: (metricsDb['grammar'] as num).toDouble(),
+            maxScore: 100,
+            feedback: metricsDb['grammar_feedback'] as String?,
+          ),
+        if (metricsDb['vocabulary'] != null)
+          WritingMetric(
+            label: 'Từ vựng',
+            score: (metricsDb['vocabulary'] as num).toDouble(),
+            maxScore: 100,
+            feedback: metricsDb['vocabulary_feedback'] as String?,
+          ),
+        if (metricsDb['coherence'] != null)
+          WritingMetric(
+            label: 'Mạch lạc & Hình thức',
+            score: (metricsDb['coherence'] as num).toDouble(),
+            maxScore: 100,
+            feedback: metricsDb['format_feedback'] as String?,
+          ),
+        if (metricsDb['task_achievement'] != null)
+          WritingMetric(
+            label: 'Nội dung',
+            score: (metricsDb['task_achievement'] as num).toDouble(),
+            maxScore: 100,
+            feedback: metricsDb['content_feedback'] as String?,
+          ),
+      ],
+      originalText: originalText,
+      annotatedSpans: spans,
+      correctedVersion: row['corrected_essay'] as String? ?? '',
+      overallFeedback: metricsDb['overall_feedback'] as String? ?? '',
+      shortTips: shortTips,
+    );
   }
 
   WritingFeedbackResult _parseEdgeResponse(
@@ -258,8 +314,13 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
               issueType: sm['issue_type'] as String?,
               correction: sm['correction'] as String?,
               explanation: sm['explanation'] as String?,
+              tip: sm['tip'] as String?,
             );
           }).toList();
+
+    final shortTips = (data['short_tips'] as List<dynamic>? ?? [])
+        .map((t) => t as String)
+        .toList();
 
     return WritingFeedbackResult(
       attemptId: attemptId,
@@ -270,6 +331,7 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
       annotatedSpans: spans,
       correctedVersion: data['corrected_version'] as String? ?? '',
       overallFeedback: data['overall_feedback'] as String? ?? '',
+      shortTips: shortTips,
     );
   }
 
@@ -299,4 +361,302 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
 final writingSessionProvider = StateNotifierProvider.autoDispose<
     WritingSessionNotifier, WritingSessionState>(
   (_) => WritingSessionNotifier(),
+);
+
+// ── Review feedback (mock-test result screen) ─────────────────────────────────
+//
+// Family provider keyed by questionId. Auto-submits the user's written answer
+// to the AI and stores the result for display in the review panel.
+
+class WritingReviewNotifier extends StateNotifier<WritingSessionState> {
+  WritingReviewNotifier() : super(const WritingSessionState());
+
+  static const _maxRetries = 6;
+  static const _pollInterval = Duration(seconds: 3);
+
+  bool _submitted = false;
+
+  Future<void> submit({
+    required String text,
+    required String questionId,
+  }) async {
+    if (_submitted || !mounted) return;
+    _submitted = true;
+    state = state.copyWith(status: WritingFeedbackStatus.submitting);
+
+    try {
+      String? attemptId;
+      try {
+        final res = await supabase.functions.invoke(
+          'writing-submit',
+          body: {'text': text, 'question_id': questionId},
+        );
+        final data = res.data as Map<String, dynamic>?;
+        attemptId = data?['attempt_id'] as String?;
+      } catch (_) {}
+
+      if (!mounted) return;
+      if (attemptId == null) {
+        state = state.copyWith(
+          status: WritingFeedbackStatus.error,
+          errorMessage: 'Không thể gửi bài viết lên AI.',
+        );
+        return;
+      }
+
+      state = state.copyWith(
+        status: WritingFeedbackStatus.pending,
+        attemptId: attemptId,
+      );
+
+      // writing-submit is synchronous — result should be ready immediately.
+      // Poll a few times as a safety net for DB propagation lag.
+      int count = 0;
+      while (mounted && count < _maxRetries) {
+        await Future.delayed(_pollInterval);
+        if (!mounted) return;
+        count++;
+        state = state.copyWith(
+          status: WritingFeedbackStatus.scoring,
+          pollCount: count,
+        );
+        final result = await _fetchResult(attemptId, originalText: text);
+        if (result != null) {
+          state = state.copyWith(
+            status: WritingFeedbackStatus.completed,
+            result: result,
+          );
+          return;
+        }
+      }
+
+      if (mounted && state.status != WritingFeedbackStatus.completed) {
+        state = state.copyWith(
+          status: WritingFeedbackStatus.error,
+          errorMessage: 'Hết thời gian chờ chấm điểm.',
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      state = state.copyWith(
+        status: WritingFeedbackStatus.error,
+        errorMessage: 'Lỗi kết nối AI. Vui lòng thử lại.',
+      );
+    }
+  }
+
+  Future<WritingFeedbackResult?> _fetchResult(
+    String attemptId, {
+    required String originalText,
+  }) async {
+    try {
+      final res = await supabase.functions
+          .invoke('writing-result', body: {'attempt_id': attemptId});
+      final data = res.data as Map<String, dynamic>?;
+      if (data == null || data['status'] == 'pending') return null;
+      if (data['status'] == 'error') {
+        if (mounted) {
+          state = state.copyWith(
+            status: WritingFeedbackStatus.error,
+            errorMessage:
+                data['message'] as String? ?? 'Lỗi chấm điểm bài viết.',
+          );
+        }
+        return null;
+      }
+      return _parseEdgeResponse(attemptId, data, originalText);
+    } catch (_) {}
+
+    // Fallback: read ai_writing_attempts directly
+    try {
+      final row = await supabase
+          .from('ai_writing_attempts')
+          .select()
+          .eq('id', attemptId)
+          .maybeSingle();
+      if (row == null) return null;
+      final rm = Map<String, dynamic>.from(row as Map);
+      final status = rm['status'] as String? ?? 'processing';
+      if (status == 'ready') return _parseAiRow(attemptId, rm, originalText);
+      if (status == 'error' && mounted) {
+        state = state.copyWith(
+          status: WritingFeedbackStatus.error,
+          errorMessage: rm['error_message'] as String? ??
+              'Không thể chấm điểm bài viết.',
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  WritingFeedbackResult _parseAiRow(
+    String attemptId,
+    Map<String, dynamic> row,
+    String originalText,
+  ) {
+    final metricsDb =
+        (row['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
+    final spansRaw = (row['grammar_notes'] as List?) ?? [];
+    final spans = spansRaw.isEmpty
+        ? [AnnotatedSpan(text: originalText)]
+        : spansRaw.map((s) {
+            final sm = Map<String, dynamic>.from(s as Map);
+            return AnnotatedSpan(
+              text: sm['text'] as String? ?? '',
+              issueType: sm['issue_type'] as String?,
+              correction: sm['correction'] as String?,
+              explanation: sm['explanation'] as String?,
+              tip: sm['tip'] as String?,
+            );
+          }).toList();
+    final shortTips =
+        (metricsDb['short_tips'] as List?)?.map((t) => t as String).toList() ??
+            [];
+    return WritingFeedbackResult(
+      attemptId: attemptId,
+      totalScore: (row['overall_score'] as num?)?.toDouble() ?? 0,
+      maxScore: 100,
+      metrics: [
+        if (metricsDb['grammar'] != null)
+          WritingMetric(
+            label: 'Ngữ pháp',
+            score: (metricsDb['grammar'] as num).toDouble(),
+            maxScore: 100,
+            feedback: metricsDb['grammar_feedback'] as String?,
+          ),
+        if (metricsDb['vocabulary'] != null)
+          WritingMetric(
+            label: 'Từ vựng',
+            score: (metricsDb['vocabulary'] as num).toDouble(),
+            maxScore: 100,
+            feedback: metricsDb['vocabulary_feedback'] as String?,
+          ),
+        if (metricsDb['coherence'] != null)
+          WritingMetric(
+            label: 'Mạch lạc & Hình thức',
+            score: (metricsDb['coherence'] as num).toDouble(),
+            maxScore: 100,
+            feedback: metricsDb['format_feedback'] as String?,
+          ),
+        if (metricsDb['task_achievement'] != null)
+          WritingMetric(
+            label: 'Nội dung',
+            score: (metricsDb['task_achievement'] as num).toDouble(),
+            maxScore: 100,
+            feedback: metricsDb['content_feedback'] as String?,
+          ),
+      ],
+      originalText: originalText,
+      annotatedSpans: spans,
+      correctedVersion: row['corrected_essay'] as String? ?? '',
+      overallFeedback: metricsDb['overall_feedback'] as String? ?? '',
+      shortTips: shortTips,
+    );
+  }
+
+  WritingFeedbackResult _parseEdgeResponse(
+    String attemptId,
+    Map<String, dynamic> data,
+    String originalText,
+  ) {
+    final metricsRaw = data['metrics'] as List<dynamic>? ?? [];
+    final metrics = metricsRaw.map((m) {
+      final mm = Map<String, dynamic>.from(m as Map);
+      return WritingMetric(
+        label: mm['label'] as String? ?? '',
+        score: (mm['score'] as num?)?.toDouble() ?? 0,
+        maxScore: (mm['max_score'] as num?)?.toDouble() ?? 100,
+        feedback: mm['feedback'] as String?,
+      );
+    }).toList();
+
+    final spansRaw = data['annotated_spans'] as List<dynamic>? ?? [];
+    final spans = spansRaw.isEmpty
+        ? [AnnotatedSpan(text: originalText)]
+        : spansRaw.map((s) {
+            final sm = Map<String, dynamic>.from(s as Map);
+            return AnnotatedSpan(
+              text: sm['text'] as String? ?? '',
+              issueType: sm['issue_type'] as String?,
+              correction: sm['correction'] as String?,
+              explanation: sm['explanation'] as String?,
+              tip: sm['tip'] as String?,
+            );
+          }).toList();
+
+    final shortTips = (data['short_tips'] as List<dynamic>? ?? [])
+        .map((t) => t as String)
+        .toList();
+
+    return WritingFeedbackResult(
+      attemptId: attemptId,
+      totalScore: (data['total_score'] as num?)?.toDouble() ?? 0,
+      maxScore: (data['max_score'] as num?)?.toDouble() ?? 100,
+      metrics: metrics,
+      originalText: originalText,
+      annotatedSpans: spans,
+      correctedVersion: data['corrected_version'] as String? ?? '',
+      overallFeedback: data['overall_feedback'] as String? ?? '',
+      shortTips: shortTips,
+    );
+  }
+}
+
+final writingReviewFeedbackProvider = StateNotifierProvider.autoDispose
+    .family<WritingReviewNotifier, WritingSessionState, String>(
+  (_, __) => WritingReviewNotifier(),
+);
+
+// ── Fetch a completed attempt by ID (used by WritingFeedbackScreen from review)
+
+final writingAttemptResultProvider =
+    FutureProvider.autoDispose.family<WritingFeedbackResult?, String>(
+  (_, attemptId) async {
+    try {
+      final res = await supabase.functions
+          .invoke('writing-result', body: {'attempt_id': attemptId});
+      final data = res.data as Map<String, dynamic>?;
+      if (data == null || data['status'] == 'pending') return null;
+      if (data['status'] == 'error') throw Exception(data['message']);
+      final metricsRaw = data['metrics'] as List<dynamic>? ?? [];
+      final metrics = metricsRaw.map((m) {
+        final mm = Map<String, dynamic>.from(m as Map);
+        return WritingMetric(
+          label: mm['label'] as String? ?? '',
+          score: (mm['score'] as num?)?.toDouble() ?? 0,
+          maxScore: (mm['max_score'] as num?)?.toDouble() ?? 100,
+          feedback: mm['feedback'] as String?,
+        );
+      }).toList();
+      final spansRaw = data['annotated_spans'] as List<dynamic>? ?? [];
+      final spans = spansRaw.isEmpty
+          ? [AnnotatedSpan(text: '')]
+          : spansRaw.map((s) {
+              final sm = Map<String, dynamic>.from(s as Map);
+              return AnnotatedSpan(
+                text: sm['text'] as String? ?? '',
+                issueType: sm['issue_type'] as String?,
+                correction: sm['correction'] as String?,
+                explanation: sm['explanation'] as String?,
+                tip: sm['tip'] as String?,
+              );
+            }).toList();
+      final shortTips = (data['short_tips'] as List<dynamic>? ?? [])
+          .map((t) => t as String)
+          .toList();
+      return WritingFeedbackResult(
+        attemptId: attemptId,
+        totalScore: (data['total_score'] as num?)?.toDouble() ?? 0,
+        maxScore: (data['max_score'] as num?)?.toDouble() ?? 100,
+        metrics: metrics,
+        originalText: '',
+        annotatedSpans: spans,
+        correctedVersion: data['corrected_version'] as String? ?? '',
+        overallFeedback: data['overall_feedback'] as String? ?? '',
+        shortTips: shortTips,
+      );
+    } catch (_) {
+      return null;
+    }
+  },
 );

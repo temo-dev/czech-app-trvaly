@@ -116,11 +116,11 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
   }
 
   String _skillLabel(SkillArea? skill) => switch (skill) {
-        SkillArea.grammar => 'Grammar Practice',
-        SkillArea.listening => 'Listening Practice',
-        SkillArea.reading => 'Reading Practice',
-        SkillArea.speaking => 'Speaking Practice',
-        SkillArea.writing => 'Writing Practice',
+        SkillArea.grammar => 'Luyện tập Ngữ pháp',
+        SkillArea.listening => 'Luyện tập Nghe',
+        SkillArea.reading => 'Luyện tập Đọc',
+        SkillArea.speaking => 'Luyện tập Nói',
+        SkillArea.writing => 'Luyện tập Viết',
         _ => 'Luyện tập',
       };
 

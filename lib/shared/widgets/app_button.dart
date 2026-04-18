@@ -210,7 +210,7 @@ class _PrimaryBtn extends StatelessWidget {
                         Text(
                           label,
                           style: TextStyle(
-                            fontFamily: 'Manrope',
+                            fontFamily: AppFonts.body,
                             fontSize: fontSize,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
@@ -302,7 +302,7 @@ class _SecondaryBtn extends StatelessWidget {
                           Text(
                             label,
                             style: TextStyle(
-                              fontFamily: 'Manrope',
+                              fontFamily: AppFonts.body,
                               fontSize: fontSize,
                               fontWeight: FontWeight.w600,
                               color: AppColors.primary,
@@ -344,7 +344,7 @@ class _TextBtn extends StatelessWidget {
       style: TextButton.styleFrom(
         foregroundColor: AppColors.secondary,
         textStyle: TextStyle(
-          fontFamily: 'Manrope',
+          fontFamily: AppFonts.body,
           fontSize: fontSize,
           fontWeight: FontWeight.w500,
         ),
@@ -424,7 +424,7 @@ class _DestructiveBtn extends StatelessWidget {
                   Text(
                     label,
                     style: TextStyle(
-                      fontFamily: 'Manrope',
+                      fontFamily: AppFonts.body,
                       fontSize: fontSize,
                       fontWeight: FontWeight.w600,
                     ),

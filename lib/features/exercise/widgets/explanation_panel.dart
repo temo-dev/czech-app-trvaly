@@ -126,8 +126,109 @@ class _ExplanationContent extends StatelessWidget {
   final Question question;
   final bool isCorrect;
 
+  bool get _isSubjective =>
+      question.type == QuestionType.writing ||
+      question.type == QuestionType.speaking;
+
   @override
   Widget build(BuildContext context) {
+    if (_isSubjective) {
+      return _buildSubjectiveContent(context);
+    }
+    return _buildObjectiveContent(context);
+  }
+
+  // Writing / Speaking — no "Đúng/Sai", show criteria + model answer
+  Widget _buildSubjectiveContent(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Submitted banner
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.x4, vertical: AppSpacing.x3),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.primary.withOpacity(0.15),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                question.type == QuestionType.writing
+                    ? Icons.edit_note_rounded
+                    : Icons.mic_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: AppSpacing.x3),
+              Expanded(
+                child: Text(
+                  question.type == QuestionType.writing
+                      ? 'Đã nộp bài viết — bài tự luận được chấm riêng'
+                      : 'Đã nộp bài nói — bài tự luận được chấm riêng',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Tiêu chí chấm
+        if (question.explanation.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.x4),
+          Text(
+            'Tiêu chí chấm điểm',
+            style: AppTypography.labelMedium
+                .copyWith(color: AppColors.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            question.explanation,
+            style: AppTypography.bodyMedium.copyWith(height: 1.6),
+          ),
+        ],
+
+        // Bài mẫu
+        if (question.correctAnswer != null &&
+            question.correctAnswer!.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.x4),
+          Text(
+            question.type == QuestionType.writing
+                ? 'Bài mẫu tham khảo'
+                : 'Câu trả lời gợi ý',
+            style: AppTypography.labelMedium
+                .copyWith(color: AppColors.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.x3),
+            decoration: BoxDecoration(
+              color: AppColors.primaryFixed.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: AppColors.primary.withOpacity(0.15)),
+            ),
+            child: Text(
+              question.correctAnswer!,
+              style: AppTypography.bodyMedium.copyWith(
+                height: 1.6,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // MCQ / FillBlank — standard "Đúng/Sai" + explanation
+  Widget _buildObjectiveContent(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -137,12 +238,12 @@ class _ExplanationContent extends StatelessWidget {
               horizontal: AppSpacing.x4, vertical: AppSpacing.x3),
           decoration: BoxDecoration(
             color: isCorrect
-                ? const Color(0xFFECFDF5) // emerald-50
+                ? const Color(0xFFECFDF5)
                 : AppColors.errorContainer.withOpacity(0.3),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isCorrect
-                  ? const Color(0xFFD1FAE5) // emerald-100
+                  ? const Color(0xFFD1FAE5)
                   : AppColors.error.withOpacity(0.15),
             ),
           ),

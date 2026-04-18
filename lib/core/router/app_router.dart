@@ -139,6 +139,15 @@ GoRouter appRouter(Ref ref) {
         ),
       ),
 
+      // ── AI feedback — standalone (no shell nav bar; reachable from public
+      //    routes like /mock-test/**  without triggering duplicate shell keys)
+      GoRoute(
+          path: AppRoutes.speakingFeedback,
+          builder: (_, __) => const SpeakingFeedbackScreen()),
+      GoRoute(
+          path: AppRoutes.writingFeedback,
+          builder: (_, __) => const WritingFeedbackScreen()),
+
       // ── Authenticated shell ─────────────────────────────────────────────────
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
@@ -234,17 +243,11 @@ GoRouter appRouter(Ref ref) {
           GoRoute(
               path: AppRoutes.speakingRecording,
               builder: (_, __) => const SpeakingRecordingScreen()),
-          GoRoute(
-              path: AppRoutes.speakingFeedback,
-              builder: (_, __) => const SpeakingFeedbackScreen()),
 
           // Writing AI (subscription-gated)
           GoRoute(
               path: AppRoutes.writingPrompt,
               builder: (_, __) => const WritingPromptScreen()),
-          GoRoute(
-              path: AppRoutes.writingFeedback,
-              builder: (_, __) => const WritingFeedbackScreen()),
 
           // Community & progress
           GoRoute(

@@ -54,39 +54,62 @@ Deno.serve(async (req) => {
     }
 
     // Map DB columns → Flutter _parseEdgeResponse shape
-    const metricsDb = (r['metrics'] as Record<string, number>) ?? {};
-    const issues = (r['issues'] as Array<{ word: string; suggestion: string }>) ?? [];
-    const strengths = (r['strengths'] as string[]) ?? [];
-    const improvements = (r['improvements'] as string[]) ?? [];
+    const metricsDb = (r['metrics'] as Record<string, unknown>) ?? {};
+    const issues = (r['issues'] as Array<{ word: string; type?: string; suggestion: string }>) ?? [];
     const transcript = (r['transcript'] as string) ?? '';
 
-    // metrics list expected by Flutter: [{ label, score, max_score, feedback? }]
+    // metrics list expected by Flutter: [{ label, score, max_score, feedback?, tip? }]
     const metricsList = [
-      { label: 'Phát âm', score: metricsDb['pronunciation'] ?? 0, max_score: 100 },
-      { label: 'Lưu loát', score: metricsDb['fluency'] ?? 0, max_score: 100 },
-      { label: 'Từ vựng', score: metricsDb['vocabulary'] ?? 0, max_score: 100 },
-      { label: 'Trả lời đúng đề', score: metricsDb['task_achievement'] ?? 0, max_score: 100 },
+      {
+        label: 'Phát âm',
+        score: Number(metricsDb['pronunciation'] ?? 0),
+        max_score: 100,
+        feedback: String(metricsDb['pronunciation_feedback'] ?? ''),
+        tip: String(metricsDb['pronunciation_tip'] ?? ''),
+      },
+      {
+        label: 'Lưu loát',
+        score: Number(metricsDb['fluency'] ?? 0),
+        max_score: 100,
+        feedback: String(metricsDb['content_feedback'] ?? ''),
+        tip: String(metricsDb['content_tip'] ?? ''),
+      },
+      {
+        label: 'Từ vựng',
+        score: Number(metricsDb['vocabulary'] ?? 0),
+        max_score: 100,
+        feedback: String(metricsDb['vocabulary_feedback'] ?? ''),
+        tip: String(metricsDb['vocabulary_tip'] ?? ''),
+      },
+      {
+        label: 'Ngữ pháp',
+        score: Number(metricsDb['task_achievement'] ?? 0),
+        max_score: 100,
+        feedback: String(metricsDb['grammar_feedback'] ?? ''),
+        tip: String(metricsDb['grammar_tip'] ?? ''),
+      },
     ];
 
-    // Build transcript_words: mark words that appear in issues
-    const issueMap = new Map<string, string>();
+    // Build transcript_words: mark words using their actual issue type
+    const issueMap = new Map<string, { type: string; suggestion: string }>();
     for (const issue of issues) {
-      issueMap.set(issue.word.toLowerCase(), issue.suggestion);
+      issueMap.set(issue.word.toLowerCase(), {
+        type: issue.type ?? 'pronunciation',
+        suggestion: issue.suggestion,
+      });
     }
     const transcriptWords = transcript.split(/\s+/).filter(Boolean).map((word) => {
       const clean = word.replace(/[.,!?;:'"()]/g, '');
-      const suggestion = issueMap.get(clean.toLowerCase());
-      return suggestion
-        ? { word, issue: 'pronunciation', suggestion }
+      const matched = issueMap.get(clean.toLowerCase());
+      return matched
+        ? { word, issue: matched.type, suggestion: matched.suggestion }
         : { word };
     });
 
-    // overall_feedback built from strengths
-    const overallFeedback = strengths.length > 0
-      ? `Điểm mạnh: ${strengths.join('; ')}.`
-      : improvements.length > 0
-        ? `Cần cải thiện: ${improvements[0]}.`
-        : 'Tiếp tục luyện tập để cải thiện kỹ năng nói!';
+    const overallFeedback = String(metricsDb['overall_feedback'] ?? '')
+      || 'Tiếp tục luyện tập để cải thiện kỹ năng nói!';
+
+    const shortTips = (metricsDb['short_tips'] as string[] | undefined) ?? [];
 
     return new Response(
       JSON.stringify({
@@ -97,7 +120,8 @@ Deno.serve(async (req) => {
         metrics: metricsList,
         transcript,
         transcript_words: transcriptWords,
-        corrections: improvements,
+        corrections: [],
+        short_tips: shortTips,
         overall_feedback: overallFeedback,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

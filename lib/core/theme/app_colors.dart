@@ -86,6 +86,23 @@ abstract final class AppColors {
   static const xpGold             = Color(0xFFE08850); // warm gold
   static const xpGoldDim          = Color(0xFFF0A878);
 
+  // ── Medal colors (leaderboard) ────────────────────────────────────────────
+  static const medalGold          = Color(0xFFFFD700); // #1 rank
+  static const medalSilver        = Color(0xFFC0C0C0); // #2 rank
+  static const medalBronze        = Color(0xFFCD7F32); // #3 rank
+
+  // ── Skill feedback (correct/incorrect state in exercises) ─────────────────
+  static const skillCorrectBg     = Color(0xFFECFDF5); // emerald-50
+  static const skillCorrectBorder = Color(0xFFD1FAE5); // emerald-100
+  static const skillCorrectIcon   = Color(0xFF059669); // emerald-700
+  static const skillCorrectText   = Color(0xFF065F46); // emerald-900
+  static const skillCorrectGreen  = Color(0xFF16A34A); // green-600
+
+  // ── Success state (form confirmations) ────────────────────────────────────
+  static const successContainerAlt = Color(0xFFF0FDF4); // green-50 (lighter)
+  static const successTextDark     = Color(0xFF166534); // green-800
+  static const successTextDeep     = Color(0xFF14532D); // green-900
+
   // ── Misc ─────────────────────────────────────────────────────────────────
   static const onSecond           = Color(0xFFFFFFFF);
   static const surfaceTint        = Color(0xFFC2652A);

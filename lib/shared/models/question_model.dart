@@ -66,6 +66,7 @@ class QuestionAnswer with _$QuestionAnswer {
     required String questionId,
     String? selectedOptionId,
     String? writtenAnswer,
+    String? audioKey,                              // S3 key for speaking upload
     @Default([]) List<String> selectedOptionIds,
     @Default([]) List<String> orderedIds,
     @Default({}) Map<String, String> matchedPairs, // leftId → rightId

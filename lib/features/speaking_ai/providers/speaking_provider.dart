@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:app_czech/core/supabase/supabase_config.dart';
+import 'blob_fetch_stub.dart' if (dart.library.html) 'blob_fetch_web.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -122,51 +123,73 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     state = const SpeakingState();
   }
 
-  /// Navigate away from a question — reset UI state without deleting the file
-  /// (the answer is already persisted in the exam session).
+  /// Reset UI state. Safe to call even during upload (called from dispose
+  /// only when not uploading). After a successful upload the state stays at
+  /// [SpeakingStatus.uploaded] until the next widget initialises.
   void resetToIdle() {
     state = const SpeakingState();
   }
 
-  /// Restore recorded state when navigating back to a previously recorded question.
-  void restoreRecording(String audioPath) {
-    state = SpeakingState(
-      status: SpeakingStatus.recorded,
-      audioPath: audioPath,
+  /// Restore state when navigating back to a previously answered question.
+  /// [value] may be a local file path OR a UUID attempt_id (already uploaded).
+  void restoreRecording(String value) {
+    final isAttemptId = _looksLikeAttemptId(value);
+    if (isAttemptId) {
+      state = SpeakingState(
+        status: SpeakingStatus.uploaded,
+        attemptId: value,
+      );
+    } else {
+      state = SpeakingState(
+        status: SpeakingStatus.recorded,
+        audioPath: value,
+      );
+    }
+  }
+
+  static bool _looksLikeAttemptId(String value) {
+    // UUID v4 pattern — not a file path or blob URL
+    final uuidPattern = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+      caseSensitive: false,
     );
+    return uuidPattern.hasMatch(value);
   }
 
   Future<void> submitRecording({
     required String lessonId,
     required String questionId,
   }) async {
+    if (!mounted) return;
     if (state.audioPath == null) return;
 
     state = state.copyWith(status: SpeakingStatus.uploading);
 
+    final audioPath = state.audioPath!;
     try {
       String? resultAttemptId;
 
       if (kIsWeb) {
-        // On web, record package gives a blob URL — upload as bytes
         resultAttemptId = await _uploadWeb(
-          audioPath: state.audioPath!,
+          audioPath: audioPath,
           lessonId: lessonId,
           questionId: questionId,
         );
       } else {
         resultAttemptId = await _uploadNative(
-          audioPath: state.audioPath!,
+          audioPath: audioPath,
           lessonId: lessonId,
           questionId: questionId,
         );
       }
 
+      if (!mounted) return;
       state = state.copyWith(
         status: SpeakingStatus.uploaded,
         attemptId: resultAttemptId,
       );
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         status: SpeakingStatus.error,
         errorMessage: 'Không thể tải lên bài ghi âm. Vui lòng thử lại.',
@@ -193,10 +216,15 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     required String lessonId,
     required String questionId,
   }) async {
-    // Web: audioPath is a blob URL; use http to fetch bytes
-    // For MVP, create a stub attempt row directly
+    // Web: audioPath is a blob URL — fetch actual bytes before uploading.
+    Uint8List bytes;
+    try {
+      bytes = await fetchBlobBytes(audioPath);
+    } catch (_) {
+      bytes = Uint8List(0);
+    }
     return _callUploadFunction(
-      bytes: Uint8List(0),
+      bytes: bytes,
       lessonId: lessonId,
       questionId: questionId,
     );
@@ -207,6 +235,12 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     required String lessonId,
     required String questionId,
   }) async {
+    // Use a flag instead of re-throwing inside catch — that way genuine
+    // network/HTTP failures still fall through to the DB insert fallback,
+    // while an explicit "audio rejected" response from the edge function
+    // propagates as an error to the caller.
+    String? _audioRejectedReason;
+
     try {
       final response = await supabase.functions.invoke(
         'speaking-upload',
@@ -218,22 +252,31 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
       );
       final data = response.data as Map<String, dynamic>?;
       final attemptId = data?['attempt_id'] as String?;
-      if (attemptId != null) return attemptId;
+      final responseError = data?['error'] as String?;
+      if (attemptId != null && responseError == null) return attemptId;
+      if (responseError != null) {
+        _audioRejectedReason = responseError;
+      }
     } catch (_) {
-      // Edge function not deployed yet — create stub row directly
+      // Network error or edge function not deployed — fall through to DB insert
     }
 
-    // Fallback: insert speaking_attempts row directly
+    // Edge function explicitly rejected the audio (e.g. empty bytes on web)
+    if (_audioRejectedReason != null) {
+      throw Exception(_audioRejectedReason);
+    }
+
+    // Fallback: insert ai_speaking_attempts row directly
     final userId = supabase.auth.currentUser?.id;
     final row = await supabase
-        .from('speaking_attempts')
+        .from('ai_speaking_attempts')
         .insert({
-          'lesson_id': lessonId,
-          'question_id': questionId,
           if (userId != null) 'user_id': userId,
-          'status': 'pending',
+          'audio_key':
+              'speaking/$questionId/${DateTime.now().millisecondsSinceEpoch}.m4a',
+          'status': 'processing',
         })
-        .select()
+        .select('id')
         .maybeSingle();
 
     if (row != null) return (row as Map)['id'] as String;
@@ -288,6 +331,6 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 final speakingSessionProvider =
-    StateNotifierProvider.autoDispose<SpeakingSessionNotifier, SpeakingState>(
+    StateNotifierProvider<SpeakingSessionNotifier, SpeakingState>(
   (_) => SpeakingSessionNotifier(),
 );

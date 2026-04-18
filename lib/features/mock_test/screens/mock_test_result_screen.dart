@@ -7,6 +7,7 @@ import 'package:app_czech/core/storage/prefs_storage.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/shared/utils/skill_labels.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
@@ -173,12 +174,6 @@ class _WeakSkillsRow extends StatelessWidget {
   const _WeakSkillsRow({required this.skills});
   final List<String> skills;
 
-  static const _labels = {
-    'reading':   'Đọc hiểu',
-    'listening': 'Nghe hiểu',
-    'writing':   'Viết',
-    'speaking':  'Nói',
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +197,7 @@ class _WeakSkillsRow extends StatelessWidget {
                     color: AppColors.error.withValues(alpha: 0.4)),
               ),
               child: Text(
-                _labels[s] ?? s,
+                SkillLabels.forKey(s),
                 style: AppTypography.labelSmall.copyWith(
                   color: AppColors.error,
                   fontWeight: FontWeight.w600,

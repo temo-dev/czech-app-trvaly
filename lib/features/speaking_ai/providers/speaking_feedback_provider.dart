@@ -11,12 +11,14 @@ class SpeakingMetric {
     required this.score,
     required this.maxScore,
     this.feedback,
+    this.tip,
   });
 
   final String label;
   final double score;
   final double maxScore;
   final String? feedback;
+  final String? tip;
 
   double get fraction => maxScore > 0 ? (score / maxScore).clamp(0.0, 1.0) : 0;
 }
@@ -43,6 +45,7 @@ class SpeakingFeedbackResult {
     required this.transcriptWords,
     required this.overallFeedback,
     required this.corrections,
+    this.shortTips = const [],
   });
 
   final String attemptId;
@@ -53,6 +56,7 @@ class SpeakingFeedbackResult {
   final List<TranscriptWord> transcriptWords;
   final String overallFeedback;
   final List<String> corrections;
+  final List<String> shortTips;
 
   double get fraction =>
       maxScore > 0 ? (totalScore / maxScore).clamp(0.0, 1.0) : 0;
@@ -99,7 +103,10 @@ class SpeakingFeedbackNotifier
   static const _pollInterval = Duration(seconds: 3);
 
   Future<void> _startPolling() async {
-    while (mounted && state.pollCount < _maxRetries) {
+    while (mounted &&
+        state.pollCount < _maxRetries &&
+        state.status != SpeakingFeedbackStatus.completed &&
+        state.status != SpeakingFeedbackStatus.error) {
       await Future.delayed(_pollInterval);
       if (!mounted) return;
       await _poll();
@@ -131,9 +138,9 @@ class SpeakingFeedbackNotifier
         return;
       }
 
-      // Fallback: check speaking_attempts table directly
+      // Fallback: check ai_speaking_attempts table directly
       final row = await supabase
-          .from('speaking_attempts')
+          .from('ai_speaking_attempts')
           .select()
           .eq('id', attemptId)
           .maybeSingle();
@@ -141,9 +148,9 @@ class SpeakingFeedbackNotifier
       if (row == null) return;
 
       final rm = Map<String, dynamic>.from(row as Map);
-      final status = rm['status'] as String? ?? 'pending';
+      final status = rm['status'] as String? ?? 'processing';
 
-      if (status == 'completed') {
+      if (status == 'ready') {
         state = state.copyWith(
           status: SpeakingFeedbackStatus.completed,
           result: _parseRow(rm),
@@ -154,7 +161,7 @@ class SpeakingFeedbackNotifier
           errorMessage: 'Không thể chấm điểm bài nói. Vui lòng thử lại.',
         );
       }
-      // else still pending — continue polling
+      // else still processing — continue polling
     } catch (_) {
       // Network error — keep polling
     }
@@ -191,6 +198,7 @@ class SpeakingFeedbackNotifier
         score: (mm['score'] as num?)?.toDouble() ?? 0,
         maxScore: (mm['max_score'] as num?)?.toDouble() ?? 10,
         feedback: mm['feedback'] as String?,
+        tip: mm['tip'] as String?,
       );
     }).toList();
 
@@ -207,6 +215,9 @@ class SpeakingFeedbackNotifier
     final corrections = (data['corrections'] as List<dynamic>? ?? [])
         .map((c) => c as String)
         .toList();
+    final shortTips = (data['short_tips'] as List<dynamic>? ?? [])
+        .map((t) => t as String)
+        .toList();
 
     return SpeakingFeedbackResult(
       attemptId: attemptId,
@@ -217,14 +228,16 @@ class SpeakingFeedbackNotifier
       transcriptWords: words,
       overallFeedback: data['overall_feedback'] as String? ?? '',
       corrections: corrections,
+      shortTips: shortTips,
     );
   }
 
   SpeakingFeedbackResult _parseRow(Map<String, dynamic> row) {
-    // Minimal parse from speaking_attempts row (no AI breakdown)
-    final scoreRaw = row['score'] as num?;
+    // Minimal parse from ai_speaking_attempts row
+    final scoreRaw = row['overall_score'] as num?;
     final transcript = row['transcript'] as String? ?? '';
-    final feedback = row['feedback'] as String? ?? '';
+    final metricsDb = (row['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
+    final feedback = metricsDb['overall_feedback'] as String? ?? '';
 
     return SpeakingFeedbackResult(
       attemptId: attemptId,
@@ -251,7 +264,7 @@ class SpeakingFeedbackNotifier
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final speakingFeedbackProvider = StateNotifierProvider.autoDispose
+final speakingFeedbackProvider = StateNotifierProvider
     .family<SpeakingFeedbackNotifier, SpeakingFeedbackState, String>(
   (_, attemptId) => SpeakingFeedbackNotifier(attemptId),
 );

@@ -20,7 +20,7 @@ export async function chatComplete(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt },
@@ -45,11 +45,16 @@ export async function chatComplete(
   }
 }
 
+export interface TranscribeResult {
+  text: string;
+  detectedLanguage: string; // ISO 639-1 code, e.g. 'cs', 'en', 'vi'
+}
+
 export async function transcribeAudio(
   apiKey: string,
   audioBytes: Uint8Array,
   filename: string,
-): Promise<string> {
+): Promise<TranscribeResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60_000);
 
@@ -58,7 +63,9 @@ export async function transcribeAudio(
     const blob = new Blob([audioBytes], { type: 'audio/m4a' });
     form.append('file', blob, filename);
     form.append('model', 'whisper-1');
-    form.append('language', 'cs'); // Czech — helps Whisper accuracy
+    // Use verbose_json to get the detected language — do NOT force 'cs' so
+    // that Whisper can tell us when the student speaks the wrong language.
+    form.append('response_format', 'verbose_json');
 
     const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
@@ -73,7 +80,10 @@ export async function transcribeAudio(
     }
 
     const data = await res.json();
-    return data.text ?? '';
+    return {
+      text: data.text ?? '',
+      detectedLanguage: (data.language as string | undefined) ?? 'unknown',
+    };
   } finally {
     clearTimeout(timer);
   }

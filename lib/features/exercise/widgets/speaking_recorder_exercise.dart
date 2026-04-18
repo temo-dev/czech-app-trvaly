@@ -42,8 +42,10 @@ class _SpeakingRecorderExerciseState
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late AudioPlayer _audioPlayer;
+  late SpeakingSessionNotifier _speakingNotifier;
   bool _isPlayingBack = false;
   String? _loadedAudioPath;
+  SpeakingStatus _lastStatus = SpeakingStatus.idle;
 
   @override
   void initState() {
@@ -53,6 +55,7 @@ class _SpeakingRecorderExerciseState
       duration: const Duration(milliseconds: 900),
     );
     _audioPlayer = AudioPlayer();
+    _speakingNotifier = ref.read(speakingSessionProvider.notifier);
 
     // Listen for playback completion to reset the play button.
     // Must call stop() — not seek() — to clear the internal playing=true flag;
@@ -67,18 +70,15 @@ class _SpeakingRecorderExerciseState
       }
     });
 
-    // Restore or reset the speaking provider for this question.
-    // Use addPostFrameCallback so the provider is already watched before we
-    // mutate it (avoids autoDispose disposal during initState).
+    // Restore recorded state when returning to a previously answered question.
+    // Only restore — never reset here; reset happens in dispose() below so
+    // the upload can finish even after the user navigates away.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final notifier = ref.read(speakingSessionProvider.notifier);
       if (widget.existingAudioPath != null) {
-        notifier.restoreRecording(widget.existingAudioPath!);
-      } else {
-        // Navigate to a new question — reset UI state without deleting the
-        // previous question's recording file.
-        notifier.resetToIdle();
+        ref
+            .read(speakingSessionProvider.notifier)
+            .restoreRecording(widget.existingAudioPath!);
       }
     });
   }
@@ -87,13 +87,19 @@ class _SpeakingRecorderExerciseState
   void dispose() {
     _pulseController.dispose();
     _audioPlayer.dispose();
+    // Defer state update past finalizeTree — provider mutations are forbidden
+    // during the unmount phase (would throw "Tried to modify provider while
+    // widget tree was building").
+    if (_lastStatus != SpeakingStatus.uploading) {
+      Future(() => _speakingNotifier.resetToIdle());
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final speakingState = ref.watch(speakingSessionProvider);
-    final notifier = ref.read(speakingSessionProvider.notifier);
+    final notifier = _speakingNotifier;
     final cs = Theme.of(context).colorScheme;
 
     // Sync pulse animation with recording state.
@@ -103,10 +109,24 @@ class _SpeakingRecorderExerciseState
       if (_pulseController.isAnimating) _pulseController.stop();
     }
 
-    // Fire callback when recording completes.
-    ref.listen(speakingSessionProvider, (_, next) {
-      if (next.status == SpeakingStatus.recorded && next.audioPath != null) {
-        widget.onRecordingComplete?.call(next.audioPath!);
+    // Auto-upload after recording stops; fire callback once uploaded.
+    ref.listen(speakingSessionProvider, (prev, next) {
+      _lastStatus = next.status;
+      if (next.status == SpeakingStatus.recorded &&
+          prev?.status != SpeakingStatus.recorded &&
+          next.audioPath != null) {
+        _speakingNotifier.submitRecording(
+          lessonId: widget.lessonId ?? '',
+          questionId: widget.question.id,
+        );
+      }
+      if (next.status == SpeakingStatus.uploaded &&
+          prev?.status != SpeakingStatus.uploaded &&
+          next.attemptId != null) {
+        widget.onRecordingComplete?.call(next.attemptId!);
+        // Reset after a short delay so the "Đã nộp" UI is visible briefly.
+        // Use cached notifier — ref is invalid after widget disposal.
+        Future.delayed(const Duration(seconds: 2), _speakingNotifier.resetToIdle);
       }
     });
 
@@ -177,8 +197,9 @@ class _SpeakingRecorderExerciseState
             ),
           ),
 
-          // ── Playback bar (shown after recording) ──────────────────────────
-          if (speakingState.status == SpeakingStatus.recorded &&
+          // ── Playback bar (shown after recording / during upload) ──────────
+          if ((speakingState.status == SpeakingStatus.recorded ||
+                  speakingState.status == SpeakingStatus.uploading) &&
               speakingState.audioPath != null) ...[
             const SizedBox(height: AppSpacing.x4),
             _PlaybackBar(

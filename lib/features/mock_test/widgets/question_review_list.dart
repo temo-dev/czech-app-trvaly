@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:app_czech/core/router/app_routes.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/features/exercise/widgets/explanation_panel.dart';
 import 'package:app_czech/features/exercise/widgets/question_shell.dart';
+import 'package:app_czech/features/speaking_ai/providers/speaking_feedback_provider.dart';
+import 'package:app_czech/features/writing_ai/providers/writing_provider.dart';
 import 'package:app_czech/shared/models/question_model.dart';
 import '../providers/exam_result_provider.dart';
+import '../providers/question_feedback_provider.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -454,6 +459,10 @@ class _ExpandedContent extends StatelessWidget {
   const _ExpandedContent({required this.item});
   final QuestionReviewItem item;
 
+  bool get _isSubjective =>
+      item.question.type == QuestionType.writing ||
+      item.question.type == QuestionType.speaking;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -469,14 +478,28 @@ class _ExpandedContent extends StatelessWidget {
           // Question renderer — reuse exercise widgets with isSubmitted: true
           _QuestionRenderer(item: item),
 
-          // Explanation panel (below question)
-          if (item.question.explanation.isNotEmpty) ...[
+          // Writing questions: custom review panel (no "Đúng/Sai" framing)
+          if (item.question.type == QuestionType.writing) ...[
+            const SizedBox(height: AppSpacing.x4),
+            _WritingReviewPanel(item: item),
+          ]
+          // Objective questions: show standard explanation panel
+          else if (!_isSubjective &&
+              item.question.explanation.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.x4),
             ExplanationPanel(
               question: item.question,
               isCorrect: item.isCorrect,
               isInline: true,
             ),
+          ],
+
+          // AI analysis for wrong objective answers
+          if (!_isSubjective &&
+              item.isAnswered &&
+              !item.isCorrect) ...[
+            const SizedBox(height: AppSpacing.x3),
+            _AiQuestionFeedback(item: item),
           ],
         ],
       ),
@@ -530,57 +553,33 @@ class _QuestionRenderer extends StatelessWidget {
 
 // ── Speaking review panel ─────────────────────────────────────────────────────
 
-class _SpeakingReviewPanel extends StatelessWidget {
+class _SpeakingReviewPanel extends ConsumerWidget {
   const _SpeakingReviewPanel({required this.item});
   final QuestionReviewItem item;
 
+  // UUID v4 pattern — identifies an attempt_id vs a local audio path
+  static final _uuidRe = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
+
+  String? get _attemptId {
+    final a = item.userAnswer;
+    if (a != null && _uuidRe.hasMatch(a)) return a;
+    return null;
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
+    final attemptId = _attemptId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Prompt (same style as SpeakingRecorderExercise)
+        // Prompt
         Text(item.question.prompt, style: AppTypography.bodyLarge),
         const SizedBox(height: AppSpacing.x4),
-
-        // Rubric / expected answer (if set in correctAnswer field)
-        if (item.question.correctAnswer != null &&
-            item.question.correctAnswer!.isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.x3),
-            decoration: BoxDecoration(
-              color: AppColors.primaryFixed.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.format_quote_rounded,
-                    size: 16, color: AppColors.primary),
-                const SizedBox(width: AppSpacing.x2),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Gợi ý trả lời',
-                          style: AppTypography.labelSmall
-                              .copyWith(color: AppColors.primary)),
-                      const SizedBox(height: AppSpacing.x1),
-                      Text(item.question.correctAnswer!,
-                          style: AppTypography.bodySmall
-                              .copyWith(height: 1.6)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.x3),
-        ],
 
         // Submission status
         Container(
@@ -600,9 +599,7 @@ class _SpeakingReviewPanel extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                item.isAnswered
-                    ? Icons.mic_rounded
-                    : Icons.mic_off_rounded,
+                item.isAnswered ? Icons.mic_rounded : Icons.mic_off_rounded,
                 size: 20,
                 color: item.isAnswered
                     ? AppColors.success
@@ -610,9 +607,7 @@ class _SpeakingReviewPanel extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.x3),
               Text(
-                item.isAnswered
-                    ? 'Đã ghi âm và nộp bài'
-                    : 'Chưa ghi âm',
+                item.isAnswered ? 'Đã ghi âm và nộp bài' : 'Chưa ghi âm',
                 style: AppTypography.bodySmall.copyWith(
                   color: item.isAnswered
                       ? AppColors.success
@@ -623,7 +618,821 @@ class _SpeakingReviewPanel extends StatelessWidget {
             ],
           ),
         ),
+
+        // AI feedback section
+        if (attemptId != null) ...[
+          const SizedBox(height: AppSpacing.x3),
+          _SpeakingAiFeedback(attemptId: attemptId),
+        ] else if (item.isAnswered) ...[
+          const SizedBox(height: AppSpacing.x3),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.x3),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: cs.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 16, color: cs.onSurfaceVariant),
+                const SizedBox(width: AppSpacing.x2),
+                Expanded(
+                  child: Text(
+                    'Bài ghi âm chưa được chấm điểm AI. '
+                    'Thử luyện tập lại để nhận nhận xét chi tiết.',
+                    style: AppTypography.labelSmall
+                        .copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // Model answer
+        if (item.question.correctAnswer != null &&
+            item.question.correctAnswer!.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.x3),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.x3),
+            decoration: BoxDecoration(
+              color: AppColors.primaryFixed.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline_rounded,
+                        size: 16, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.x2),
+                    Text(
+                      'Câu trả lời gợi ý',
+                      style: AppTypography.labelSmall
+                          .copyWith(color: AppColors.primary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                Text(item.question.correctAnswer!,
+                    style: AppTypography.bodySmall.copyWith(height: 1.6)),
+              ],
+            ),
+          ),
+        ],
       ],
+    );
+  }
+}
+
+// ── Inline AI speaking feedback ───────────────────────────────────────────────
+
+class _SpeakingAiFeedback extends ConsumerWidget {
+  const _SpeakingAiFeedback({required this.attemptId});
+  final String attemptId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(speakingFeedbackProvider(attemptId));
+
+    if (state.status == SpeakingFeedbackStatus.pending ||
+        state.status == SpeakingFeedbackStatus.scoring) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.x3),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.x3),
+            Text(
+              'AI đang chấm điểm bài nói...',
+              style: AppTypography.labelSmall
+                  .copyWith(color: AppColors.primary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (state.status == SpeakingFeedbackStatus.error) {
+      return _AiUnavailableCard(
+        message: state.errorMessage ?? 'Chưa thể chấm điểm bài nói.',
+        onRetry: () =>
+            ref.read(speakingFeedbackProvider(attemptId).notifier).retry(),
+      );
+    }
+
+    if (state.result == null) {
+      return const SizedBox.shrink();
+    }
+
+    final result = state.result!;
+    final pct = (result.fraction * 100).round();
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header + score + link
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded,
+                  color: AppColors.primary, size: 16),
+              const SizedBox(width: AppSpacing.x2),
+              Expanded(
+                child: Text(
+                  'Nhận xét AI',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x2, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$pct điểm',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          if (result.overallFeedback.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.x2),
+            Text(
+              result.overallFeedback,
+              style: AppTypography.bodySmall.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.x3),
+          GestureDetector(
+            onTap: () => context.push(
+              AppRoutes.speakingFeedback,
+              extra: {'attemptId': attemptId},
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Xem nhận xét chi tiết',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_forward_rounded,
+                    size: 14, color: AppColors.primary),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Writing review panel ──────────────────────────────────────────────────────
+
+class _WritingReviewPanel extends ConsumerStatefulWidget {
+  const _WritingReviewPanel({required this.item});
+  final QuestionReviewItem item;
+
+  @override
+  ConsumerState<_WritingReviewPanel> createState() =>
+      _WritingReviewPanelState();
+}
+
+class _WritingReviewPanelState extends ConsumerState<_WritingReviewPanel> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.item.isAnswered && widget.item.userAnswer != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref
+            .read(writingReviewFeedbackProvider(
+                    widget.item.question.id)
+                .notifier)
+            .submit(
+              text: widget.item.userAnswer!,
+              questionId: widget.item.question.id,
+            );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final item = widget.item;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Submission status banner
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.x4, vertical: AppSpacing.x3),
+          decoration: BoxDecoration(
+            color: item.isAnswered
+                ? AppColors.primary.withValues(alpha: 0.06)
+                : cs.surfaceContainer,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: item.isAnswered
+                  ? AppColors.primary.withValues(alpha: 0.2)
+                  : cs.outlineVariant,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                item.isAnswered
+                    ? Icons.edit_note_rounded
+                    : Icons.edit_off_outlined,
+                size: 20,
+                color: item.isAnswered
+                    ? AppColors.primary
+                    : cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: AppSpacing.x3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.isAnswered ? 'Đã nộp bài viết' : 'Chưa làm bài',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: item.isAnswered
+                            ? AppColors.primary
+                            : cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'Bài tự luận — chấm điểm theo tiêu chí bên dưới',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // AI feedback section
+        if (item.isAnswered) ...[
+          const SizedBox(height: AppSpacing.x3),
+          _WritingAiFeedback(questionId: item.question.id),
+        ],
+
+        // Tiêu chí chấm điểm
+        if (item.question.explanation.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.x3),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.x3),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: cs.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.fact_check_outlined,
+                        size: 16, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.x2),
+                    Text(
+                      'Tiêu chí chấm điểm',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  item.question.explanation,
+                  style: AppTypography.bodySmall.copyWith(height: 1.6),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // Model answer (if available)
+        if (item.question.correctAnswer != null &&
+            item.question.correctAnswer!.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.x3),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.x3),
+            decoration: BoxDecoration(
+              color: AppColors.primaryFixed.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline_rounded,
+                        size: 16, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.x2),
+                    Text(
+                      'Bài mẫu tham khảo',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  item.question.correctAnswer!,
+                  style: AppTypography.bodySmall.copyWith(height: 1.6),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Inline AI writing feedback ────────────────────────────────────────────────
+
+class _WritingAiFeedback extends ConsumerWidget {
+  const _WritingAiFeedback({required this.questionId});
+  final String questionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(writingReviewFeedbackProvider(questionId));
+
+    if (state.status == WritingFeedbackStatus.submitting ||
+        state.status == WritingFeedbackStatus.pending ||
+        state.status == WritingFeedbackStatus.scoring) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.x3),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.primary),
+            ),
+            const SizedBox(width: AppSpacing.x3),
+            Text(
+              'AI đang chấm bài viết...',
+              style: AppTypography.labelSmall
+                  .copyWith(color: AppColors.primary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (state.status == WritingFeedbackStatus.error) {
+      return _AiUnavailableCard(
+        message: state.errorMessage ?? 'Chưa thể chấm điểm bài viết.',
+      );
+    }
+
+    if (state.result == null) {
+      return const SizedBox.shrink();
+    }
+
+    final result = state.result!;
+    final pct = (result.fraction * 100).round();
+    final attemptId = state.attemptId;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded,
+                  color: AppColors.primary, size: 16),
+              const SizedBox(width: AppSpacing.x2),
+              Expanded(
+                child: Text(
+                  'Nhận xét AI',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x2, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$pct điểm',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (result.overallFeedback.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.x2),
+            Text(
+              result.overallFeedback,
+              style: AppTypography.bodySmall.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
+          ],
+          if (attemptId != null) ...[
+            const SizedBox(height: AppSpacing.x3),
+            GestureDetector(
+              onTap: () => context.push(
+                AppRoutes.writingFeedback,
+                extra: {'attemptId': attemptId},
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Xem nhận xét chi tiết',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded,
+                      size: 14, color: AppColors.primary),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── AI Question Feedback ──────────────────────────────────────────────────────
+
+class _AiQuestionFeedback extends ConsumerStatefulWidget {
+  const _AiQuestionFeedback({required this.item});
+  final QuestionReviewItem item;
+
+  @override
+  ConsumerState<_AiQuestionFeedback> createState() =>
+      _AiQuestionFeedbackState();
+}
+
+class _AiQuestionFeedbackState extends ConsumerState<_AiQuestionFeedback> {
+  bool _requested = false;
+
+  QuestionFeedbackParams? get _params {
+    final q = widget.item.question;
+    final correctOption = widget.item.correctOption;
+    final selectedOption = widget.item.selectedOption;
+    if (correctOption == null || selectedOption == null) return null;
+
+    final sectionSkill = widget.item.sectionSkill;
+    return QuestionFeedbackParams(
+      questionId: q.id,
+      questionText: q.prompt,
+      options: q.options,
+      correctAnswerText: correctOption.text,
+      userAnswerText: selectedOption.text,
+      sectionSkill: sectionSkill,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final params = _params;
+    if (params == null) return const SizedBox.shrink();
+
+    if (!_requested) {
+      return OutlinedButton.icon(
+        onPressed: () {
+          setState(() => _requested = true);
+          ref.read(questionFeedbackProvider(params).notifier).fetchFeedback();
+        },
+        icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
+        label: const Text('Xem phân tích AI'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
+          textStyle: AppTypography.labelSmall
+              .copyWith(fontWeight: FontWeight.w700),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.x3, vertical: AppSpacing.x2),
+        ),
+      );
+    }
+
+    final feedbackAsync = ref.watch(questionFeedbackProvider(params));
+
+    return feedbackAsync.when(
+      loading: () => Container(
+        padding: const EdgeInsets.all(AppSpacing.x3),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.primary),
+            ),
+            const SizedBox(width: AppSpacing.x2),
+            Text('AI đang phân tích...',
+                style: AppTypography.labelSmall
+                    .copyWith(color: AppColors.primary)),
+          ],
+        ),
+      ),
+      error: (_, __) => Text(
+        'Không thể tải phân tích AI.',
+        style: AppTypography.labelSmall
+            .copyWith(color: cs.onSurfaceVariant),
+      ),
+      data: (feedback) {
+        if (feedback == null) return const SizedBox.shrink();
+        return _AiFeedbackCard(feedback: feedback);
+      },
+    );
+  }
+}
+
+class _AiFeedbackCard extends StatelessWidget {
+  const _AiFeedbackCard({required this.feedback});
+  final QuestionAiFeedback feedback;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded,
+                  color: AppColors.primary, size: 15),
+              const SizedBox(width: AppSpacing.x1 + 2),
+              Text(
+                'Phân tích AI',
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (feedback.keyConceptLabel.isNotEmpty) ...[
+                const SizedBox(width: AppSpacing.x2),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x2, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    feedback.keyConceptLabel,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.primary,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.x2),
+
+          // Error analysis
+          if (feedback.errorAnalysis.isNotEmpty) ...[
+            _FeedbackRow(
+              icon: Icons.cancel_outlined,
+              color: AppColors.error,
+              label: 'Tại sao sai:',
+              text: feedback.errorAnalysis,
+            ),
+            const SizedBox(height: AppSpacing.x2),
+          ],
+
+          // Correct explanation
+          if (feedback.correctExplanation.isNotEmpty) ...[
+            _FeedbackRow(
+              icon: Icons.check_circle_outline,
+              color: AppColors.success,
+              label: 'Đáp án đúng vì:',
+              text: feedback.correctExplanation,
+            ),
+            const SizedBox(height: AppSpacing.x2),
+          ],
+
+          // Short tip
+          if (feedback.shortTip.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.x2 + 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFFE082)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('💡 ', style: TextStyle(fontSize: 13)),
+                  Expanded(
+                    child: Text(
+                      feedback.shortTip,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: const Color(0xFF7B5E00),
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeedbackRow extends StatelessWidget {
+  const _FeedbackRow({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.text,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: AppSpacing.x1 + 2),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: AppTypography.bodySmall.copyWith(height: 1.5),
+              children: [
+                TextSpan(
+                  text: '$label ',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                TextSpan(text: text),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── AI unavailable notice ─────────────────────────────────────────────────────
+
+class _AiUnavailableCard extends StatelessWidget {
+  const _AiUnavailableCard({required this.message, this.onRetry});
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded,
+              size: 16, color: cs.onSurfaceVariant),
+          const SizedBox(width: AppSpacing.x2),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.labelSmall
+                  .copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(width: AppSpacing.x2),
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                'Thử lại',
+                style: AppTypography.labelSmall
+                    .copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

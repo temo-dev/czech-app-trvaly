@@ -5,30 +5,51 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SPEAKING_SYSTEM_PROMPT = `
 Bạn là giám khảo chấm điểm bài thi nói tiếng Séc cho người học người Việt Nam.
 Người học đang luyện thi kỳ thi trình độ A2 để xin trạng thái Trvalý pobyt (cư trú lâu dài) tại Cộng hòa Séc.
-Nhiệm vụ của bạn là chấm điểm bài nói dựa trên phần phiên âm (transcript) được cung cấp.
 
-Tiêu chí chấm:
+⚠️ QUY TẮC QUAN TRỌNG NHẤT: Bài thi YÊU CẦU trả lời bằng TIẾNG SÉC.
+- Nếu phiên âm KHÔNG phải tiếng Séc (tiếng Anh, tiếng Việt, hoặc ngôn ngữ khác), hãy cho điểm 0 tất cả các tiêu chí và giải thích rõ lý do bằng tiếng Việt.
+- Chỉ chấm điểm bình thường khi bài nói thực sự là tiếng Séc.
+
+Tiêu chí chấm (chỉ áp dụng khi bài nói là tiếng Séc):
 - pronunciation (phát âm): 0–100 — độ rõ ràng và chính xác của âm thanh tiếng Séc
 - fluency (độ lưu loát): 0–100 — nhịp nói, ngắt câu tự nhiên, không ngập ngừng nhiều
 - vocabulary (từ vựng): 0–100 — sử dụng từ phù hợp, đa dạng
 - task_achievement (trả lời đúng câu hỏi): 0–100 — câu trả lời có liên quan và đáp ứng đúng yêu cầu của câu hỏi không
 
-Lưu ý: Người học nói tiếng Việt là tiếng mẹ đẻ, vì vậy những lỗi điển hình bao gồm:
+Lưu ý với bài tiếng Séc: Người học nói tiếng Việt là tiếng mẹ đẻ, những lỗi điển hình bao gồm:
 dấu thanh tiếng Séc (háček), phụ âm đặc biệt (ř, č, ž, š), trật tự từ, giới từ, và các đuôi danh từ biến cách.
 
 Hãy trả về JSON theo đúng định dạng sau (không có văn bản nào khác):
 {
-  "overall_score": <int 0-100>,
-  "pronunciation": <int 0-100>,
-  "fluency": <int 0-100>,
-  "vocabulary": <int 0-100>,
-  "task_achievement": <int 0-100>,
-  "transcript_issues": [{ "word": "<từ bị lỗi hoặc khó>", "suggestion": "<gợi ý phát âm/sử dụng đúng>" }],
-  "strengths": ["<điểm mạnh 1>", "<điểm mạnh 2>"],
-  "improvements": ["<điểm cần cải thiện 1>", "<điểm cần cải thiện 2>"],
-  "corrected_answer": "<câu trả lời đã được sửa và hoàn chỉnh>",
-  "overall_feedback": "<nhận xét tổng quan 1-2 câu bằng tiếng Việt>"
+  "is_czech": <true nếu bài nói là tiếng Séc, false nếu không phải>,
+  "overall_score": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
+  "pronunciation": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
+  "fluency": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
+  "vocabulary": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
+  "task_achievement": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
+  "transcript_issues": [],
+  "pronunciation_feedback": {
+    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về phát âm, liệt kê lỗi cụ thể.>",
+    "tip": "<Lời khuyên ngắn 1 câu, actionable: cách luyện phát âm đúng. Để trống nếu không phải tiếng Séc.>"
+  },
+  "grammar_feedback": {
+    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về ngữ pháp.>",
+    "tip": "<Lời khuyên ngắn 1 câu về ngữ pháp. Để trống nếu không phải tiếng Séc.>"
+  },
+  "vocabulary_feedback": {
+    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về từ vựng.>",
+    "tip": "<Lời khuyên ngắn 1 câu về từ vựng. Để trống nếu không phải tiếng Séc.>"
+  },
+  "content_feedback": {
+    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét về nội dung.>",
+    "tip": "<Lời khuyên ngắn 1 câu về nội dung/cách trả lời. Để trống nếu không phải tiếng Séc.>"
+  },
+  "short_tips": ["<tip1 ngắn gọn>", "<tip2 ngắn gọn>", "<tip3 ngắn gọn>"],
+  "overall_feedback": "<Nếu không phải tiếng Séc: giải thích rõ bằng tiếng Việt rằng bài thi yêu cầu trả lời bằng tiếng Séc, không chấp nhận ngôn ngữ khác, và ngôn ngữ phát hiện là gì. Nếu tiếng Séc: nhận xét tổng quan 2-3 câu.>",
+  "corrected_answer": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: câu trả lời đã sửa hoàn chỉnh.>"
 }
+
+Lưu ý: short_tips là tối đa 3 lời khuyên ngắn gọn, mỗi tip tối đa 15 từ, ưu tiên lỗi cần sửa nhất. Để trống array [] nếu không phải tiếng Séc.
 `.trim();
 
 Deno.serve(async (req) => {
@@ -113,28 +134,56 @@ Deno.serve(async (req) => {
     const audioBytes = Uint8Array.from(atob(audio_b64), (c) => c.charCodeAt(0));
     const apiKey = getOpenAIKey();
 
-    // Step 1: Transcribe with Whisper
-    const transcript = await transcribeAudio(apiKey, audioBytes, `audio_${attemptId}.m4a`);
+    // Step 1: Transcribe with Whisper (auto language detection)
+    const { text: transcript, detectedLanguage } = await transcribeAudio(
+      apiKey, audioBytes, `audio_${attemptId}.m4a`,
+    );
 
     // Step 2: Score with GPT-4o-mini
     const questionPrompt = (question as Record<string, unknown> | null)?.['prompt'] as string ?? '';
-    const userMessage = `Câu hỏi thi: "${questionPrompt}"\n\nPhiên âm bài nói của học viên:\n"${transcript}"`;
+    const userMessage = `Câu hỏi thi: "${questionPrompt}"\n\nNgôn ngữ Whisper phát hiện: ${detectedLanguage}\n\nPhiên âm bài nói của học viên:\n"${transcript}"`;
     const scored = await chatComplete(apiKey, SPEAKING_SYSTEM_PROMPT, userMessage);
 
-    const overallScore = Number(scored['overall_score'] ?? 0);
-    const metrics = {
-      pronunciation: Number(scored['pronunciation'] ?? 0),
-      fluency: Number(scored['fluency'] ?? 0),
-      vocabulary: Number(scored['vocabulary'] ?? 0),
-      task_achievement: Number(scored['task_achievement'] ?? 0),
+    // Hard enforcement: if GPT or Whisper detects non-Czech, zero out all scores
+    const isCzechByGpt = scored['is_czech'] === true;
+    const isCzechByWhisper = detectedLanguage === 'czech' || detectedLanguage === 'cs';
+    const isCzech = isCzechByGpt && isCzechByWhisper;
+
+    const getFeedbackDetail = (val: unknown): string => {
+      if (typeof val === 'string') return val;
+      if (val && typeof val === 'object') {
+        return String((val as Record<string, unknown>)['detail'] ?? '');
+      }
+      return '';
     };
-    const issues = (scored['transcript_issues'] as Array<{ word: string; suggestion: string }>) ?? [];
-    const strengths = (scored['strengths'] as string[]) ?? [];
-    const improvements = (scored['improvements'] as string[]) ?? [];
+    const getFeedbackTip = (val: unknown): string => {
+      if (val && typeof val === 'object') {
+        return String((val as Record<string, unknown>)['tip'] ?? '');
+      }
+      return '';
+    };
+
+    const overallScore = isCzech ? Number(scored['overall_score'] ?? 0) : 0;
+    const nonCzechFeedback = isCzech ? '' : String(scored['overall_feedback'] ?? `Bài thi yêu cầu trả lời bằng tiếng Séc. Whisper phát hiện ngôn ngữ: "${detectedLanguage}". Vui lòng thử lại bằng tiếng Séc.`);
+    const metrics = {
+      pronunciation: isCzech ? Number(scored['pronunciation'] ?? 0) : 0,
+      pronunciation_feedback: isCzech ? getFeedbackDetail(scored['pronunciation_feedback']) : '',
+      pronunciation_tip: isCzech ? getFeedbackTip(scored['pronunciation_feedback']) : '',
+      fluency: isCzech ? Number(scored['fluency'] ?? 0) : 0,
+      vocabulary: isCzech ? Number(scored['vocabulary'] ?? 0) : 0,
+      vocabulary_feedback: isCzech ? getFeedbackDetail(scored['vocabulary_feedback']) : '',
+      vocabulary_tip: isCzech ? getFeedbackTip(scored['vocabulary_feedback']) : '',
+      task_achievement: isCzech ? Number(scored['task_achievement'] ?? 0) : 0,
+      content_feedback: isCzech ? getFeedbackDetail(scored['content_feedback']) : '',
+      content_tip: isCzech ? getFeedbackTip(scored['content_feedback']) : '',
+      grammar_feedback: isCzech ? getFeedbackDetail(scored['grammar_feedback']) : '',
+      grammar_tip: isCzech ? getFeedbackTip(scored['grammar_feedback']) : '',
+      overall_feedback: isCzech ? String(scored['overall_feedback'] ?? '') : nonCzechFeedback,
+      short_tips: isCzech ? ((scored['short_tips'] as string[]) ?? []) : [],
+    };
+    const issues = (scored['transcript_issues'] as Array<{ word: string; type?: string; suggestion: string }>) ?? [];
     const correctedAnswer = String(scored['corrected_answer'] ?? '');
 
-    // Update attempt with results
-    // overall_feedback is computed in speaking-result from strengths/improvements
     await supabase
       .from('ai_speaking_attempts')
       .update({
@@ -143,8 +192,8 @@ Deno.serve(async (req) => {
         overall_score: overallScore,
         metrics,
         issues,
-        strengths,
-        improvements,
+        strengths: [],
+        improvements: [],
         corrected_answer: correctedAnswer,
         updated_at: new Date().toISOString(),
       })
