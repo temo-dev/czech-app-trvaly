@@ -19,11 +19,11 @@ class SectionTransitionCard extends StatelessWidget {
   final VoidCallback onContinue;
 
   IconData _iconFor(String skill) => switch (skill) {
-        'reading'   => Icons.menu_book_outlined,
+        'reading' => Icons.menu_book_outlined,
         'listening' => Icons.headphones_outlined,
-        'writing'   => Icons.edit_note_outlined,
-        'speaking'  => Icons.mic_outlined,
-        _           => Icons.quiz_outlined,
+        'writing' => Icons.edit_note_outlined,
+        'speaking' => Icons.mic_outlined,
+        _ => Icons.quiz_outlined,
       };
 
   @override
@@ -93,6 +93,7 @@ class SectionTransitionCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.x8),
 
               AppButton(
+                key: const Key('section_transition_continue_button'),
                 label: 'Bắt đầu ${nextSection.label}',
                 onPressed: onContinue,
                 icon: Icons.play_arrow_rounded,

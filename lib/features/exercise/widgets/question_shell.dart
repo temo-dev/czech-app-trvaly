@@ -28,6 +28,7 @@ class QuestionShell extends StatelessWidget {
     this.currentAnswer,
     this.isSubmitted = false,
     this.lessonId,
+    this.examAttemptId,
     this.onAnswerChanged,
   });
 
@@ -40,6 +41,7 @@ class QuestionShell extends StatelessWidget {
 
   /// Optional lessonId — forwarded to SpeakingRecorderExercise for upload context.
   final String? lessonId;
+  final String? examAttemptId;
 
   /// Called whenever the user changes their answer.
   final ValueChanged<QuestionAnswer>? onAnswerChanged;
@@ -58,7 +60,8 @@ class QuestionShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasIntro = question.introText != null || question.introImageUrl != null;
+    final hasIntro =
+        question.introText != null || question.introImageUrl != null;
     return Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.x4, vertical: AppSpacing.x4),
@@ -93,8 +96,7 @@ class QuestionShell extends StatelessWidget {
         }
         // Reading questions show a passage panel
         if (question.skill == SkillArea.reading &&
-            (question.imageUrl != null ||
-                question.prompt.length > 300)) {
+            (question.imageUrl != null || question.prompt.length > 300)) {
           return ReadingPassageExercise(
             question: question,
             selectedOptionId: selectedOptionId,
@@ -130,6 +132,7 @@ class QuestionShell extends StatelessWidget {
           question: question,
           isSubmitted: isSubmitted,
           lessonId: lessonId,
+          examAttemptId: examAttemptId,
           existingAudioPath: writtenAnswer,
           onRecordingComplete: _updateText,
         );

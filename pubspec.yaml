@@ -57,6 +57,9 @@ dependencies:
   url_launcher: ^6.3.0
 
 dependency_overrides:
+  # Vendored to patch an iOS Objective-C class-name collision on simulator/runtime.
+  file_picker:
+    path: third_party/file_picker
   record_linux: ^1.3.0
 
 dev_dependencies:

@@ -7,7 +7,6 @@ import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/features/course/providers/course_providers.dart';
 import 'package:app_czech/features/exercise/providers/exercise_provider.dart';
 import 'package:app_czech/features/exercise/widgets/explanation_panel.dart';
-import 'package:app_czech/features/exercise/widgets/lesson_answer_feedback_sheet.dart';
 import 'package:app_czech/features/exercise/widgets/question_shell.dart';
 import 'package:app_czech/shared/models/question_model.dart';
 import 'package:app_czech/shared/providers/gamification_provider.dart';
@@ -70,8 +69,7 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
           child: SafeArea(
             bottom: false,
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   IconButton(
@@ -150,50 +148,12 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
       context,
       question: question,
       isCorrect: _isCorrect,
+      submittedAnswer: _answer,
+      source: widget.lessonId != null ? 'lesson' : 'practice',
+      exerciseId: widget.exerciseId,
+      lessonId: widget.lessonId,
       onContinue: () {},
     );
-
-    if (!mounted) return;
-
-    // Show AI feedback sheet for wrong objective answers
-    if (!_isCorrect) {
-      final correctAnswerText = _correctAnswerText(question);
-      final userAnswerText = _userAnswerText(question, _answer!);
-      if (correctAnswerText != null && userAnswerText != null) {
-        await LessonAnswerFeedbackSheet.show(
-          context,
-          ref: ref,
-          question: question,
-          userAnswerText: userAnswerText,
-          correctAnswerText: correctAnswerText,
-          onContinue: () {},
-        );
-      }
-    }
-  }
-
-  String? _correctAnswerText(Question question) {
-    switch (question.type) {
-      case QuestionType.mcq:
-        return question.options.where((o) => o.isCorrect).firstOrNull?.text;
-      case QuestionType.fillBlank:
-        return question.correctAnswer;
-      default:
-        return null;
-    }
-  }
-
-  String? _userAnswerText(Question question, QuestionAnswer answer) {
-    switch (question.type) {
-      case QuestionType.mcq:
-        final optionId = answer.selectedOptionId;
-        if (optionId == null) return null;
-        return question.options.where((o) => o.id == optionId).firstOrNull?.text;
-      case QuestionType.fillBlank:
-        return answer.writtenAnswer;
-      default:
-        return null;
-    }
   }
 
   bool _evaluate(Question question, QuestionAnswer answer) {
@@ -306,8 +266,7 @@ class _PracticeBody extends StatelessWidget {
                   // Inline feedback for correct answer
                   if (isSubmitted) ...[
                     const SizedBox(height: 16),
-                    _FeedbackCard(
-                        isCorrect: isCorrect, question: question),
+                    _FeedbackCard(isCorrect: isCorrect, question: question),
                   ],
                 ],
               ),
@@ -388,8 +347,7 @@ class _ProgressBar extends StatelessWidget {
 // ── Feedback Card ─────────────────────────────────────────────────────────────
 
 class _FeedbackCard extends StatelessWidget {
-  const _FeedbackCard(
-      {required this.isCorrect, required this.question});
+  const _FeedbackCard({required this.isCorrect, required this.question});
   final bool isCorrect;
   final Question question;
 
@@ -416,9 +374,7 @@ class _FeedbackCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                isCorrect
-                    ? Icons.verified_rounded
-                    : Icons.cancel_rounded,
+                isCorrect ? Icons.verified_rounded : Icons.cancel_rounded,
                 color: isCorrect
                     ? const Color(0xFF059669) // emerald-700
                     : AppColors.error,
@@ -428,9 +384,7 @@ class _FeedbackCard extends StatelessWidget {
               Text(
                 isCorrect ? 'Chính xác!' : 'Chưa đúng',
                 style: AppTypography.labelSmall.copyWith(
-                  color: isCorrect
-                      ? const Color(0xFF059669)
-                      : AppColors.error,
+                  color: isCorrect ? const Color(0xFF059669) : AppColors.error,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.8,
                 ),

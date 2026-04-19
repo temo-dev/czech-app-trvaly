@@ -3,6 +3,9 @@ import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/core/theme/app_radius.dart';
+import 'package:app_czech/shared/models/question_model.dart';
+
+import '../models/exam_question_answer.dart';
 import '../models/exam_meta.dart';
 
 enum QuestionNavStatus { unanswered, answered, current, flagged }
@@ -54,8 +57,7 @@ class QuestionNavPanel extends StatelessWidget {
                 AppSpacing.x4, AppSpacing.x4, AppSpacing.x2, AppSpacing.x2),
             child: Row(
               children: [
-                Text('Danh sách câu hỏi',
-                    style: AppTypography.titleSmall),
+                Text('Danh sách câu hỏi', style: AppTypography.titleSmall),
                 const Spacer(),
                 if (onClose != null)
                   IconButton(
@@ -88,10 +90,8 @@ class QuestionNavPanel extends StatelessWidget {
               itemCount: sections.length,
               itemBuilder: (context, si) {
                 final section = sections[si];
-                final sectionItems = items
-                    .skip(offset)
-                    .take(section.questionCount)
-                    .toList();
+                final sectionItems =
+                    items.skip(offset).take(section.questionCount).toList();
                 offset += section.questionCount;
 
                 return Column(
@@ -221,19 +221,23 @@ class _LegendItem extends StatelessWidget {
 /// Helper to build [QuestionNavItem] list from session state.
 List<QuestionNavItem> buildNavItems({
   required List<SectionMeta> sections,
-  required Map<String, String> answers,
+  required Map<String, ExamQuestionAnswer> answers,
+  List<Question>? questions,
 }) {
   final items = <QuestionNavItem>[];
   int global = 0;
   for (var si = 0; si < sections.length; si++) {
     for (var qi = 0; qi < sections[si].questionCount; qi++) {
-      // We use global index as a proxy question ID until real IDs are available
-      final questionId = 'q_${global}';
+      final questionId = questions != null && global < questions.length
+          ? questions[global].id
+          : null;
       items.add(QuestionNavItem(
         sectionIndex: si,
         questionIndex: qi,
         globalIndex: global,
-        status: answers.containsKey(questionId)
+        status: questionId != null &&
+                answers[questionId] != null &&
+                answers[questionId]!.isAnswered
             ? QuestionNavStatus.answered
             : QuestionNavStatus.unanswered,
       ));

@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:app_czech/shared/models/question_model.dart';
+import 'package:app_czech/features/mock_test/models/exam_question_answer.dart';
 import 'package:app_czech/features/mock_test/providers/exam_session_notifier.dart';
 import 'package:app_czech/features/mock_test/models/exam_meta.dart';
 import 'package:app_czech/features/mock_test/models/exam_attempt.dart';
@@ -47,6 +49,26 @@ final _fakeInitialState = ExamSessionState(
   meta: _fakeMeta,
 );
 
+const _readingQuestion = Question(
+  id: 'question-reading-1',
+  type: QuestionType.mcq,
+  skill: SkillArea.reading,
+  difficulty: Difficulty.intermediate,
+  prompt: 'Prompt 1',
+  explanation: 'Explanation 1',
+  points: 1,
+);
+
+const _listeningQuestion = Question(
+  id: 'question-listening-1',
+  type: QuestionType.mcq,
+  skill: SkillArea.listening,
+  difficulty: Difficulty.intermediate,
+  prompt: 'Prompt 2',
+  explanation: 'Explanation 2',
+  points: 1,
+);
+
 // ── Fake notifier — bypasses Supabase build() ─────────────────────────────────
 
 class _FakeExamSessionNotifier extends ExamSessionNotifier {
@@ -74,11 +96,21 @@ void main() {
 
       container
           .read(examSessionNotifierProvider('attempt-001').notifier)
-          .answer('q1', 'opt-b');
+          .answerQuestion(
+            question: _readingQuestion,
+            answer: const QuestionAnswer(
+              questionId: 'question-reading-1',
+              selectedOptionId: 'opt-b',
+            ),
+          );
 
-      final state =
-          container.read(examSessionNotifierProvider('attempt-001')).requireValue;
-      expect(state.currentAnswers['q1'], 'opt-b');
+      final state = container
+          .read(examSessionNotifierProvider('attempt-001'))
+          .requireValue;
+      expect(
+        state.currentAnswers['question-reading-1']?.selectedOptionId,
+        'opt-b',
+      );
     });
 
     test('overrides previous answer for same question', () async {
@@ -87,12 +119,28 @@ void main() {
 
       final notifier =
           container.read(examSessionNotifierProvider('attempt-001').notifier);
-      notifier.answer('q1', 'opt-a');
-      notifier.answer('q1', 'opt-c');
+      notifier.answerQuestion(
+        question: _readingQuestion,
+        answer: const QuestionAnswer(
+          questionId: 'question-reading-1',
+          selectedOptionId: 'opt-a',
+        ),
+      );
+      notifier.answerQuestion(
+        question: _readingQuestion,
+        answer: const QuestionAnswer(
+          questionId: 'question-reading-1',
+          selectedOptionId: 'opt-c',
+        ),
+      );
 
-      final state =
-          container.read(examSessionNotifierProvider('attempt-001')).requireValue;
-      expect(state.currentAnswers['q1'], 'opt-c');
+      final state = container
+          .read(examSessionNotifierProvider('attempt-001'))
+          .requireValue;
+      expect(
+        state.currentAnswers['question-reading-1']?.selectedOptionId,
+        'opt-c',
+      );
       expect(state.currentAnswers.length, 1);
     });
 
@@ -102,11 +150,24 @@ void main() {
 
       final notifier =
           container.read(examSessionNotifierProvider('attempt-001').notifier);
-      notifier.answer('q1', 'opt-a');
-      notifier.answer('q2', 'opt-b');
+      notifier.answerQuestion(
+        question: _readingQuestion,
+        answer: const QuestionAnswer(
+          questionId: 'question-reading-1',
+          selectedOptionId: 'opt-a',
+        ),
+      );
+      notifier.answerQuestion(
+        question: _listeningQuestion,
+        answer: const QuestionAnswer(
+          questionId: 'question-listening-1',
+          selectedOptionId: 'opt-b',
+        ),
+      );
 
-      final state =
-          container.read(examSessionNotifierProvider('attempt-001')).requireValue;
+      final state = container
+          .read(examSessionNotifierProvider('attempt-001'))
+          .requireValue;
       expect(state.answeredCount, 2);
     });
   });
@@ -120,8 +181,9 @@ void main() {
           .read(examSessionNotifierProvider('attempt-001').notifier)
           .nextQuestion();
 
-      final state =
-          container.read(examSessionNotifierProvider('attempt-001')).requireValue;
+      final state = container
+          .read(examSessionNotifierProvider('attempt-001'))
+          .requireValue;
       expect(state.currentQuestionIndex, 1);
       expect(state.currentSectionIndex, 0);
     });
@@ -136,12 +198,14 @@ void main() {
           .read(examSessionNotifierProvider('attempt-001').notifier)
           .nextQuestion();
 
-      final state =
-          container.read(examSessionNotifierProvider('attempt-001')).requireValue;
+      final state = container
+          .read(examSessionNotifierProvider('attempt-001'))
+          .requireValue;
       expect(state.showSectionTransition, isTrue);
     });
 
-    test('advanceSection moves to next section, resets question index', () async {
+    test('advanceSection moves to next section, resets question index',
+        () async {
       final container = _makeContainer();
       await container.read(examSessionNotifierProvider('attempt-001').future);
 
@@ -149,8 +213,9 @@ void main() {
           .read(examSessionNotifierProvider('attempt-001').notifier)
           .advanceSection();
 
-      final state =
-          container.read(examSessionNotifierProvider('attempt-001')).requireValue;
+      final state = container
+          .read(examSessionNotifierProvider('attempt-001'))
+          .requireValue;
       expect(state.currentSectionIndex, 1);
       expect(state.currentQuestionIndex, 0);
       expect(state.showSectionTransition, isFalse);
@@ -164,8 +229,9 @@ void main() {
           .read(examSessionNotifierProvider('attempt-001').notifier)
           .goToQuestion(1, 1);
 
-      final state =
-          container.read(examSessionNotifierProvider('attempt-001')).requireValue;
+      final state = container
+          .read(examSessionNotifierProvider('attempt-001'))
+          .requireValue;
       expect(state.currentSectionIndex, 1);
       expect(state.currentQuestionIndex, 1);
     });
@@ -179,7 +245,16 @@ void main() {
 
     test('unansweredCount = total - answered', () {
       final state = _fakeInitialState.copyWith(
-        currentAnswers: {'q1': 'a', 'q2': 'b'},
+        currentAnswers: {
+          'question-reading-1': const ExamQuestionAnswer(
+            questionId: 'question-reading-1',
+            selectedOptionId: 'a',
+          ),
+          'question-listening-1': const ExamQuestionAnswer(
+            questionId: 'question-listening-1',
+            selectedOptionId: 'b',
+          ),
+        },
       );
       expect(state.unansweredCount, 3);
     });
@@ -203,8 +278,9 @@ void main() {
           .read(examSessionNotifierProvider('attempt-001').notifier)
           .updateRemainingSeconds(1800);
 
-      final state =
-          container.read(examSessionNotifierProvider('attempt-001')).requireValue;
+      final state = container
+          .read(examSessionNotifierProvider('attempt-001'))
+          .requireValue;
       expect(state.attempt.remainingSeconds, 1800);
     });
   });

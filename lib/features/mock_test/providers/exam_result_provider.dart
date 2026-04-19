@@ -1,40 +1,55 @@
+import 'package:app_czech/core/storage/prefs_storage.dart';
+import 'package:app_czech/core/supabase/supabase_config.dart';
+import 'package:app_czech/features/mock_test/models/exam_question_answer.dart';
+import 'package:app_czech/features/mock_test/models/mock_test_result.dart';
+import 'package:app_czech/shared/models/question_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:app_czech/core/supabase/supabase_config.dart';
-import 'package:app_czech/core/storage/prefs_storage.dart';
-import 'package:app_czech/shared/models/question_model.dart';
-import '../models/mock_test_result.dart';
+
 import 'exam_questions_provider.dart';
 
 part 'exam_result_provider.g.dart';
 
+const _resultPollRetries = 15;
+const _resultPollInterval = Duration(seconds: 1);
+
 @riverpod
 Future<MockTestResult> examResult(ExamResultRef ref, String attemptId) async {
-  final data = await supabase
-      .from('exam_results')
-      .select()
-      .eq('attempt_id', attemptId)
-      .order('created_at', ascending: false)
-      .limit(1)
-      .single();
+  Map<String, dynamic>? raw;
 
-  final raw = Map<String, dynamic>.from(data as Map);
+  for (var i = 0; i < _resultPollRetries; i++) {
+    final data = await supabase
+        .from('exam_results')
+        .select()
+        .eq('attempt_id', attemptId)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
 
-  // Parse section_scores: { skill: { score, total } }
-  final rawSections =
-      (raw['section_scores'] as Map<String, dynamic>?) ?? {};
+    if (data != null) {
+      raw = Map<String, dynamic>.from(data as Map);
+      break;
+    }
+
+    if (i < _resultPollRetries - 1) {
+      await Future.delayed(_resultPollInterval);
+    }
+  }
+
+  if (raw == null) {
+    throw StateError('Exam result not ready yet.');
+  }
+
+  final rawSections = (raw['section_scores'] as Map<String, dynamic>?) ?? {};
   final sectionScores = rawSections.map(
-    (k, v) => MapEntry(
-      k,
-      SectionResult.fromJson(Map<String, dynamic>.from(v as Map)),
+    (key, value) => MapEntry(
+      key,
+      SectionResult.fromJson(Map<String, dynamic>.from(value as Map)),
     ),
   );
 
-  // Parse weak_skills: stored as List in Postgres
   final rawWeak = raw['weak_skills'];
-  final weakSkills = rawWeak is List
-      ? List<String>.from(rawWeak)
-      : <String>[];
+  final weakSkills = rawWeak is List ? List<String>.from(rawWeak) : <String>[];
 
   return MockTestResult(
     id: raw['id'] as String,
@@ -49,8 +64,6 @@ Future<MockTestResult> examResult(ExamResultRef ref, String attemptId) async {
   );
 }
 
-/// Links an anonymous attempt to the newly authenticated user.
-/// Called right after a successful signup if a pendingAttemptId exists.
 Future<void> linkPendingAttempt(String userId) async {
   final pendingId = PrefsStorage.instance.pendingAttemptId;
   if (pendingId == null) return;
@@ -58,24 +71,46 @@ Future<void> linkPendingAttempt(String userId) async {
   try {
     await supabase
         .from('exam_attempts')
-        .update({'user_id': userId})
+        .update({'user_id': userId, 'guest_token': null})
         .eq('id', pendingId)
-        .isFilter('user_id', null); // only link if still anonymous
+        .isFilter('user_id', null);
 
     await supabase
         .from('exam_results')
-        .update({'user_id': userId})
+        .update({'user_id': userId, 'guest_token': null})
+        .eq('attempt_id', pendingId)
+        .isFilter('user_id', null);
+
+    await supabase
+        .from('ai_speaking_attempts')
+        .update({'user_id': userId, 'guest_token': null})
+        .eq('exam_attempt_id', pendingId)
+        .isFilter('user_id', null);
+
+    await supabase
+        .from('ai_writing_attempts')
+        .update({'user_id': userId, 'guest_token': null})
+        .eq('exam_attempt_id', pendingId)
+        .isFilter('user_id', null);
+
+    await supabase
+        .from('ai_teacher_reviews')
+        .update({'user_id': userId, 'guest_token': null})
+        .eq('exam_attempt_id', pendingId)
+        .isFilter('user_id', null);
+
+    await supabase
+        .from('exam_analysis')
+        .update({'user_id': userId, 'guest_token': null})
         .eq('attempt_id', pendingId)
         .isFilter('user_id', null);
 
     await PrefsStorage.instance.clearPendingAttemptId();
   } catch (_) {
-    // Non-fatal: attempt stays anonymous, user can still see result
+    // Non-fatal: attempt stays anonymous, user can still see result.
   }
 }
 
-/// Fetches the examId for a given attemptId from exam_attempts.
-/// No codegen needed — uses classic Riverpod family API.
 final attemptExamIdProvider =
     FutureProvider.autoDispose.family<String?, String>((ref, attemptId) async {
   try {
@@ -90,28 +125,30 @@ final attemptExamIdProvider =
   }
 });
 
-// ── Review ─────────────────────────────────────────────────────────────────────
-
 class QuestionReviewItem {
   const QuestionReviewItem({
+    required this.attemptId,
     required this.number,
     required this.globalIndex,
     required this.question,
     required this.sectionSkill,
     required this.sectionLabel,
     this.userAnswer,
+    this.aiAttemptId,
     required this.isCorrect,
     required this.isAnswered,
     this.selectedOption,
     this.correctOption,
   });
 
+  final String attemptId;
   final int number;
   final int globalIndex;
   final Question question;
-  final String sectionSkill;   // 'reading' | 'listening' | 'writing' | 'speaking'
+  final String sectionSkill;
   final String sectionLabel;
-  final String? userAnswer;    // optionId for MCQ, free text for writing/speaking/fillBlank
+  final String? userAnswer;
+  final String? aiAttemptId;
   final bool isCorrect;
   final bool isAnswered;
   final QuestionOption? selectedOption;
@@ -120,8 +157,9 @@ class QuestionReviewItem {
 
 @riverpod
 Future<List<QuestionReviewItem>> examReview(
-    ExamReviewRef ref, String attemptId) async {
-  // 1. Fetch attempt answers + examId
+  ExamReviewRef ref,
+  String attemptId,
+) async {
   final attemptRow = await supabase
       .from('exam_attempts')
       .select('exam_id, answers')
@@ -129,79 +167,141 @@ Future<List<QuestionReviewItem>> examReview(
       .single();
 
   final examId = attemptRow['exam_id'] as String;
-  final rawAnswers =
-      (attemptRow['answers'] as Map<String, dynamic>?) ?? {};
-  // Answers are keyed as 'q_0', 'q_1', ... (global index during exam session)
-  final answers = rawAnswers.map((k, v) => MapEntry(k, v.toString()));
+  final rawAnswers = (attemptRow['answers'] as Map<String, dynamic>?) ?? {};
 
-  // 2. Fetch sections to know skill per question (sections are ordered by order_index)
   final sectionsData = await supabase
       .from('exam_sections')
       .select('id, skill, label, question_count')
       .eq('exam_id', examId)
       .order('order_index');
 
-  final sections = (sectionsData as List).map((s) => (
-        id: s['id'] as String,
-        skill: s['skill'] as String? ?? 'reading',
-        label: s['label'] as String? ?? '',
-        count: (s['question_count'] as num?)?.toInt() ?? 0,
-      )).toList();
+  final sections = (sectionsData as List)
+      .map(
+        (section) => (
+          id: section['id'] as String,
+          skill: section['skill'] as String? ?? 'reading',
+          label: section['label'] as String? ?? '',
+          count: (section['question_count'] as num?)?.toInt() ?? 0,
+        ),
+      )
+      .toList();
 
-  // Build section boundary map: globalIndex → (skill, label)
   final sectionForIndex = <int, ({String skill, String label})>{};
   var offset = 0;
-  for (final sec in sections) {
-    for (var j = 0; j < sec.count; j++) {
-      sectionForIndex[offset + j] = (skill: sec.skill, label: sec.label);
+  for (final section in sections) {
+    for (var j = 0; j < section.count; j++) {
+      sectionForIndex[offset + j] = (
+        skill: section.skill,
+        label: section.label,
+      );
     }
-    offset += sec.count;
+    offset += section.count;
   }
 
-  // 3. Fetch questions (flat, in section order)
   final questions = await ref.watch(examQuestionsProvider(examId).future);
+  final answers = _restoreReviewAnswers(rawAnswers, questions);
 
-  // 4. Build review items
   return questions.asMap().entries.map((entry) {
-    final i = entry.key;
-    final q = entry.value;
-    // Answer key matches ExamSessionNotifier.answer() which uses 'q_$globalIdx'
-    final userAnswer = answers['q_$i'];
-    final isAnswered = userAnswer != null && userAnswer.isNotEmpty;
-    final sec = sectionForIndex[i] ?? (skill: q.skill.name, label: '');
+    final index = entry.key;
+    final question = entry.value;
+    final storedAnswer = answers[question.id];
+    final userAnswer = switch (question.type) {
+      QuestionType.mcq => storedAnswer?.selectedOptionId,
+      QuestionType.writing ||
+      QuestionType.fillBlank =>
+        storedAnswer?.writtenAnswer,
+      QuestionType.speaking => storedAnswer?.writtenAnswer,
+      QuestionType.matching ||
+      QuestionType.ordering =>
+        storedAnswer?.writtenAnswer,
+    };
+    final isAnswered = storedAnswer?.isAnswered ?? false;
+    final section = sectionForIndex[index] ??
+        (
+          skill: question.skill.name,
+          label: '',
+        );
 
     QuestionOption? selectedOption;
     QuestionOption? correctOption;
-    bool isCorrect = false;
+    var isCorrect = false;
 
-    if (q.options.isNotEmpty) {
-      correctOption = q.options.where((o) => o.isCorrect).firstOrNull;
+    if (question.options.isNotEmpty) {
+      correctOption =
+          question.options.where((option) => option.isCorrect).firstOrNull;
     }
 
-    if (q.type == QuestionType.mcq) {
-      if (isAnswered) {
-        selectedOption =
-            q.options.where((o) => o.id == userAnswer).firstOrNull;
+    if (question.type == QuestionType.mcq) {
+      if (userAnswer != null) {
+        selectedOption = question.options
+            .where((option) => option.id == userAnswer)
+            .firstOrNull;
       }
       isCorrect = selectedOption?.isCorrect ?? false;
-    } else if (q.type == QuestionType.fillBlank) {
-      isCorrect = isAnswered &&
+    } else if (question.type == QuestionType.fillBlank) {
+      isCorrect = userAnswer != null &&
           userAnswer.toLowerCase().trim() ==
-              (q.correctAnswer ?? '').toLowerCase().trim();
+              (question.correctAnswer ?? '').toLowerCase().trim();
     }
-    // writing/speaking: no objective correctness — isCorrect stays false
 
     return QuestionReviewItem(
-      number: i + 1,
-      globalIndex: i,
-      question: q,
-      sectionSkill: sec.skill,
-      sectionLabel: sec.label,
+      attemptId: attemptId,
+      number: index + 1,
+      globalIndex: index,
+      question: question,
+      sectionSkill: section.skill,
+      sectionLabel: section.label,
       userAnswer: userAnswer,
+      aiAttemptId: storedAnswer?.aiAttemptId,
       isCorrect: isCorrect,
       isAnswered: isAnswered,
       selectedOption: selectedOption,
       correctOption: correctOption,
     );
   }).toList();
+}
+
+Map<String, ExamQuestionAnswer> _restoreReviewAnswers(
+  Map<String, dynamic> rawAnswers,
+  List<Question> questions,
+) {
+  if (rawAnswers.isEmpty) return {};
+
+  final restored = <String, ExamQuestionAnswer>{};
+  final isLegacy = rawAnswers.keys.any((key) => key.startsWith('q_'));
+
+  if (isLegacy) {
+    for (final entry in questions.asMap().entries) {
+      final raw = rawAnswers['q_${entry.key}'];
+      if (raw == null) continue;
+      final value = raw.toString().trim();
+      if (value.isEmpty) continue;
+
+      final question = entry.value;
+      restored[question.id] = switch (question.type) {
+        QuestionType.mcq => ExamQuestionAnswer(
+            questionId: question.id,
+            selectedOptionId: value,
+          ),
+        QuestionType.speaking => ExamQuestionAnswer(
+            questionId: question.id,
+            aiAttemptId: value,
+          ),
+        _ => ExamQuestionAnswer(
+            questionId: question.id,
+            writtenAnswer: value,
+          ),
+      };
+    }
+    return restored;
+  }
+
+  for (final entry in rawAnswers.entries) {
+    final answer = ExamQuestionAnswer.fromStoredJson(entry.key, entry.value);
+    if (answer.isAnswered) {
+      restored[entry.key] = answer;
+    }
+  }
+
+  return restored;
 }

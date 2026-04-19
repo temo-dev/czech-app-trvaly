@@ -1,6 +1,11 @@
-import { corsHeaders } from '../_shared/cors.ts';
-import { getOpenAIKey, chatComplete } from '../_shared/openai.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from "../_shared/cors.ts";
+import { chatComplete, getOpenAIKey } from "../_shared/openai.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  assertCanAccessExamAttempt,
+  getAuthUserId,
+  getGuestToken,
+} from "../_shared/guest_access.ts";
 
 const WRITING_SYSTEM_PROMPT = `
 Bạn là giáo viên chấm bài viết tiếng Séc cho người học người Việt Nam.
@@ -47,14 +52,16 @@ short_tips là tối đa 3 lời khuyên quan trọng nhất từ toàn bộ bà
 `.trim();
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  let attemptId: string | null = null;
 
   try {
     const body = await req.json() as {
@@ -68,79 +75,101 @@ Deno.serve(async (req) => {
 
     if (!text || !question_id) {
       return new Response(
-        JSON.stringify({ error: 'text and question_id are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({ error: "text and question_id are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    // Get authenticated user (nullable for anonymous)
-    const authHeader = req.headers.get('Authorization');
-    let userId: string | null = null;
-    if (authHeader) {
-      const { data: { user } } = await supabase.auth.getUser(
-        authHeader.replace('Bearer ', ''),
+    const userId = await getAuthUserId(supabase, req);
+    const guestToken = getGuestToken(req);
+    if (userId == null && guestToken == null) {
+      return new Response(
+        JSON.stringify({ error: "Missing guest access token" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
-      userId = user?.id ?? null;
+    }
+    if (exam_attempt_id) {
+      await assertCanAccessExamAttempt({
+        supabase,
+        req,
+        attemptId: exam_attempt_id,
+      });
     }
 
     // Fetch question prompt
     const { data: question } = await supabase
-      .from('questions')
-      .select('prompt')
-      .eq('id', question_id)
+      .from("questions")
+      .select("prompt")
+      .eq("id", question_id)
       .maybeSingle();
 
-    const promptText = (question as Record<string, unknown> | null)?.['prompt'] as string ?? '';
+    const promptText =
+      (question as Record<string, unknown> | null)?.["prompt"] as string ?? "";
     const rubricType = detectRubricType(promptText);
 
     // Insert attempt row
     const { data: attempt, error: insertErr } = await supabase
-      .from('ai_writing_attempts')
+      .from("ai_writing_attempts")
       .insert({
         user_id: userId,
+        guest_token: userId == null ? guestToken : null,
         exercise_id: null,
         question_id: question_id ?? null,
         exam_attempt_id: exam_attempt_id ?? null,
         prompt_text: promptText,
         answer_text: text,
         rubric_type: rubricType,
-        status: 'processing',
+        status: "processing",
       })
-      .select('id')
+      .select("id")
       .single();
 
     if (insertErr || !attempt) {
-      throw new Error(`Failed to create writing attempt: ${insertErr?.message}`);
+      throw new Error(
+        `Failed to create writing attempt: ${insertErr?.message}`,
+      );
     }
 
-    const attemptId: string = (attempt as Record<string, unknown>)['id'] as string;
+    attemptId = (attempt as Record<string, unknown>)["id"] as string;
     const apiKey = getOpenAIKey();
 
     // Score with GPT-4o-mini
-    const userMessage = `Đề bài: "${promptText}"\n\nBài viết của học viên:\n"${text}"`;
-    const scored = await chatComplete(apiKey, WRITING_SYSTEM_PROMPT, userMessage);
+    const userMessage =
+      `Đề bài: "${promptText}"\n\nBài viết của học viên:\n"${text}"`;
+    const scored = await chatComplete(
+      apiKey,
+      WRITING_SYSTEM_PROMPT,
+      userMessage,
+    );
 
-    const overallScore = Number(scored['overall_score'] ?? 0);
+    const overallScore = Number(scored["overall_score"] ?? 0);
     const metrics = {
-      grammar: Number(scored['grammar'] ?? 0),
-      grammar_feedback: String(scored['grammar_feedback'] ?? ''),
-      vocabulary: Number(scored['vocabulary'] ?? 0),
-      vocabulary_feedback: String(scored['vocabulary_feedback'] ?? ''),
-      coherence: Number(scored['coherence'] ?? 0),
-      format_feedback: String(scored['format_feedback'] ?? ''),
-      task_achievement: Number(scored['task_achievement'] ?? 0),
-      content_feedback: String(scored['content_feedback'] ?? ''),
-      overall_feedback: String(scored['overall_feedback'] ?? ''),
-      short_tips: (scored['short_tips'] as string[]) ?? [],
+      grammar: Number(scored["grammar"] ?? 0),
+      grammar_feedback: String(scored["grammar_feedback"] ?? ""),
+      vocabulary: Number(scored["vocabulary"] ?? 0),
+      vocabulary_feedback: String(scored["vocabulary_feedback"] ?? ""),
+      coherence: Number(scored["coherence"] ?? 0),
+      format_feedback: String(scored["format_feedback"] ?? ""),
+      task_achievement: Number(scored["task_achievement"] ?? 0),
+      content_feedback: String(scored["content_feedback"] ?? ""),
+      overall_feedback: String(scored["overall_feedback"] ?? ""),
+      short_tips: (scored["short_tips"] as string[]) ?? [],
     };
 
-    const annotatedSpans = (scored['annotated_spans'] as unknown[]) ?? [{ text, issue_type: null }];
-    const correctedEssay = String(scored['corrected_essay'] ?? '');
+    const annotatedSpans = (scored["annotated_spans"] as unknown[]) ??
+      [{ text, issue_type: null }];
+    const correctedEssay = String(scored["corrected_essay"] ?? "");
 
     await supabase
-      .from('ai_writing_attempts')
+      .from("ai_writing_attempts")
       .update({
-        status: 'ready',
+        status: "ready",
         overall_score: overallScore,
         metrics,
         grammar_notes: annotatedSpans,
@@ -148,24 +177,44 @@ Deno.serve(async (req) => {
         corrected_essay: correctedEssay,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', attemptId);
+      .eq("id", attemptId);
 
     return new Response(
       JSON.stringify({ attempt_id: attemptId }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (err) {
-    console.error('writing-submit error:', err);
+    console.error("writing-submit error:", err);
+    if (attemptId) {
+      try {
+        await supabase
+          .from("ai_writing_attempts")
+          .update({
+            status: "error",
+            error_message: String(err),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", attemptId);
+      } catch (_) { /* best-effort */ }
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });
 
-function detectRubricType(prompt: string): 'letter' | 'essay' | 'form' {
+function detectRubricType(prompt: string): "letter" | "essay" | "form" {
   const p = prompt.toLowerCase();
-  if (p.includes('dopis') || p.includes('email') || p.includes('napište')) return 'letter';
-  if (p.includes('formulář') || p.includes('form')) return 'form';
-  return 'essay';
+  if (p.includes("dopis") || p.includes("email") || p.includes("napište")) {
+    return "letter";
+  }
+  if (p.includes("formulář") || p.includes("form")) return "form";
+  return "essay";
 }

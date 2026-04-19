@@ -37,12 +37,13 @@ Widget inventory with file paths and key props. Organized by feature.
 | `ExamTopBar` | `sectionLabel, remainingSeconds, onSubmit` |
 | `ExamTimer` | `remainingSeconds` |
 | `QuestionNavPanel` | `questions, answers, currentIndex, onNavigate` |
-| `QuestionReviewList` | `questions, answers, flags` |
+| `QuestionReviewList` | `attemptId, analysis?` |
 | `AutosaveIndicator` | `isSaving` |
 | `ConfirmSubmitDialog` | `unansweredCount, onConfirm, onCancel` |
 | `SectionTransitionCard` | `fromSkill, toSkill` |
 | `TotalScoreHero` | `score, passed` |
 | `SkillBreakdownChart` | `sectionScores (Map<String,SectionResult>)` |
+| `OverallInsightsCard` | `analysis (ExamAnalysis?)` |
 | `ResultCtaSection` | `isAuthenticated, onRetry, onReview, onSignup` |
 
 ---

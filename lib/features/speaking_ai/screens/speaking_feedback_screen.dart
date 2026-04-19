@@ -5,8 +5,12 @@ import 'package:app_czech/core/router/app_routes.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/features/ai_teacher/models/ai_teacher_review.dart';
+import 'package:app_czech/features/ai_teacher/providers/ai_teacher_review_provider.dart';
+import 'package:app_czech/features/ai_teacher/widgets/ai_teacher_review_widgets.dart';
 import 'package:app_czech/features/course/providers/course_providers.dart';
 import 'package:app_czech/features/speaking_ai/providers/speaking_feedback_provider.dart';
+import 'package:app_czech/shared/models/question_model.dart';
 import 'package:app_czech/shared/widgets/circular_progress_ring.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
@@ -19,40 +23,64 @@ class SpeakingFeedbackScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     final attemptId = extra?['attemptId'] as String? ?? '';
+    final questionId = extra?['questionId'] as String? ?? '';
+    final exerciseId = extra?['exerciseId'] as String? ??
+        (questionId.isNotEmpty ? questionId : '');
     final lessonId = extra?['lessonId'] as String? ?? '';
     final lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
+    final source = extra?['source'] as String? ??
+        (lessonId.isNotEmpty ? 'lesson' : 'practice');
 
     if (attemptId.isEmpty) {
       return _buildShell(context, child: _ScoringInProgress());
     }
 
-    final state = ref.watch(speakingFeedbackProvider(attemptId));
+    final request = AiTeacherReviewRequest(
+      source: source,
+      questionId: questionId,
+      exerciseId: exerciseId.isNotEmpty ? exerciseId : null,
+      lessonId: lessonId.isNotEmpty ? lessonId : null,
+      aiAttemptId: attemptId,
+      questionType: QuestionType.speaking,
+    );
+    final reviewAsync = ref.watch(aiTeacherReviewEntryProvider(request));
 
-    // Mark block complete when AI scoring finishes
-    ref.listen(speakingFeedbackProvider(attemptId), (_, next) {
-      if (next.status == SpeakingFeedbackStatus.completed &&
-          lessonId.isNotEmpty &&
-          lessonBlockId.isNotEmpty) {
-        markBlockComplete(lessonId: lessonId, lessonBlockId: lessonBlockId);
-        ref.invalidate(lessonDetailProvider(lessonId));
-      }
+    ref.listen(aiTeacherReviewEntryProvider(request), (_, next) {
+      next.whenData((response) {
+        if (response.isReady &&
+            lessonId.isNotEmpty &&
+            lessonBlockId.isNotEmpty) {
+          markBlockComplete(lessonId: lessonId, lessonBlockId: lessonBlockId);
+          ref.invalidate(lessonDetailProvider(lessonId));
+        }
+      });
     });
 
     return _buildShell(
       context,
-      child: switch (state.status) {
-        SpeakingFeedbackStatus.pending ||
-        SpeakingFeedbackStatus.scoring =>
-          _ScoringInProgress(),
-        SpeakingFeedbackStatus.completed when state.result != null =>
-          _FeedbackBody(result: state.result!),
-        SpeakingFeedbackStatus.error => ErrorState(
-            message: state.errorMessage ?? 'Không thể tải kết quả.',
-            onRetry: () =>
-                ref.read(speakingFeedbackProvider(attemptId).notifier).retry(),
-          ),
-        _ => _ScoringInProgress(),
-      },
+      child: reviewAsync.when(
+        loading: () => _ScoringInProgress(),
+        error: (_, __) => ErrorState(
+          message: 'Không thể tải kết quả.',
+          onRetry: () => ref.invalidate(aiTeacherReviewEntryProvider(request)),
+        ),
+        data: (response) {
+          if (response.isPending) return _ScoringInProgress();
+          if (response.isError || response.review == null) {
+            return ErrorState(
+              message: response.message ?? 'Không thể tải kết quả.',
+              onRetry: () =>
+                  ref.invalidate(aiTeacherReviewEntryProvider(request)),
+            );
+          }
+          return AiTeacherDetailView(
+            review: response.review!,
+            title: 'Kết quả Nói',
+            subtitle:
+                'AI Teacher nhận xét bài nói dựa trên transcript và tiêu chí chấm hiện có.',
+          );
+        },
+      ),
     );
   }
 
@@ -191,7 +219,8 @@ class _PulsingRingState extends State<_PulsingRing>
           color: AppColors.primary.withOpacity(0.08),
           shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.mic_rounded, size: 44, color: AppColors.primary),
+        child:
+            const Icon(Icons.mic_rounded, size: 44, color: AppColors.primary),
       ),
     );
   }
@@ -420,8 +449,7 @@ class _ShortTipsCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('💡 ',
-                      style: TextStyle(fontSize: 13)),
+                  const Text('💡 ', style: TextStyle(fontSize: 13)),
                   Expanded(
                     child: Text(
                       tip,
@@ -622,8 +650,7 @@ class _ErrorCategoryCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: hasErrors
                       ? AppColors.tertiaryFixed
@@ -721,8 +748,8 @@ class _SampleAnswerCard extends StatelessWidget {
               GestureDetector(
                 onTap: () {},
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(AppRadius.full),

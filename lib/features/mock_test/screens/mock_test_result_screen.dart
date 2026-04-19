@@ -12,7 +12,9 @@ import 'package:app_czech/shared/widgets/error_state.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
 import '../models/mock_test_result.dart';
+import '../providers/exam_analysis_provider.dart';
 import '../providers/exam_result_provider.dart';
+import '../widgets/overall_insights_card.dart';
 import '../widgets/question_review_list.dart';
 import '../widgets/result_cta_section.dart';
 import '../widgets/skill_breakdown_chart.dart';
@@ -27,8 +29,7 @@ class MockTestResultScreen extends ConsumerStatefulWidget {
       _MockTestResultScreenState();
 }
 
-class _MockTestResultScreenState
-    extends ConsumerState<MockTestResultScreen> {
+class _MockTestResultScreenState extends ConsumerState<MockTestResultScreen> {
   @override
   void initState() {
     super.initState();
@@ -48,10 +49,10 @@ class _MockTestResultScreenState
 
   @override
   Widget build(BuildContext context) {
-    final resultAsync =
-        ref.watch(examResultProvider(widget.attemptId));
+    final resultAsync = ref.watch(examResultProvider(widget.attemptId));
 
     return Scaffold(
+      key: const Key('mock_exam_result_screen'),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: const Text('Kết quả bài thi'),
@@ -67,8 +68,7 @@ class _MockTestResultScreenState
         loading: () => const _ResultSkeleton(),
         error: (e, _) => ErrorState(
           message: 'Không thể tải kết quả. Vui lòng thử lại.',
-          onRetry: () =>
-              ref.invalidate(examResultProvider(widget.attemptId)),
+          onRetry: () => ref.invalidate(examResultProvider(widget.attemptId)),
         ),
         data: (result) {
           final examIdAsync =
@@ -98,7 +98,7 @@ class _MockTestResultScreenState
 
 // ── Body ──────────────────────────────────────────────────────────────────────
 
-class _ResultBody extends StatelessWidget {
+class _ResultBody extends ConsumerWidget {
   const _ResultBody({
     required this.result,
     required this.isAuthenticated,
@@ -116,7 +116,10 @@ class _ResultBody extends StatelessWidget {
   final VoidCallback onGoToDashboard;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final analysis =
+        ref.watch(examAnalysisProvider(result.attemptId)).valueOrNull;
+
     return ResponsivePageContainer(
       maxWidth: 640,
       child: SingleChildScrollView(
@@ -130,10 +133,11 @@ class _ResultBody extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.x4, vertical: AppSpacing.x3),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: AppColors.primary.withOpacity(0.3)),
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -161,11 +165,9 @@ class _ResultBody extends StatelessWidget {
 
             // Skill breakdown
             if (result.sectionScores.isNotEmpty) ...[
-              Text('Kết quả từng kỹ năng',
-                  style: AppTypography.titleSmall),
+              Text('Kết quả từng kỹ năng', style: AppTypography.titleSmall),
               const SizedBox(height: AppSpacing.x4),
-              SkillBreakdownChart(
-                  sectionScores: result.sectionScores),
+              SkillBreakdownChart(sectionScores: result.sectionScores),
               const SizedBox(height: AppSpacing.x5),
             ],
 
@@ -175,12 +177,14 @@ class _ResultBody extends StatelessWidget {
               const SizedBox(height: AppSpacing.x5),
             ],
 
-            // Recommendation card
-            _RecommendationCard(weakSkills: result.weakSkills),
+            OverallInsightsCard(analysis: analysis),
             const SizedBox(height: AppSpacing.x5),
 
             // Review section
-            QuestionReviewList(attemptId: result.attemptId),
+            QuestionReviewList(
+              attemptId: result.attemptId,
+              analysis: analysis,
+            ),
             const SizedBox(height: AppSpacing.x6),
 
             // CTA section
@@ -205,14 +209,12 @@ class _WeakSkillsRow extends StatelessWidget {
   const _WeakSkillsRow({required this.skills});
   final List<String> skills;
 
-
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Kỹ năng cần cải thiện',
-            style: AppTypography.titleSmall),
+        Text('Kỹ năng cần cải thiện', style: AppTypography.titleSmall),
         const SizedBox(height: AppSpacing.x3),
         Wrap(
           spacing: AppSpacing.x2,
@@ -224,8 +226,8 @@ class _WeakSkillsRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.errorContainer,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: AppColors.error.withValues(alpha: 0.4)),
+                border:
+                    Border.all(color: AppColors.error.withValues(alpha: 0.4)),
               ),
               child: Text(
                 SkillLabels.forKey(s),
@@ -242,71 +244,6 @@ class _WeakSkillsRow extends StatelessWidget {
   }
 }
 
-// ── Recommendation card ───────────────────────────────────────────────────────
-
-class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({required this.weakSkills});
-  final List<String> weakSkills;
-
-  String get _primarySkill =>
-      weakSkills.isNotEmpty ? weakSkills.first : 'reading';
-
-  static const _moduleMap = {
-    'reading':   ('Đọc hiểu — Module 1', 'Bắt đầu với các đoạn văn A2 cơ bản'),
-    'listening': ('Nghe hiểu — Module 1', 'Luyện nghe hội thoại hằng ngày'),
-    'writing':   ('Viết — Module 1', 'Luyện viết câu đơn giản và đơn xin việc'),
-    'speaking':  ('Nói — Module 1', 'Luyện phát âm và hội thoại cơ bản'),
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final (title, subtitle) =
-        _moduleMap[_primarySkill] ?? _moduleMap['reading']!;
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.x4),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.primaryFixed,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.lightbulb_outline_rounded,
-                color: AppColors.primary, size: 24),
-          ),
-          const SizedBox(width: AppSpacing.x3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Gợi ý cho bạn',
-                    style: AppTypography.labelSmall
-                        .copyWith(color: AppColors.primary)),
-                const SizedBox(height: AppSpacing.x1),
-                Text(title, style: AppTypography.bodyMedium),
-                Text(subtitle,
-                    style: AppTypography.bodySmall
-                        .copyWith(color: cs.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right_rounded,
-              color: cs.onSurfaceVariant, size: 20),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 
 class _ResultSkeleton extends StatelessWidget {
@@ -316,8 +253,7 @@ class _ResultSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    Widget block({double h = 16, double w = double.infinity}) =>
-        Padding(
+    Widget block({double h = 16, double w = double.infinity}) => Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.x3),
           child: LoadingShimmer(
             child: Container(

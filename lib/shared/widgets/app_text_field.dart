@@ -9,6 +9,7 @@ import 'package:app_czech/core/theme/app_radius.dart';
 class AppTextField extends StatelessWidget {
   const AppTextField({
     super.key,
+    this.fieldKey,
     this.controller,
     this.focusNode,
     this.label,
@@ -29,6 +30,7 @@ class AppTextField extends StatelessWidget {
     this.initialValue,
   });
 
+  final Key? fieldKey;
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final String? label;
@@ -63,6 +65,7 @@ class AppTextField extends StatelessWidget {
           const SizedBox(height: 6),
         ],
         TextFormField(
+          key: fieldKey,
           controller: controller,
           focusNode: focusNode,
           initialValue: controller == null ? initialValue : null,
@@ -111,8 +114,7 @@ class AppTextField extends StatelessWidget {
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              borderSide:
-                  const BorderSide(color: AppColors.error, width: 1.5),
+              borderSide: const BorderSide(color: AppColors.error, width: 1.5),
             ),
             hintStyle: AppTypography.bodyMedium.copyWith(
               color: AppColors.onSurfaceVariant.withOpacity(0.6),

@@ -1,5 +1,6 @@
-import { corsHeaders } from '../_shared/cors.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from "../_shared/cors.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertCanAccessExamAttempt } from "../_shared/guest_access.ts";
 
 interface QuestionRow {
   id: string;
@@ -9,7 +10,9 @@ interface QuestionRow {
   correct_answer: string | null;
   section_id: string;
   order_index: number;
-  question_options: Array<{ id: string; is_correct: boolean; order_index: number }>;
+  question_options: Array<
+    { id: string; is_correct: boolean; order_index: number }
+  >;
 }
 
 interface SectionRow {
@@ -19,14 +22,32 @@ interface SectionRow {
   question_count: number;
 }
 
+interface StoredAnswer {
+  question_id?: string;
+  selected_option_id?: string | null;
+  written_answer?: string | null;
+  ai_attempt_id?: string | null;
+}
+
+interface AiAttemptScoreRow {
+  id: string;
+  question_id: string | null;
+  overall_score: number | null;
+}
+
+interface AiAttemptPendingRow {
+  id: string;
+  question_id: string | null;
+}
+
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
   try {
@@ -34,184 +55,327 @@ Deno.serve(async (req) => {
 
     if (!attempt_id) {
       return new Response(
-        JSON.stringify({ error: 'attempt_id required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({ error: "attempt_id required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    // 1. Fetch the attempt
+    const accessAttempt = await assertCanAccessExamAttempt({
+      supabase,
+      req,
+      attemptId: attempt_id,
+    });
+
     const { data: attempt, error: attemptErr } = await supabase
-      .from('exam_attempts')
-      .select('id, exam_id, user_id, answers')
-      .eq('id', attempt_id)
+      .from("exam_attempts")
+      .select("id, exam_id, user_id, guest_token, answers")
+      .eq("id", attempt_id)
       .single();
 
     if (attemptErr || !attempt) {
       return new Response(
-        JSON.stringify({ error: 'Attempt not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({ error: "Attempt not found" }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    const a = attempt as Record<string, unknown>;
-    const answers = (a['answers'] ?? {}) as Record<string, string>;
+    const attemptRecord = attempt as Record<string, unknown>;
+    const answers = (attemptRecord["answers"] ?? {}) as Record<string, unknown>;
+    const hasLegacyAnswerKeys = Object.keys(answers).some((key) =>
+      key.startsWith("q_")
+    );
 
-    // 2. Fetch exam sections ordered by order_index
     const { data: sectionsRaw } = await supabase
-      .from('exam_sections')
-      .select('id, skill, order_index, question_count')
-      .eq('exam_id', a['exam_id'])
-      .order('order_index');
+      .from("exam_sections")
+      .select("id, skill, order_index, question_count")
+      .eq("exam_id", attemptRecord["exam_id"])
+      .order("order_index");
 
     const sections = (sectionsRaw ?? []) as SectionRow[];
-
     if (!sections.length) {
       return new Response(
-        JSON.stringify({ error: 'No sections found for exam' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({ error: "No sections found for exam" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    const sectionIds = sections.map((s) => s.id);
+    const sectionIds = sections.map((section) => section.id);
 
-    // 3. Fetch all questions with options, ordered by order_index within each section
     const { data: questionsRaw } = await supabase
-      .from('questions')
-      .select('id, type, skill, points, correct_answer, section_id, order_index, question_options(id, is_correct, order_index)')
-      .in('section_id', sectionIds)
-      .order('order_index');
+      .from("questions")
+      .select(
+        "id, type, skill, points, correct_answer, section_id, order_index, question_options(id, is_correct, order_index)",
+      )
+      .in("section_id", sectionIds)
+      .order("order_index");
 
     const questions = (questionsRaw ?? []) as QuestionRow[];
+    const storedAttemptIds = Object.values(answers)
+      .filter((value): value is StoredAnswer =>
+        typeof value === "object" && value !== null
+      )
+      .map((value) => value.ai_attempt_id)
+      .filter((value): value is string =>
+        typeof value === "string" && value.length > 0
+      );
 
-    // 4. Fetch real AI scores for speaking/writing answers in this exam attempt
-    const [speakingRes, writingRes, pendingSpeakingRes, pendingWritingRes] = await Promise.all([
+    const [
+      speakingReadyRes,
+      writingReadyRes,
+      speakingPendingRes,
+      writingPendingRes,
+      speakingByIdReadyRes,
+      writingByIdReadyRes,
+      speakingByIdPendingRes,
+      writingByIdPendingRes,
+    ] = await Promise.all([
       supabase
-        .from('ai_speaking_attempts')
-        .select('question_id, overall_score')
-        .eq('exam_attempt_id', attempt_id)
-        .eq('status', 'ready'),
+        .from("ai_speaking_attempts")
+        .select("question_id, overall_score")
+        .eq("exam_attempt_id", attempt_id)
+        .eq("status", "ready"),
       supabase
-        .from('ai_writing_attempts')
-        .select('question_id, overall_score')
-        .eq('exam_attempt_id', attempt_id)
-        .eq('status', 'ready'),
+        .from("ai_writing_attempts")
+        .select("question_id, overall_score")
+        .eq("exam_attempt_id", attempt_id)
+        .eq("status", "ready"),
       supabase
-        .from('ai_speaking_attempts')
-        .select('id')
-        .eq('exam_attempt_id', attempt_id)
-        .eq('status', 'processing')
-        .limit(1),
+        .from("ai_speaking_attempts")
+        .select("question_id")
+        .eq("exam_attempt_id", attempt_id)
+        .eq("status", "processing"),
       supabase
-        .from('ai_writing_attempts')
-        .select('id')
-        .eq('exam_attempt_id', attempt_id)
-        .eq('status', 'processing')
-        .limit(1),
+        .from("ai_writing_attempts")
+        .select("question_id")
+        .eq("exam_attempt_id", attempt_id)
+        .eq("status", "processing"),
+      storedAttemptIds.length
+        ? supabase
+          .from("ai_speaking_attempts")
+          .select("id, question_id, overall_score")
+          .in("id", storedAttemptIds)
+          .eq("status", "ready")
+        : Promise.resolve({ data: [] as AiAttemptScoreRow[] }),
+      storedAttemptIds.length
+        ? supabase
+          .from("ai_writing_attempts")
+          .select("id, question_id, overall_score")
+          .in("id", storedAttemptIds)
+          .eq("status", "ready")
+        : Promise.resolve({ data: [] as AiAttemptScoreRow[] }),
+      storedAttemptIds.length
+        ? supabase
+          .from("ai_speaking_attempts")
+          .select("id, question_id")
+          .in("id", storedAttemptIds)
+          .eq("status", "processing")
+        : Promise.resolve({ data: [] as AiAttemptPendingRow[] }),
+      storedAttemptIds.length
+        ? supabase
+          .from("ai_writing_attempts")
+          .select("id, question_id")
+          .in("id", storedAttemptIds)
+          .eq("status", "processing")
+        : Promise.resolve({ data: [] as AiAttemptPendingRow[] }),
     ]);
 
-    const aiGradingPending =
-      (pendingSpeakingRes.data?.length ?? 0) > 0 ||
-      (pendingWritingRes.data?.length ?? 0) > 0;
-
     const speakingScoreMap = new Map<string, number>();
-    for (const r of speakingRes.data ?? []) {
-      if (r.question_id) speakingScoreMap.set(r.question_id, r.overall_score ?? 0);
+    for (const row of speakingReadyRes.data ?? []) {
+      if (row.question_id) {
+        speakingScoreMap.set(row.question_id, row.overall_score ?? 0);
+      }
     }
+
     const writingScoreMap = new Map<string, number>();
-    for (const r of writingRes.data ?? []) {
-      if (r.question_id) writingScoreMap.set(r.question_id, r.overall_score ?? 0);
+    for (const row of writingReadyRes.data ?? []) {
+      if (row.question_id) {
+        writingScoreMap.set(row.question_id, row.overall_score ?? 0);
+      }
     }
 
-    // 5. Group questions by section, maintaining order
+    const pendingSpeakingQuestions = new Set<string>();
+    for (const row of speakingPendingRes.data ?? []) {
+      if (row.question_id) pendingSpeakingQuestions.add(row.question_id);
+    }
+
+    const pendingWritingQuestions = new Set<string>();
+    for (const row of writingPendingRes.data ?? []) {
+      if (row.question_id) pendingWritingQuestions.add(row.question_id);
+    }
+
+    const speakingScoreByAttemptId = new Map<string, number>();
+    for (
+      const row of (speakingByIdReadyRes.data ?? []) as AiAttemptScoreRow[]
+    ) {
+      if (row.id) {
+        speakingScoreByAttemptId.set(row.id, row.overall_score ?? 0);
+      }
+    }
+
+    const writingScoreByAttemptId = new Map<string, number>();
+    for (const row of (writingByIdReadyRes.data ?? []) as AiAttemptScoreRow[]) {
+      if (row.id) {
+        writingScoreByAttemptId.set(row.id, row.overall_score ?? 0);
+      }
+    }
+
+    const pendingSpeakingAttemptIds = new Set<string>();
+    for (
+      const row of (speakingByIdPendingRes.data ?? []) as AiAttemptPendingRow[]
+    ) {
+      if (row.id) pendingSpeakingAttemptIds.add(row.id);
+    }
+
+    const pendingWritingAttemptIds = new Set<string>();
+    for (
+      const row of (writingByIdPendingRes.data ?? []) as AiAttemptPendingRow[]
+    ) {
+      if (row.id) pendingWritingAttemptIds.add(row.id);
+    }
+
     const bySection = new Map<string, QuestionRow[]>();
-    for (const s of sections) bySection.set(s.id, []);
-    for (const q of questions) {
-      bySection.get(q.section_id)?.push(q);
+    for (const section of sections) bySection.set(section.id, []);
+    for (const question of questions) {
+      bySection.get(question.section_id)?.push(question);
     }
 
-    // 6. Grade each question
     const sectionScores: Record<string, { score: number; total: number }> = {};
     const weakSkills: string[] = [];
-    let globalIdx = 0;
     let totalEarned = 0;
     let totalPossible = 0;
+    let aiGradingPending = false;
+    let globalIdx = 0;
 
     for (const section of sections) {
-      const sectionQs = bySection.get(section.id) ?? [];
+      const sectionQuestions = bySection.get(section.id) ?? [];
       let sectionEarned = 0;
       let sectionPossible = 0;
 
-      for (const q of sectionQs) {
-        const answerKey = `q_${globalIdx}`;
-        const studentAnswer = answers[answerKey];
-        const points = q.points || 1;
-        sectionPossible += points;
+      for (const question of sectionQuestions) {
+        const storedAnswer = getStoredAnswer({
+          answers,
+          question,
+          globalIdx,
+          hasLegacyAnswerKeys,
+        });
 
+        const selectedOptionId = normalizeString(
+          storedAnswer?.selected_option_id ??
+            (question.type === "mcq"
+              ? (storedAnswer?.written_answer ?? null)
+              : null),
+        );
+        const writtenAnswer = normalizeString(storedAnswer?.written_answer);
+        const points = question.points || 1;
         let earned = 0;
 
-        if (q.type === 'mcq' || q.type === 'reading_mcq' || q.type === 'listening_mcq') {
-          if (studentAnswer) {
-            const selectedOption = q.question_options.find((o) => o.id === studentAnswer);
+        sectionPossible += points;
+
+        if (
+          question.type === "mcq" ||
+          question.type === "reading_mcq" ||
+          question.type === "listening_mcq"
+        ) {
+          if (selectedOptionId) {
+            const selectedOption = question.question_options.find(
+              (option) => option.id === selectedOptionId,
+            );
             if (selectedOption?.is_correct) {
               earned = points;
             }
           }
-        } else if (q.type === 'fill_blank' || q.type === 'fillBlank') {
+        } else if (
+          question.type === "fill_blank" || question.type === "fillBlank"
+        ) {
           if (
-            studentAnswer &&
-            q.correct_answer &&
-            studentAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()
+            writtenAnswer &&
+            question.correct_answer &&
+            writtenAnswer.trim().toLowerCase() ===
+              question.correct_answer.trim().toLowerCase()
           ) {
             earned = points;
           }
-        } else if (q.type === 'matching' || q.type === 'ordering') {
-          // Proportional credit: compare submitted order against correct order position-by-position
-          if (studentAnswer && studentAnswer.length > 0) {
-            try {
-              const submitted: string[] = JSON.parse(studentAnswer);
-              const correctOrder = [...q.question_options]
-                .sort((a, b) => a.order_index - b.order_index)
-                .map((o) => o.id);
-              if (correctOrder.length > 0) {
-                const matchCount = submitted.filter((id, i) => id === correctOrder[i]).length;
-                earned = Math.round(points * (matchCount / correctOrder.length));
-              } else {
-                earned = Math.round(points * 0.5);
+        } else if (
+          question.type === "matching" || question.type === "ordering"
+        ) {
+          if (writtenAnswer && writtenAnswer.length > 0) {
+            if (question.type === "ordering") {
+              try {
+                const submitted: string[] = JSON.parse(writtenAnswer);
+                const correctOrder = [...question.question_options]
+                  .sort((a, b) => a.order_index - b.order_index)
+                  .map((option) => option.id);
+                if (correctOrder.length > 0) {
+                  const matchCount = submitted.filter(
+                    (optionId, idx) => optionId === correctOrder[idx],
+                  ).length;
+                  earned = Math.round(
+                    points * (matchCount / correctOrder.length),
+                  );
+                }
+              } catch {
+                earned = 0;
               }
-            } catch {
-              earned = Math.round(points * 0.5);
+            } else {
+              const submittedPairs = parseMatchingPairs(writtenAnswer);
+              const correctPairs = parseMatchingPairs(question.correct_answer);
+              const correctKeys = Object.keys(correctPairs);
+              if (correctKeys.length > 0) {
+                const matchCount = correctKeys.filter(
+                  (leftId) => submittedPairs[leftId] === correctPairs[leftId],
+                ).length;
+                earned = Math.round(points * (matchCount / correctKeys.length));
+              }
             }
           }
-        } else if (q.type === 'speaking') {
-          const aiScore = speakingScoreMap.get(q.id);
+        } else if (question.type === "speaking") {
+          const aiAttemptId = normalizeString(storedAnswer?.ai_attempt_id);
+          const aiScore = aiAttemptId
+            ? speakingScoreByAttemptId.get(aiAttemptId)
+            : speakingScoreMap.get(question.id);
           if (aiScore !== undefined) {
             earned = Math.round(points * (aiScore / 100));
-          } else if (studentAnswer && studentAnswer.length > 0) {
-            // AI not yet ready — partial credit placeholder
-            earned = Math.round(points * 0.5);
+          } else if (
+            (aiAttemptId && pendingSpeakingAttemptIds.has(aiAttemptId)) ||
+            pendingSpeakingQuestions.has(question.id)
+          ) {
+            aiGradingPending = true;
           }
-        } else if (q.type === 'writing') {
-          const aiScore = writingScoreMap.get(q.id);
+        } else if (question.type === "writing") {
+          const aiAttemptId = normalizeString(storedAnswer?.ai_attempt_id);
+          const aiScore = aiAttemptId
+            ? writingScoreByAttemptId.get(aiAttemptId)
+            : writingScoreMap.get(question.id);
           if (aiScore !== undefined) {
             earned = Math.round(points * (aiScore / 100));
-          } else if (studentAnswer && studentAnswer.length > 0) {
-            earned = Math.round(points * 0.5);
+          } else if (
+            (aiAttemptId && pendingWritingAttemptIds.has(aiAttemptId)) ||
+            pendingWritingQuestions.has(question.id)
+          ) {
+            aiGradingPending = true;
           }
         }
 
         sectionEarned += earned;
+        totalEarned += earned;
+        totalPossible += points;
         globalIdx++;
       }
 
-      // Convert to 0–100 scale per section
       const sectionScore = sectionPossible > 0
         ? Math.round((sectionEarned / sectionPossible) * 100)
         : 0;
 
       sectionScores[section.skill] = { score: sectionScore, total: 100 };
-      totalEarned += sectionEarned;
-      totalPossible += sectionPossible;
-
       if (sectionScore < 60) weakSkills.push(section.skill);
     }
 
@@ -219,17 +383,14 @@ Deno.serve(async (req) => {
       ? Math.round((totalEarned / totalPossible) * 100)
       : 0;
 
-    // 7. Delete any existing result row, then insert updated result
-    await supabase
-      .from('exam_results')
-      .delete()
-      .eq('attempt_id', attempt_id);
+    await supabase.from("exam_results").delete().eq("attempt_id", attempt_id);
 
     const { error: insertErr } = await supabase
-      .from('exam_results')
+      .from("exam_results")
       .insert({
         attempt_id,
-        user_id: a['user_id'] ?? null,
+        user_id: attemptRecord["user_id"] ?? null,
+        guest_token: accessAttempt["guest_token"] ?? null,
         total_score: totalScore,
         pass_threshold: 60,
         section_scores: sectionScores,
@@ -241,6 +402,12 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to insert exam result: ${insertErr.message}`);
     }
 
+    supabase.functions
+      .invoke("analyze-exam", { body: { attempt_id } })
+      .catch((error) => {
+        console.warn("analyze-exam trigger failed:", error);
+      });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -250,13 +417,71 @@ Deno.serve(async (req) => {
         weak_skills: weakSkills,
         ai_grading_pending: aiGradingPending,
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (err) {
-    console.error('grade-exam error:', err);
+    console.error("grade-exam error:", err);
     return new Response(
       JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });
+
+function getStoredAnswer({
+  answers,
+  question,
+  globalIdx,
+  hasLegacyAnswerKeys,
+}: {
+  answers: Record<string, unknown>;
+  question: QuestionRow;
+  globalIdx: number;
+  hasLegacyAnswerKeys: boolean;
+}): StoredAnswer | null {
+  if (hasLegacyAnswerKeys) {
+    const legacyValue = normalizeString(answers[`q_${globalIdx}`]);
+    if (!legacyValue) return null;
+    if (
+      question.type === "mcq" ||
+      question.type === "reading_mcq" ||
+      question.type === "listening_mcq"
+    ) {
+      return { selected_option_id: legacyValue };
+    }
+    if (question.type === "speaking") {
+      return { ai_attempt_id: legacyValue };
+    }
+    return { written_answer: legacyValue };
+  }
+
+  const rawAnswer = answers[question.id];
+  if (!rawAnswer || typeof rawAnswer !== "object") return null;
+  return rawAnswer as StoredAnswer;
+}
+
+function normalizeString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+}
+
+function parseMatchingPairs(raw: string | null): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .map(([leftId, rightId]) => [String(leftId), String(rightId ?? "")])
+        .filter(([, rightId]) => rightId.length > 0),
+    );
+  } catch {
+    return {};
+  }
+}

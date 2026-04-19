@@ -68,6 +68,7 @@ Run `make gen` after any change to `@riverpod` annotated code.
 ## Database Access Patterns
 
 - **Client reads**: direct Supabase PostgREST calls with RLS enforced via anon key
+- **Anonymous ownership**: client sends stable `x-guest-token` header on every Supabase request; guest-owned rows persist the same token and RLS/Edge Functions check it before read/update
 - **AI scoring writes**: service_role key inside Edge Functions only — client never holds service_role key
 - **Admin CMS**: service_role key in Next.js server-side — bypasses all RLS
 - **RPC calls**: `increment_xp`, `unlock_lesson_bonus`, `find_or_create_dm` — SECURITY DEFINER functions invoked by authenticated client
@@ -76,7 +77,7 @@ Access the client anywhere: `import 'package:app_czech/core/supabase/supabase_co
 
 ---
 
-## AI Pipeline (Speaking & Writing)
+## AI Pipeline (Speaking, Writing, Exam Analysis)
 
 ```
 Client                          Edge Function              OpenAI
@@ -88,9 +89,28 @@ Client                          Edge Function              OpenAI
   │── POST speaking-result ──► SELECT ai_speaking_attempts WHERE id = attempt_id
   │◄── { status: pending|ready|error }
   │    (poll every 3s, max 10 retries)
+  │
+  │── POST grade-exam ───────► INSERT exam_results
+  │                           fire-and-forget analyze-exam()
+  │                           ├─ objective questions → cache/GPT via question-feedback
+  │                           ├─ speaking/writing → hydrate from ai_*_attempts
+  │                           └─ 1 synthesis GPT call → INSERT/UPDATE exam_analysis
+  │
+  │── result screen ─────────► poll exam_analysis until ready/error
+  │◄── preload per-question feedback + skill insights + recommendations
 ```
 
 Czech language enforcement: if Whisper detects non-Czech OR GPT returns `is_czech: false` → all metric scores zeroed, Vietnamese explanation returned.
+
+Guest security: anonymous mock-test and AI rows (`exam_attempts`, `exam_results`, `exam_analysis`, `ai_*_attempts`, `ai_teacher_reviews`) are scoped by persisted `guest_token`. Edge Functions using service-role also re-check ownership against `user_id` or `guest_token` instead of trusting raw UUIDs.
+
+**Edge Function JWT config — critical:** This project uses ES256 JWT signing. The Supabase edge runtime only supports HS256 for its built-in pre-verification step, so all functions must be deployed with `verify_jwt = false`. Auth is handled manually inside each function via `assertCanAccessExamAttempt` / `getAuthUserId` in `_shared/guest_access.ts`. `config.toml` declares `verify_jwt = false` for every function. When adding a new edge function, always add the entry to `config.toml` and deploy with `--no-verify-jwt`:
+
+```bash
+supabase functions deploy <function-name> --no-verify-jwt
+```
+
+Omitting this causes a 401 `UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM` before any function code runs.
 
 ---
 

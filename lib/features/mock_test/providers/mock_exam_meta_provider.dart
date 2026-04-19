@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:app_czech/core/storage/prefs_storage.dart';
 import 'package:app_czech/core/supabase/supabase_config.dart';
 import '../models/exam_meta.dart';
 
@@ -6,19 +7,20 @@ part 'mock_exam_meta_provider.g.dart';
 
 // Supabase trả về snake_case, nhưng fromJson expect camelCase
 Map<String, dynamic> _mapExamJson(Map<String, dynamic> e) => {
-  'id': e['id'],
-  'title': e['title'],
-  'durationMinutes': e['duration_minutes'] ?? e['durationMinutes'] ?? 0,
-};
+      'id': e['id'],
+      'title': e['title'],
+      'durationMinutes': e['duration_minutes'] ?? e['durationMinutes'] ?? 0,
+    };
 
 Map<String, dynamic> _mapSectionJson(Map<String, dynamic> s) => {
-  'id': s['id'],
-  'skill': s['skill'],
-  'label': s['label'],
-  'questionCount': s['question_count'] ?? s['questionCount'] ?? 0,
-  'sectionDurationMinutes': s['section_duration_minutes'] ?? s['sectionDurationMinutes'],
-  'orderIndex': s['order_index'] ?? s['orderIndex'] ?? 0,
-};
+      'id': s['id'],
+      'skill': s['skill'],
+      'label': s['label'],
+      'questionCount': s['question_count'] ?? s['questionCount'] ?? 0,
+      'sectionDurationMinutes':
+          s['section_duration_minutes'] ?? s['sectionDurationMinutes'],
+      'orderIndex': s['order_index'] ?? s['orderIndex'] ?? 0,
+    };
 
 /// Fetches the active exam meta (first active exam + its sections).
 /// Used by MockTestIntroScreen before an attempt is created.
@@ -41,7 +43,8 @@ Future<ExamMeta> mockExamMeta(MockExamMetaRef ref) async {
       .order('order_index');
 
   final sections = (sectionsData as List)
-      .map((s) => SectionMeta.fromJson(_mapSectionJson(s as Map<String, dynamic>)))
+      .map((s) =>
+          SectionMeta.fromJson(_mapSectionJson(s as Map<String, dynamic>)))
       .toList();
 
   return ExamMeta.fromJson({
@@ -57,11 +60,7 @@ Future<ExamMeta> mockExamMeta(MockExamMetaRef ref) async {
 Future<ExamMeta> examMeta(ExamMetaRef ref, String? examId) async {
   final Map<String, dynamic> examData;
   if (examId != null) {
-    examData = await supabase
-        .from('exams')
-        .select()
-        .eq('id', examId)
-        .single();
+    examData = await supabase.from('exams').select().eq('id', examId).single();
   } else {
     examData = await supabase
         .from('exams')
@@ -79,7 +78,8 @@ Future<ExamMeta> examMeta(ExamMetaRef ref, String? examId) async {
       .order('order_index');
 
   final sections = (sectionsData as List)
-      .map((s) => SectionMeta.fromJson(_mapSectionJson(s as Map<String, dynamic>)))
+      .map((s) =>
+          SectionMeta.fromJson(_mapSectionJson(s as Map<String, dynamic>)))
       .toList();
 
   return ExamMeta.fromJson({
@@ -104,6 +104,8 @@ class ExamAttemptCreator extends _$ExamAttemptCreator {
           .insert({
             'exam_id': examId,
             if (userId != null) 'user_id': userId,
+            if (userId == null)
+              'guest_token': PrefsStorage.instance.guestAccessToken,
             'remaining_seconds': durationMinutes * 60,
           })
           .select()

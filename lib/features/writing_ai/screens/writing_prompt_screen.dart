@@ -27,6 +27,7 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
   String _questionId = '';
   String _lessonId = '';
   String _lessonBlockId = '';
+  String _examAttemptId = '';
 
   static const _minWords = 30;
   static const _maxWords = 250;
@@ -34,12 +35,12 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final extra =
-        GoRouterState.of(context).extra as Map<String, dynamic>?;
+    final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     _prompt = extra?['prompt'] as String? ?? '';
     _questionId = extra?['questionId'] as String? ?? '';
     _lessonId = extra?['lessonId'] as String? ?? '';
     _lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
+    _examAttemptId = extra?['examAttemptId'] as String? ?? '';
   }
 
   @override
@@ -68,8 +69,10 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
           AppRoutes.writingFeedback,
           extra: {
             'attemptId': next.attemptId,
+            'questionId': _questionId,
             'lessonId': _lessonId,
             'lessonBlockId': _lessonBlockId,
+            'source': _lessonId.isNotEmpty ? 'lesson' : 'practice',
             'originalText': _controller.text,
           },
         );
@@ -117,8 +120,7 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
                         _prompt.isEmpty
                             ? 'Viết đoạn văn theo yêu cầu.'
                             : _prompt,
-                        style:
-                            AppTypography.bodyLarge.copyWith(height: 1.6),
+                        style: AppTypography.bodyLarge.copyWith(height: 1.6),
                       ),
                     ],
                   ),
@@ -180,6 +182,8 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
                             text: _controller.text,
                             questionId: _questionId,
                             lessonId: _lessonId,
+                            examAttemptId:
+                                _examAttemptId.isEmpty ? null : _examAttemptId,
                           )
                       : null,
                 ),

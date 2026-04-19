@@ -2,7 +2,7 @@
 -- Keyed by (question_id, user_answer_hash) — avoids re-calling GPT for identical answers.
 
 CREATE TABLE IF NOT EXISTS public.question_ai_feedback (
-  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   question_id         uuid NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
   user_answer_hash    text NOT NULL,
   question_type       text NOT NULL DEFAULT 'mcq',

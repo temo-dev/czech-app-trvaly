@@ -22,6 +22,7 @@ class SpeakingRecorderExercise extends ConsumerStatefulWidget {
     required this.question,
     this.isSubmitted = false,
     this.lessonId,
+    this.examAttemptId,
     this.existingAudioPath,
     this.onRecordingComplete,
   });
@@ -29,6 +30,7 @@ class SpeakingRecorderExercise extends ConsumerStatefulWidget {
   final Question question;
   final bool isSubmitted;
   final String? lessonId;
+  final String? examAttemptId;
   final String? existingAudioPath;
   final ValueChanged<String>? onRecordingComplete;
 
@@ -43,6 +45,7 @@ class _SpeakingRecorderExerciseState
   late AnimationController _pulseController;
   late AudioPlayer _audioPlayer;
   late SpeakingSessionNotifier _speakingNotifier;
+  ProviderSubscription<SpeakingState>? _speakingSubscription;
   bool _isPlayingBack = false;
   String? _loadedAudioPath;
   SpeakingStatus _lastStatus = SpeakingStatus.idle;
@@ -81,10 +84,36 @@ class _SpeakingRecorderExerciseState
             .restoreRecording(widget.existingAudioPath!);
       }
     });
+
+    _speakingSubscription = ref.listenManual<SpeakingState>(
+      speakingSessionProvider,
+      (prev, next) {
+        _lastStatus = next.status;
+        if (next.status == SpeakingStatus.recorded &&
+            prev?.status != SpeakingStatus.recorded &&
+            next.audioPath != null) {
+          _speakingNotifier.submitRecording(
+            lessonId: widget.lessonId ?? '',
+            examAttemptId: widget.examAttemptId,
+            questionId: widget.question.id,
+          );
+        }
+        if (next.status == SpeakingStatus.uploaded &&
+            prev?.status != SpeakingStatus.uploaded &&
+            next.attemptId != null) {
+          widget.onRecordingComplete?.call(next.attemptId!);
+          Future.delayed(
+            const Duration(seconds: 2),
+            _speakingNotifier.resetToIdle,
+          );
+        }
+      },
+    );
   }
 
   @override
   void dispose() {
+    _speakingSubscription?.close();
     _pulseController.dispose();
     _audioPlayer.dispose();
     // Defer state update past finalizeTree — provider mutations are forbidden
@@ -108,27 +137,6 @@ class _SpeakingRecorderExerciseState
     } else {
       if (_pulseController.isAnimating) _pulseController.stop();
     }
-
-    // Auto-upload after recording stops; fire callback once uploaded.
-    ref.listen(speakingSessionProvider, (prev, next) {
-      _lastStatus = next.status;
-      if (next.status == SpeakingStatus.recorded &&
-          prev?.status != SpeakingStatus.recorded &&
-          next.audioPath != null) {
-        _speakingNotifier.submitRecording(
-          lessonId: widget.lessonId ?? '',
-          questionId: widget.question.id,
-        );
-      }
-      if (next.status == SpeakingStatus.uploaded &&
-          prev?.status != SpeakingStatus.uploaded &&
-          next.attemptId != null) {
-        widget.onRecordingComplete?.call(next.attemptId!);
-        // Reset after a short delay so the "Đã nộp" UI is visible briefly.
-        // Use cached notifier — ref is invalid after widget disposal.
-        Future.delayed(const Duration(seconds: 2), _speakingNotifier.resetToIdle);
-      }
-    });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -220,8 +228,7 @@ class _SpeakingRecorderExerciseState
               ),
               child: Text(
                 speakingState.errorMessage!,
-                style: AppTypography.bodySmall
-                    .copyWith(color: AppColors.error),
+                style: AppTypography.bodySmall.copyWith(color: AppColors.error),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -237,6 +244,7 @@ class _SpeakingRecorderExerciseState
                   'prompt': widget.question.prompt,
                   'questionId': widget.question.id,
                   'lessonId': widget.lessonId ?? '',
+                  'examAttemptId': widget.examAttemptId,
                 },
               ),
               icon: const Icon(Icons.open_in_full_rounded, size: 16),
@@ -323,7 +331,6 @@ class _PlaybackBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.x4, vertical: AppSpacing.x3),
@@ -363,8 +370,7 @@ class _PlaybackBar extends StatelessWidget {
                 const SizedBox(height: AppSpacing.x1),
                 LinearProgressIndicator(
                   value: isPlaying ? null : 0,
-                  backgroundColor:
-                      AppColors.primary.withValues(alpha: 0.2),
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.2),
                   color: AppColors.primary,
                   minHeight: 3,
                 ),
@@ -489,16 +495,15 @@ class _RecordButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isRecording = status == SpeakingStatus.recording;
-    final isRecorded = status == SpeakingStatus.recorded ||
-        status == SpeakingStatus.uploaded;
+    final isRecorded =
+        status == SpeakingStatus.recorded || status == SpeakingStatus.uploaded;
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedBuilder(
         animation: pulseController,
         builder: (context, child) {
-          final scale =
-              isRecording ? 1.0 + pulseController.value * 0.12 : 1.0;
+          final scale = isRecording ? 1.0 + pulseController.value * 0.12 : 1.0;
           return Transform.scale(
             scale: scale,
             child: Container(
@@ -513,9 +518,7 @@ class _RecordButton extends StatelessWidget {
                         : AppColors.primary,
                 boxShadow: [
                   BoxShadow(
-                    color: (isRecording
-                            ? AppColors.error
-                            : AppColors.primary)
+                    color: (isRecording ? AppColors.error : AppColors.primary)
                         .withValues(alpha: 0.35),
                     blurRadius: isRecording ? 16 : 8,
                     spreadRadius: isRecording ? 4 : 0,

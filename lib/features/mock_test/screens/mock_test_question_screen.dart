@@ -28,10 +28,86 @@ class MockTestQuestionScreen extends ConsumerStatefulWidget {
       _MockTestQuestionScreenState();
 }
 
-class _MockTestQuestionScreenState
-    extends ConsumerState<MockTestQuestionScreen> {
+class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
+    with WidgetsBindingObserver {
   bool _navPanelOpen = false;
   bool _timerStarted = false;
+  int? _lastVisibleTimer;
+  int? _lastSyncedTimer;
+  ProviderSubscription<AsyncValue<ExamSessionState>>? _sessionSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _sessionSubscription = ref.listenManual<AsyncValue<ExamSessionState>>(
+      examSessionNotifierProvider(widget.attemptId),
+      (prev, next) {
+        if (_timerStarted) return;
+        final s = next.valueOrNull;
+        if (s == null) return;
+        _timerStarted = true;
+        final remaining = s.attempt.remainingSeconds ?? 0;
+        final seconds = remaining > 0 ? remaining : s.meta.durationMinutes * 60;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ref
+              .read(examTimerNotifierProvider(seconds).notifier)
+              .start(_onTimerExpired);
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _sessionSubscription?.close();
+    _persistTimerCheckpoint();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      _persistTimerCheckpoint();
+    }
+  }
+
+  void _persistTimerCheckpoint() {
+    final remaining = _lastVisibleTimer ??
+        ref
+            .read(examSessionNotifierProvider(widget.attemptId))
+            .valueOrNull
+            ?.attempt
+            .remainingSeconds;
+    if (remaining == null) return;
+    _lastSyncedTimer = remaining;
+    ref
+        .read(examSessionNotifierProvider(widget.attemptId).notifier)
+        .persistCheckpoint(remaining);
+  }
+
+  void _trackTimer(ExamSessionState session, int timerSeconds) {
+    if (_lastVisibleTimer == timerSeconds) return;
+
+    _lastVisibleTimer = timerSeconds;
+    final shouldSync = _lastSyncedTimer == null ||
+        (_lastSyncedTimer! - timerSeconds).abs() >= 15 ||
+        timerSeconds <= 5;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final notifier =
+          ref.read(examSessionNotifierProvider(widget.attemptId).notifier);
+      notifier.updateRemainingSeconds(timerSeconds);
+      if (!shouldSync) return;
+      _lastSyncedTimer = timerSeconds;
+      notifier.syncProgress(remainingSeconds: timerSeconds);
+    });
+  }
 
   void _onTimerExpired() {
     _submit();
@@ -43,7 +119,18 @@ class _MockTestQuestionScreenState
         .submit();
     if (id != null && mounted) {
       context.pushReplacement(AppRoutes.mockTestResultPath(id));
+      return;
     }
+    if (!mounted) return;
+
+    final message = ref
+            .read(examSessionNotifierProvider(widget.attemptId))
+            .valueOrNull
+            ?.errorMessage ??
+        'Nộp bài thất bại. Vui lòng thử lại.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   void _showNavPanel(BuildContext ctx) {
@@ -60,8 +147,7 @@ class _MockTestQuestionScreenState
           maxChildSize: 0.92,
           minChildSize: 0.4,
           builder: (_, controller) => ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             child: _buildNavPanel(ctx),
           ),
         ),
@@ -70,14 +156,16 @@ class _MockTestQuestionScreenState
   }
 
   Widget _buildNavPanel(BuildContext ctx) {
-    final sessionState = ref
-        .read(examSessionNotifierProvider(widget.attemptId))
-        .valueOrNull;
+    final sessionState =
+        ref.read(examSessionNotifierProvider(widget.attemptId)).valueOrNull;
     if (sessionState == null) return const SizedBox.shrink();
+    final questions =
+        ref.read(examQuestionsProvider(sessionState.meta.id)).valueOrNull;
 
     final navItems = buildNavItems(
       sections: sessionState.meta.sections,
       answers: sessionState.currentAnswers,
+      questions: questions,
     );
 
     return QuestionNavPanel(
@@ -99,27 +187,6 @@ class _MockTestQuestionScreenState
     final sessionAsync =
         ref.watch(examSessionNotifierProvider(widget.attemptId));
 
-    // Start timer once when session first loads.
-    // addPostFrameCallback ensures ref.watch(examTimerNotifierProvider) in the
-    // data block below has already run this frame, keeping the autoDispose
-    // provider alive before we call .start() on it.
-    ref.listen(examSessionNotifierProvider(widget.attemptId), (prev, next) {
-      if (_timerStarted) return;
-      final s = next.valueOrNull;
-      if (s == null) return;
-      _timerStarted = true;
-      final remaining = s.attempt.remainingSeconds ?? 0;
-      final seconds = remaining > 0
-          ? remaining
-          : s.meta.durationMinutes * 60;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ref
-            .read(examTimerNotifierProvider(seconds).notifier)
-            .start(_onTimerExpired);
-      });
-    });
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (_, __) async {
@@ -133,8 +200,8 @@ class _MockTestQuestionScreenState
         error: (e, st) {
           return ErrorState(
             message: 'Lỗi session: $e',
-            onRetry: () => ref.invalidate(
-                examSessionNotifierProvider(widget.attemptId)),
+            onRetry: () =>
+                ref.invalidate(examSessionNotifierProvider(widget.attemptId)),
           );
         },
         data: (session) {
@@ -147,6 +214,7 @@ class _MockTestQuestionScreenState
               _remaining > 0 ? _remaining : session.meta.durationMinutes * 60,
             ),
           );
+          _trackTimer(session, timerSeconds);
 
           // Show section transition overlay.
           // currentSectionIndex still points to the completed section here;
@@ -158,8 +226,7 @@ class _MockTestQuestionScreenState
               completedSection: session.meta.sections[completedIdx],
               nextSection: session.meta.sections[nextIdx],
               onContinue: () => ref
-                  .read(examSessionNotifierProvider(widget.attemptId)
-                      .notifier)
+                  .read(examSessionNotifierProvider(widget.attemptId).notifier)
                   .advanceSection(),
             );
           }
@@ -213,8 +280,7 @@ class _MockTestQuestionScreenState
                                     .notifier)
                                 .goToQuestion(si, qi - 1);
                           } else if (si > 0) {
-                            final prevSection =
-                                session.meta.sections[si - 1];
+                            final prevSection = session.meta.sections[si - 1];
                             ref
                                 .read(examSessionNotifierProvider(
                                         widget.attemptId)
@@ -224,8 +290,7 @@ class _MockTestQuestionScreenState
                           }
                         },
                         onNext: () => ref
-                            .read(examSessionNotifierProvider(
-                                    widget.attemptId)
+                            .read(examSessionNotifierProvider(widget.attemptId)
                                 .notifier)
                             .nextQuestion(),
                         onSubmit: () => ConfirmSubmitDialog.show(
@@ -235,9 +300,9 @@ class _MockTestQuestionScreenState
                         ),
                         isSubmitting:
                             session.status == ExamSessionStatus.submitting,
-                        isSpeakingUploading: ref.watch(speakingSessionProvider)
-                                .status ==
-                            SpeakingStatus.uploading,
+                        isSpeakingUploading:
+                            ref.watch(speakingSessionProvider).status ==
+                                SpeakingStatus.uploading,
                       ),
                     ],
                   ),
@@ -272,8 +337,7 @@ class _ProgressBar extends StatelessWidget {
       children: [
         LinearProgressIndicator(
           value: progress,
-          backgroundColor:
-              Theme.of(context).colorScheme.outlineVariant,
+          backgroundColor: Theme.of(context).colorScheme.outlineVariant,
           color: AppColors.primary,
           minHeight: 3,
         ),
@@ -311,14 +375,11 @@ class _BottomBar extends StatelessWidget {
   final bool isSpeakingUploading;
 
   bool get _isFirst =>
-      session.currentSectionIndex == 0 &&
-      session.currentQuestionIndex == 0;
+      session.currentSectionIndex == 0 && session.currentQuestionIndex == 0;
 
   bool get _isLast =>
-      session.currentSectionIndex ==
-          session.meta.sections.length - 1 &&
-      session.currentQuestionIndex ==
-          session.currentSection.questionCount - 1;
+      session.currentSectionIndex == session.meta.sections.length - 1 &&
+      session.currentQuestionIndex == session.currentSection.questionCount - 1;
 
   @override
   Widget build(BuildContext context) {
@@ -374,20 +435,24 @@ class _BottomBar extends StatelessWidget {
               Expanded(
                 child: _isLast
                     ? AppButton(
-                  label: 'Nộp bài',
-                  loading: isSubmitting,
-                  onPressed: isSubmitting ? null : onSubmit,
-                  fullWidth: true,
-                  icon: Icons.check_rounded,
-                  size: AppButtonSize.md,
-                )
+                        key: const Key('mock_exam_submit_button'),
+                        label: 'Nộp bài',
+                        loading: isSubmitting,
+                        onPressed: (isSubmitting || isSpeakingUploading)
+                            ? null
+                            : onSubmit,
+                        fullWidth: true,
+                        icon: Icons.check_rounded,
+                        size: AppButtonSize.md,
+                      )
                     : AppButton(
-                  label: 'Tiếp',
-                  onPressed: isSpeakingUploading ? null : onNext,
-                  fullWidth: true,
-                  trailingIcon: Icons.chevron_right_rounded,
-                  size: AppButtonSize.md,
-                ),
+                        key: const Key('mock_exam_next_button'),
+                        label: 'Tiếp',
+                        onPressed: isSpeakingUploading ? null : onNext,
+                        fullWidth: true,
+                        trailingIcon: Icons.chevron_right_rounded,
+                        size: AppButtonSize.md,
+                      ),
               ),
             ],
           ),
@@ -431,17 +496,10 @@ class _QuestionBody extends ConsumerWidget {
           );
         }
         final question = questions[globalIdx];
-        final raw = session.currentAnswers['q_$globalIdx'];
-        // Writing/fill-blank/speaking answers are stored as free text;
-        // MCQ answers are stored as selectedOptionId.
-        final isTextAnswer = question.type == QuestionType.writing ||
-            question.type == QuestionType.fillBlank ||
-            question.type == QuestionType.speaking;
-        final currentAnswer = raw == null
+        final storedAnswer = session.currentAnswers[question.id];
+        final currentAnswer = storedAnswer == null
             ? QuestionAnswer(questionId: question.id)
-            : isTextAnswer
-                ? QuestionAnswer(questionId: question.id, writtenAnswer: raw)
-                : QuestionAnswer(questionId: question.id, selectedOptionId: raw);
+            : storedAnswer.toQuestionAnswer(question);
 
         // Pre-read the notifier so the closure does not capture [ref].
         // Capturing ref is unsafe: async callbacks (e.g. speaking upload
@@ -459,9 +517,10 @@ class _QuestionBody extends ConsumerWidget {
             question: question,
             currentAnswer: currentAnswer,
             isSubmitted: false,
-            onAnswerChanged: (qa) => sessionNotifier.answer(
-              'q_$globalIdx',
-              qa.selectedOptionId ?? qa.writtenAnswer ?? '',
+            examAttemptId: attemptId,
+            onAnswerChanged: (qa) => sessionNotifier.answerQuestion(
+              question: question,
+              answer: qa,
             ),
           ),
         );

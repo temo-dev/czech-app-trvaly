@@ -8,7 +8,7 @@ import 'package:app_czech/shared/widgets/app_button.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
 
 /// Entry screen for a speaking exercise.
-/// Receives [prompt] and [questionId] + [lessonId] via GoRouter extra.
+/// Receives [prompt], [questionId], [exerciseId], and [lessonId] via GoRouter extra.
 class SpeakingPromptScreen extends StatelessWidget {
   const SpeakingPromptScreen({super.key});
 
@@ -17,6 +17,8 @@ class SpeakingPromptScreen extends StatelessWidget {
     final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     final prompt = extra?['prompt'] as String? ?? '';
     final questionId = extra?['questionId'] as String? ?? '';
+    final exerciseId = extra?['exerciseId'] as String? ??
+        (questionId.isNotEmpty ? questionId : '');
     final lessonId = extra?['lessonId'] as String? ?? '';
     final lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
 
@@ -130,6 +132,7 @@ class SpeakingPromptScreen extends StatelessWidget {
                     extra: {
                       'prompt': prompt,
                       'questionId': questionId,
+                      'exerciseId': exerciseId,
                       'lessonId': lessonId,
                       'lessonBlockId': lessonBlockId,
                     },

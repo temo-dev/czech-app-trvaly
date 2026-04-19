@@ -66,8 +66,7 @@ class _AnonymousCTA extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.primaryFixed,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.3)),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,6 +92,7 @@ class _AnonymousCTA extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.x4),
               AppButton(
+                key: const Key('result_signup_button'),
                 label: 'Đăng ký miễn phí',
                 onPressed: onSignup,
                 icon: Icons.person_add_outlined,

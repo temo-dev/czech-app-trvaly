@@ -1,42 +1,49 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+
+import 'package:app_czech/core/storage/prefs_storage.dart';
+import 'package:app_czech/core/supabase/supabase_config.dart';
+import 'package:app_czech/features/mock_test/models/exam_attempt.dart';
+import 'package:app_czech/features/mock_test/models/exam_meta.dart';
+import 'package:app_czech/features/mock_test/models/exam_question_answer.dart';
+import 'package:app_czech/features/writing_ai/providers/writing_provider.dart';
+import 'package:app_czech/shared/models/question_model.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:app_czech/core/supabase/supabase_config.dart';
-import 'package:app_czech/core/storage/prefs_storage.dart';
-import '../models/exam_meta.dart';
-import '../models/exam_attempt.dart';
+
+import 'exam_questions_provider.dart';
 
 part 'exam_session_notifier.freezed.dart';
 part 'exam_session_notifier.g.dart';
 
-// Supabase trả về snake_case, nhưng fromJson expect camelCase
 Map<String, dynamic> _mapExamJson(Map<String, dynamic> e) => {
-  'id': e['id'],
-  'title': e['title'],
-  'durationMinutes': e['duration_minutes'] ?? e['durationMinutes'] ?? 0,
-};
+      'id': e['id'],
+      'title': e['title'],
+      'durationMinutes': e['duration_minutes'] ?? e['durationMinutes'] ?? 0,
+    };
 
 Map<String, dynamic> _mapSectionJson(Map<String, dynamic> s) => {
-  'id': s['id'],
-  'skill': s['skill'],
-  'label': s['label'],
-  'questionCount': s['question_count'] ?? s['questionCount'] ?? 0,
-  'sectionDurationMinutes': s['section_duration_minutes'] ?? s['sectionDurationMinutes'],
-  'orderIndex': s['order_index'] ?? s['orderIndex'] ?? 0,
-};
+      'id': s['id'],
+      'skill': s['skill'],
+      'label': s['label'],
+      'questionCount': s['question_count'] ?? s['questionCount'] ?? 0,
+      'sectionDurationMinutes':
+          s['section_duration_minutes'] ?? s['sectionDurationMinutes'],
+      'orderIndex': s['order_index'] ?? s['orderIndex'] ?? 0,
+    };
 
 Map<String, dynamic> _mapAttemptJson(Map<String, dynamic> a) => {
-  'id': a['id'],
-  'examId': a['exam_id'] ?? a['examId'],
-  'userId': a['user_id'] ?? a['userId'],
-  'status': a['status'] ?? 'in_progress',
-  'answers': a['answers'] ?? {},
-  'remainingSeconds': a['remaining_seconds'] ?? a['remainingSeconds'],
-  'startedAt': a['started_at'] ?? a['startedAt'],
-  'submittedAt': a['submitted_at'] ?? a['submittedAt'],
-};
-
-// ── Status ──────────────────────────────────────────────────────────────────
+      'id': a['id'],
+      'examId': a['exam_id'] ?? a['examId'],
+      'userId': a['user_id'] ?? a['userId'],
+      'status': a['status'] ?? 'in_progress',
+      'answers': a['answers'] ?? {},
+      'remainingSeconds': a['remaining_seconds'] ?? a['remainingSeconds'],
+      'startedAt': a['started_at'] ?? a['startedAt'],
+      'submittedAt': a['submitted_at'] ?? a['submittedAt'],
+    };
 
 enum ExamSessionStatus {
   initializing,
@@ -49,15 +56,13 @@ enum ExamSessionStatus {
 
 enum AutosaveStatus { idle, saving, saved, failed }
 
-// ── State ───────────────────────────────────────────────────────────────────
-
 @freezed
 class ExamSessionState with _$ExamSessionState {
   const factory ExamSessionState({
     required ExamAttempt attempt,
     required ExamMeta meta,
     @Default(ExamSessionStatus.ready) ExamSessionStatus status,
-    @Default({}) Map<String, String> currentAnswers, // questionId → optionId/text
+    @Default({}) Map<String, ExamQuestionAnswer> currentAnswers,
     @Default(0) int currentSectionIndex,
     @Default(0) int currentQuestionIndex,
     @Default(false) bool showSectionTransition,
@@ -70,7 +75,7 @@ extension ExamSessionStateX on ExamSessionState {
   SectionMeta get currentSection => meta.sections[currentSectionIndex];
 
   int get globalQuestionIndex {
-    int offset = 0;
+    var offset = 0;
     for (var i = 0; i < currentSectionIndex; i++) {
       offset += meta.sections[i].questionCount;
     }
@@ -78,23 +83,32 @@ extension ExamSessionStateX on ExamSessionState {
   }
 
   int get totalQuestions => meta.totalQuestions;
-  int get answeredCount => currentAnswers.length;
+
+  int get answeredCount =>
+      currentAnswers.values.where((answer) => answer.isAnswered).length;
+
   int get unansweredCount => totalQuestions - answeredCount;
 }
-
-// ── Notifier ────────────────────────────────────────────────────────────────
 
 @riverpod
 class ExamSessionNotifier extends _$ExamSessionNotifier {
   Timer? _autosaveTimer;
+  var _disposed = false;
+  var _autosaveEnabled = true;
+
   static const _autosaveDebounce = Duration(seconds: 30);
+  static const _resultWait = Duration(seconds: 45);
+  static const _resultPollInterval = Duration(seconds: 2);
   static const _prefsPrefix = 'exam_answers_';
 
   @override
   Future<ExamSessionState> build(String attemptId) async {
-    ref.onDispose(() => _autosaveTimer?.cancel());
+    ref.onDispose(() {
+      _disposed = true;
+      _autosaveEnabled = false;
+      _autosaveTimer?.cancel();
+    });
 
-    // Fetch attempt
     final attemptData = await supabase
         .from('exam_attempts')
         .select()
@@ -102,12 +116,8 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
         .single();
     final attempt = ExamAttempt.fromJson(_mapAttemptJson(attemptData));
 
-    // Fetch exam meta
-    final examData = await supabase
-        .from('exams')
-        .select()
-        .eq('id', attempt.examId)
-        .single();
+    final examData =
+        await supabase.from('exams').select().eq('id', attempt.examId).single();
 
     final sectionsData = await supabase
         .from('exam_sections')
@@ -115,21 +125,44 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
         .eq('exam_id', attempt.examId)
         .order('order_index');
 
-    final sections = (sectionsData as List)
-        .map((s) => SectionMeta.fromJson(_mapSectionJson(s as Map<String, dynamic>)))
+    final rawSections = (sectionsData as List)
+        .map((s) => Map<String, dynamic>.from(s as Map))
+        .toList();
+    final sectionIds =
+        rawSections.map((section) => section['id'] as String).toList();
+    final questionCountRows = sectionIds.isEmpty
+        ? const <dynamic>[]
+        : await supabase
+            .from('questions')
+            .select('id, section_id')
+            .inFilter('section_id', sectionIds);
+    final actualCountBySection = <String, int>{};
+    for (final row in questionCountRows) {
+      final sectionId = (row as Map)['section_id'] as String?;
+      if (sectionId == null) continue;
+      actualCountBySection.update(sectionId, (value) => value + 1,
+          ifAbsent: () => 1);
+    }
+
+    final sections = rawSections
+        .map((section) =>
+            SectionMeta.fromJson(_mapSectionJson(section)).copyWith(
+              questionCount: actualCountBySection[section['id'] as String] ??
+                  ((section['question_count'] as num?)?.toInt() ?? 0),
+            ))
         .toList();
 
     final meta = ExamMeta.fromJson({
       ..._mapExamJson(examData),
-      'sections': sections.map((s) => s.toJson()).toList(),
+      'sections': sections.map((section) => section.toJson()).toList(),
     });
 
-    // Restore buffered answers from prefs (offline fallback).
-    // If prefs are empty (new install / cleared), fall back to DB-stored answers.
+    final questions =
+        await ref.read(examQuestionsProvider(attempt.examId).future);
     final buffered = _loadBufferedAnswers(attemptId);
     final currentAnswers = buffered.isNotEmpty
         ? buffered
-        : attempt.answers.map((k, v) => MapEntry(k, v.toString()));
+        : _restoreStoredAnswers(attempt.answers, questions);
 
     return ExamSessionState(
       attempt: attempt,
@@ -138,29 +171,49 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
     );
   }
 
-  // ── Answer ────────────────────────────────────────────────────────────────
-
-  void answer(String questionId, String value) {
+  void answerQuestion({
+    required Question question,
+    required QuestionAnswer answer,
+  }) {
     final current = state.valueOrNull;
     if (current == null) return;
+    if (!_autosaveEnabled || current.status == ExamSessionStatus.submitting) {
+      return;
+    }
 
-    final updated = Map<String, String>.from(current.currentAnswers)
-      ..[questionId] = value;
+    final previous = current.currentAnswers[question.id];
+    final normalized = ExamQuestionAnswer.fromQuestionAnswer(
+      question: question,
+      answer: answer,
+      existingAiAttemptId: previous?.aiAttemptId,
+    );
+
+    final updated =
+        Map<String, ExamQuestionAnswer>.from(current.currentAnswers);
+    if (normalized.isAnswered) {
+      updated[question.id] = normalized;
+    } else {
+      updated.remove(question.id);
+    }
 
     state = AsyncData(current.copyWith(currentAnswers: updated));
-    _scheduleAutosave(current.attempt.id, updated, current.attempt.remainingSeconds);
+    _scheduleAutosave(
+      current.attempt.id,
+      updated,
+      current.attempt.remainingSeconds,
+    );
   }
-
-  // ── Navigation ────────────────────────────────────────────────────────────
 
   void goToQuestion(int sectionIndex, int questionIndex) {
     final current = state.valueOrNull;
     if (current == null) return;
-    state = AsyncData(current.copyWith(
-      currentSectionIndex: sectionIndex,
-      currentQuestionIndex: questionIndex,
-      showSectionTransition: false,
-    ));
+    state = AsyncData(
+      current.copyWith(
+        currentSectionIndex: sectionIndex,
+        currentQuestionIndex: questionIndex,
+        showSectionTransition: false,
+      ),
+    );
   }
 
   void nextQuestion() {
@@ -174,11 +227,12 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
         current.currentSectionIndex >= current.meta.sections.length - 1;
 
     if (!isLastInSection) {
-      state = AsyncData(current.copyWith(
-        currentQuestionIndex: current.currentQuestionIndex + 1,
-      ));
+      state = AsyncData(
+        current.copyWith(
+          currentQuestionIndex: current.currentQuestionIndex + 1,
+        ),
+      );
     } else if (!isLastSection) {
-      // Show section transition card
       state = AsyncData(current.copyWith(showSectionTransition: true));
     }
   }
@@ -186,134 +240,348 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
   void advanceSection() {
     final current = state.valueOrNull;
     if (current == null) return;
-    state = AsyncData(current.copyWith(
-      currentSectionIndex: current.currentSectionIndex + 1,
-      currentQuestionIndex: 0,
-      showSectionTransition: false,
-    ));
+    state = AsyncData(
+      current.copyWith(
+        currentSectionIndex: current.currentSectionIndex + 1,
+        currentQuestionIndex: 0,
+        showSectionTransition: false,
+      ),
+    );
   }
-
-  // ── Submit ────────────────────────────────────────────────────────────────
 
   Future<String?> submit() async {
     final current = state.valueOrNull;
     if (current == null) return null;
 
-    state = AsyncData(current.copyWith(status: ExamSessionStatus.submitting));
+    _autosaveEnabled = false;
+    _autosaveTimer?.cancel();
+
+    state = AsyncData(
+      current.copyWith(
+        status: ExamSessionStatus.submitting,
+        errorMessage: null,
+      ),
+    );
 
     try {
-      // 1. Mark attempt as submitted
-      await supabase.from('exam_attempts').update({
-        'status': 'submitted',
-        'answers': current.currentAnswers,
-        'submitted_at': DateTime.now().toIso8601String(),
-        'remaining_seconds': 0,
-      }).eq('id', current.attempt.id);
+      final questions =
+          await ref.read(examQuestionsProvider(current.meta.id).future);
+      final enrichedAnswers = await _ensureAiAttempts(
+        attemptId: current.attempt.id,
+        questions: questions,
+        answers: current.currentAnswers,
+      );
 
-      // 2. Grade exam — wait up to 20s; partial result acceptable if AI still processing
-      try {
-        await supabase.functions
-            .invoke('grade-exam', body: {'attempt_id': current.attempt.id})
-            .timeout(const Duration(seconds: 20));
-      } catch (_) {
-        // Non-fatal: result screen displays ai_grading_pending banner if needed
+      final submittedAt = DateTime.now();
+      final updatedAttempt = current.attempt.copyWith(
+        remainingSeconds: 0,
+        submittedAt: submittedAt,
+        status: 'submitted',
+      );
+
+      state = AsyncData(
+        (state.valueOrNull ?? current).copyWith(
+          attempt: updatedAttempt,
+          currentAnswers: enrichedAnswers,
+        ),
+      );
+
+      await _persistProgress(
+        attemptId: current.attempt.id,
+        answers: enrichedAnswers,
+        remainingSeconds: 0,
+        status: 'submitted',
+        submittedAt: submittedAt,
+      );
+
+      unawaited(Future<void>(() async {
+        try {
+          await supabase.functions
+              .invoke('grade-exam', body: {'attempt_id': current.attempt.id});
+        } catch (e) {
+          debugPrint('[grade-exam] invoke error: $e');
+        }
+      }));
+
+      final hasResult = await _waitForResultRow(current.attempt.id);
+      if (!hasResult) {
+        throw Exception('Result row not ready after ${_resultWait.inSeconds}s');
       }
 
-      // 3. Clear offline buffer
       _clearBufferedAnswers(current.attempt.id);
-
-      state = AsyncData(current.copyWith(status: ExamSessionStatus.submitted));
+      state = AsyncData(
+        (state.valueOrNull ?? current).copyWith(
+          status: ExamSessionStatus.submitted,
+          attempt: updatedAttempt,
+        ),
+      );
       return current.attempt.id;
-    } catch (e) {
-      state = AsyncData(current.copyWith(
-        status: ExamSessionStatus.ready,
-        errorMessage: 'Nộp bài thất bại. Vui lòng thử lại.',
-      ));
+    } catch (e, st) {
+      debugPrint('[submit] failed: $e\n$st');
+      _autosaveEnabled = true;
+      state = AsyncData(
+        (state.valueOrNull ?? current).copyWith(
+          status: ExamSessionStatus.ready,
+          errorMessage: 'Nộp bài thất bại. Vui lòng thử lại.',
+        ),
+      );
       return null;
     }
   }
 
-  // ── Timer sync ────────────────────────────────────────────────────────────
-
   void updateRemainingSeconds(int seconds) {
     final current = state.valueOrNull;
     if (current == null) return;
-    state = AsyncData(current.copyWith(
-      attempt: current.attempt.copyWith(remainingSeconds: seconds),
-    ));
+    state = AsyncData(
+      current.copyWith(
+        attempt: current.attempt.copyWith(remainingSeconds: seconds),
+      ),
+    );
   }
 
-  // ── Autosave ──────────────────────────────────────────────────────────────
+  Future<void> syncProgress({
+    int? remainingSeconds,
+    bool showAutosave = false,
+  }) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    if (!_autosaveEnabled || current.status == ExamSessionStatus.submitting) {
+      return;
+    }
+
+    final nextRemaining = remainingSeconds ?? current.attempt.remainingSeconds;
+    if (nextRemaining != null &&
+        current.attempt.remainingSeconds != nextRemaining) {
+      state = AsyncData(
+        current.copyWith(
+          attempt: current.attempt.copyWith(remainingSeconds: nextRemaining),
+        ),
+      );
+    }
+
+    await _persistProgress(
+      attemptId: current.attempt.id,
+      answers: state.valueOrNull?.currentAnswers ?? current.currentAnswers,
+      remainingSeconds: nextRemaining,
+      showAutosave: showAutosave,
+    );
+  }
 
   void _scheduleAutosave(
     String attemptId,
-    Map<String, String> answers,
+    Map<String, ExamQuestionAnswer> answers,
     int? remainingSeconds,
   ) {
+    if (!_autosaveEnabled || _disposed) return;
     _autosaveTimer?.cancel();
     _autosaveTimer = Timer(_autosaveDebounce, () {
-      _doAutosave(attemptId, answers, remainingSeconds);
+      if (!_autosaveEnabled || _disposed) return;
+      _persistProgress(
+        attemptId: attemptId,
+        answers: answers,
+        remainingSeconds: remainingSeconds,
+        showAutosave: true,
+      );
     });
   }
 
-  Future<void> _doAutosave(
-    String attemptId,
-    Map<String, String> answers,
+  Future<void> _persistProgress({
+    required String attemptId,
+    required Map<String, ExamQuestionAnswer> answers,
     int? remainingSeconds,
-  ) async {
+    bool showAutosave = false,
+    String? status,
+    DateTime? submittedAt,
+  }) async {
+    if (_disposed) return;
+    if (showAutosave && !_autosaveEnabled) return;
     final current = state.valueOrNull;
     if (current == null) return;
 
-    state = AsyncData(current.copyWith(autosaveStatus: AutosaveStatus.saving));
+    if (showAutosave) {
+      _safeSetState(current.copyWith(autosaveStatus: AutosaveStatus.saving));
+    }
+
     try {
       await supabase.from('exam_attempts').update({
-        'answers': answers,
-        if (remainingSeconds != null)
-          'remaining_seconds': remainingSeconds,
+        'answers': _serializeAnswers(answers),
+        if (remainingSeconds != null) 'remaining_seconds': remainingSeconds,
+        if (status != null) 'status': status,
+        if (submittedAt != null) 'submitted_at': submittedAt.toIso8601String(),
       }).eq('id', attemptId);
 
       _clearBufferedAnswers(attemptId);
 
-      state = AsyncData(
-        (state.valueOrNull ?? current).copyWith(
-            autosaveStatus: AutosaveStatus.saved),
-      );
-      // Reset to idle after 2s
-      await Future.delayed(const Duration(seconds: 2));
-      state = AsyncData(
-        (state.valueOrNull ?? current).copyWith(
-            autosaveStatus: AutosaveStatus.idle),
-      );
+      if (showAutosave) {
+        _safeSetState(
+          (state.valueOrNull ?? current).copyWith(
+            autosaveStatus: AutosaveStatus.saved,
+          ),
+        );
+        await Future.delayed(const Duration(seconds: 2));
+        _safeSetState(
+          (state.valueOrNull ?? current).copyWith(
+            autosaveStatus: AutosaveStatus.idle,
+          ),
+        );
+      }
     } catch (_) {
-      // Buffer to prefs for offline resilience
       _bufferAnswers(attemptId, answers);
-      state = AsyncData(
-        (state.valueOrNull ?? current).copyWith(
-            autosaveStatus: AutosaveStatus.failed),
-      );
+      if (showAutosave) {
+        _safeSetState(
+          (state.valueOrNull ?? current).copyWith(
+            autosaveStatus: AutosaveStatus.failed,
+          ),
+        );
+      }
     }
   }
 
-  // ── Prefs buffer ──────────────────────────────────────────────────────────
-
-  Map<String, String> _loadBufferedAnswers(String attemptId) {
+  void _safeSetState(ExamSessionState next) {
+    if (_disposed) return;
     try {
-      final raw = PrefsStorage.instance.prefs
-          .getString('$_prefsPrefix$attemptId');
-      if (raw == null) return {};
-      return Map<String, String>.from(
-          Uri.splitQueryString(raw).map((k, v) => MapEntry(k, v)));
+      state = AsyncData(next);
+    } catch (_) {
+      // A deferred autosave callback can finish after the provider/widget tree
+      // has already been torn down. In that case we silently ignore the update.
+    }
+  }
+
+  Future<void> persistCheckpoint(int remainingSeconds) async {
+    if (_disposed) return;
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    try {
+      await supabase.from('exam_attempts').update({
+        'answers': _serializeAnswers(current.currentAnswers),
+        'remaining_seconds': remainingSeconds,
+      }).eq('id', current.attempt.id);
+    } catch (_) {
+      _bufferAnswers(current.attempt.id, current.currentAnswers);
+    }
+  }
+
+  Future<Map<String, ExamQuestionAnswer>> _ensureAiAttempts({
+    required String attemptId,
+    required List<Question> questions,
+    required Map<String, ExamQuestionAnswer> answers,
+  }) async {
+    final updated = Map<String, ExamQuestionAnswer>.from(answers);
+
+    for (final question in questions) {
+      if (question.type != QuestionType.writing) continue;
+
+      final existing = updated[question.id];
+      final text = existing?.writtenAnswer;
+      if (existing == null || text == null || text.isEmpty) continue;
+      if (existing.aiAttemptId != null) continue;
+
+      final aiAttemptId = await submitWritingAttempt(
+        text: text,
+        questionId: question.id,
+        examAttemptId: attemptId,
+      );
+      if (aiAttemptId != null && aiAttemptId.isNotEmpty) {
+        updated[question.id] = existing.copyWith(aiAttemptId: aiAttemptId);
+      }
+    }
+
+    return updated;
+  }
+
+  Future<bool> _waitForResultRow(String attemptId) async {
+    final deadline = DateTime.now().add(_resultWait);
+    while (DateTime.now().isBefore(deadline)) {
+      final row = await supabase
+          .from('exam_results')
+          .select('id')
+          .eq('attempt_id', attemptId)
+          .maybeSingle();
+      if (row != null) return true;
+      await Future.delayed(_resultPollInterval);
+    }
+    return false;
+  }
+
+  Map<String, ExamQuestionAnswer> _restoreStoredAnswers(
+    Map<String, dynamic> rawAnswers,
+    List<Question> questions,
+  ) {
+    if (rawAnswers.isEmpty) return {};
+
+    final restored = <String, ExamQuestionAnswer>{};
+    final isLegacy = rawAnswers.keys.any((key) => key.startsWith('q_'));
+
+    if (isLegacy) {
+      for (final entry in questions.asMap().entries) {
+        final raw = rawAnswers['q_${entry.key}'];
+        if (raw == null) continue;
+        final value = raw.toString().trim();
+        if (value.isEmpty) continue;
+
+        final question = entry.value;
+        restored[question.id] = switch (question.type) {
+          QuestionType.mcq => ExamQuestionAnswer(
+              questionId: question.id,
+              selectedOptionId: value,
+            ),
+          QuestionType.speaking => ExamQuestionAnswer(
+              questionId: question.id,
+              aiAttemptId: _looksLikeUuid(value) ? value : null,
+            ),
+          _ => ExamQuestionAnswer(
+              questionId: question.id,
+              writtenAnswer: value,
+            ),
+        };
+      }
+      return restored;
+    }
+
+    for (final entry in rawAnswers.entries) {
+      final answer = ExamQuestionAnswer.fromStoredJson(entry.key, entry.value);
+      if (answer.isAnswered) {
+        restored[entry.key] = answer;
+      }
+    }
+    return restored;
+  }
+
+  Map<String, dynamic> _serializeAnswers(
+    Map<String, ExamQuestionAnswer> answers,
+  ) {
+    return {
+      for (final entry in answers.entries)
+        if (entry.value.isAnswered) entry.key: entry.value.toJson(),
+    };
+  }
+
+  Map<String, ExamQuestionAnswer> _loadBufferedAnswers(String attemptId) {
+    try {
+      final raw =
+          PrefsStorage.instance.prefs.getString('$_prefsPrefix$attemptId');
+      if (raw == null || raw.isEmpty) return {};
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      return decoded.map<String, ExamQuestionAnswer>((key, value) {
+        return MapEntry(
+          key.toString(),
+          ExamQuestionAnswer.fromStoredJson(key.toString(), value),
+        );
+      });
     } catch (_) {
       return {};
     }
   }
 
-  void _bufferAnswers(String attemptId, Map<String, String> answers) {
+  void _bufferAnswers(
+    String attemptId,
+    Map<String, ExamQuestionAnswer> answers,
+  ) {
     try {
-      final encoded =
-          answers.entries.map((e) => '${e.key}=${e.value}').join('&');
-      PrefsStorage.instance.prefs
-          .setString('$_prefsPrefix$attemptId', encoded);
+      final encoded = jsonEncode(_serializeAnswers(answers));
+      PrefsStorage.instance.prefs.setString('$_prefsPrefix$attemptId', encoded);
     } catch (_) {}
   }
 
@@ -323,8 +591,6 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
     } catch (_) {}
   }
 }
-
-// ── Timer notifier ────────────────────────────────────────────────────────────
 
 @riverpod
 class ExamTimerNotifier extends _$ExamTimerNotifier {
@@ -351,4 +617,12 @@ class ExamTimerNotifier extends _$ExamTimerNotifier {
   void pause() => _ticker?.cancel();
 
   void updateFromServer(int seconds) => state = seconds;
+}
+
+bool _looksLikeUuid(String value) {
+  final uuidPattern = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
+  return uuidPattern.hasMatch(value);
 }

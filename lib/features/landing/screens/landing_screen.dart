@@ -55,7 +55,8 @@ class LandingScreen extends StatelessWidget {
                 ),
                 actions: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8), // 👈 đều 2 bên
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8), // 👈 đều 2 bên
                     child: SizedBox(
                       width: 120, // hoặc theo design
                       child: AppButton(
@@ -68,7 +69,8 @@ class LandingScreen extends StatelessWidget {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8), // 👈 đều 2 bên
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8), // 👈 đều 2 bên
                     child: SizedBox(
                       width: 120, // hoặc theo design
                       child: AppButton(
@@ -87,8 +89,9 @@ class LandingScreen extends StatelessWidget {
               SliverToBoxAdapter(
                 child: Column(
                   children: [
-                    _HeroSection(onStartMockTest: () =>
-                        context.push(AppRoutes.mockTestIntro)),
+                    _HeroSection(
+                        onStartMockTest: () =>
+                            context.push(AppRoutes.mockTestIntro)),
                     _HowItWorksSection(),
                     _BenefitsSection(),
                     _ResultPreviewSection(),
@@ -176,6 +179,7 @@ class _HeroSection extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: AppButton(
+                  key: const Key('landing_start_exam_button'),
                   label: 'Thi thử miễn phí ngay',
                   icon: Icons.book,
                   onPressed: onStartMockTest,
@@ -191,9 +195,7 @@ class _HeroSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadius.xl),
                     image: DecorationImage(
                         image: AssetImage('assets/images/banner01.png'),
-                        fit: BoxFit.contain
-                    )
-                ),
+                        fit: BoxFit.contain)),
               ),
             ],
           ),
@@ -604,7 +606,8 @@ class _LearningPathSection extends StatelessWidget {
                     ...List.generate(
                       milestones.length,
                       (i) => Padding(
-                        padding: EdgeInsets.only(bottom: i < milestones.length - 1 ? 0 : 0),
+                        padding: EdgeInsets.only(
+                            bottom: i < milestones.length - 1 ? 0 : 0),
                         child: Column(
                           children: [
                             Container(

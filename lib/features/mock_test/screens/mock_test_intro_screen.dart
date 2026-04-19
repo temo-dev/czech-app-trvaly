@@ -30,9 +30,8 @@ class MockTestIntroScreen extends ConsumerWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          onPressed: () => context.canPop()
-              ? context.pop()
-              : context.go(AppRoutes.landing),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go(AppRoutes.landing),
         ),
         title: Text(
           'Czech Proficiency',
@@ -145,9 +144,7 @@ class _IntroBody extends StatelessWidget {
                           child: _OverviewItem(
                             icon: Icons.checklist_rounded,
                             label: 'Skills',
-                            value: meta.sections
-                                .map((s) => s.label)
-                                .join(', '),
+                            value: meta.sections.map((s) => s.label).join(', '),
                           ),
                         ),
                       ],
@@ -259,6 +256,7 @@ class _IntroBody extends StatelessWidget {
 
               // ── CTAs ──────────────────────────────────────────────────────
               AppButton(
+                key: const Key('mock_exam_start_button'),
                 label: 'Bắt đầu thi thử ngay',
                 icon: Icons.book,
                 loading: isStarting,
@@ -287,13 +285,11 @@ class _IntroBody extends StatelessWidget {
               Container(
                 height: 200,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.xl),
-                  image: DecorationImage(
-                    image: AssetImage('assets/images/banner01.png'),
-                    fit: BoxFit.contain
-                  )
-                ),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
+                    image: DecorationImage(
+                        image: AssetImage('assets/images/banner01.png'),
+                        fit: BoxFit.contain)),
               ),
               const SizedBox(height: 32),
             ],
@@ -409,8 +405,7 @@ class _IntroSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget block({double h = 16, double w = double.infinity}) =>
-        LoadingShimmer(
+    Widget block({double h = 16, double w = double.infinity}) => LoadingShimmer(
           child: Container(
             height: h,
             width: w,

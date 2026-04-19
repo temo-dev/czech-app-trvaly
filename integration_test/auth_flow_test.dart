@@ -1,7 +1,7 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:app_czech/app.dart';
+
+import 'helpers/bootstrap.dart';
 import 'helpers/test_robot.dart';
 
 /// End-to-end: log in with staging credentials → land on dashboard → sign out.
@@ -13,13 +13,12 @@ void main() {
 
   const testEmail = String.fromEnvironment('TEST_USER_EMAIL',
       defaultValue: 'e2e@staging.test');
-  const testPassword = String.fromEnvironment('TEST_USER_PASSWORD',
-      defaultValue: 'Test1234!');
+  const testPassword =
+      String.fromEnvironment('TEST_USER_PASSWORD', defaultValue: 'Test1234!');
 
   group('Auth flow', () {
     testWidgets('login → dashboard → logout', (tester) async {
-      await tester.pumpWidget(const ProviderScope(child: App()));
-      await tester.pumpAndSettle(const Duration(seconds: 5));
+      await pumpRealApp(tester);
 
       final robot = AppRobot(tester);
 

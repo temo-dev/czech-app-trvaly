@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+
 /// Confirmation dialog shown before submitting.
 /// Warns about unanswered questions.
 class ConfirmSubmitDialog extends StatelessWidget {
@@ -33,8 +34,8 @@ class ConfirmSubmitDialog extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Bạn còn $unansweredCount câu chưa trả lời.',
-                    style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.warning),
+                    style: AppTypography.bodyMedium
+                        .copyWith(color: AppColors.warning),
                   ),
                 ),
               ],
@@ -55,6 +56,7 @@ class ConfirmSubmitDialog extends StatelessWidget {
           child: const Text('Xem lại'),
         ),
         FilledButton(
+          key: const Key('confirm_submit_button'),
           onPressed: () {
             Navigator.of(context).pop();
             onConfirm();
@@ -99,8 +101,7 @@ class ConfirmExitDialog extends StatelessWidget {
           child: const Text('Tiếp tục thi'),
         ),
         TextButton(
-          style: TextButton.styleFrom(
-              foregroundColor: AppColors.error),
+          style: TextButton.styleFrom(foregroundColor: AppColors.error),
           onPressed: () {
             Navigator.of(context).pop();
             onConfirm();

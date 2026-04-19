@@ -1,6 +1,15 @@
-import { corsHeaders } from '../_shared/cors.ts';
-import { getOpenAIKey, transcribeAudio, chatComplete } from '../_shared/openai.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from "../_shared/cors.ts";
+import {
+  chatComplete,
+  getOpenAIKey,
+  transcribeAudio,
+} from "../_shared/openai.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  assertCanAccessExamAttempt,
+  getAuthUserId,
+  getGuestToken,
+} from "../_shared/guest_access.ts";
 
 const SPEAKING_SYSTEM_PROMPT = `
 Bạn là giám khảo chấm điểm bài thi nói tiếng Séc cho người học người Việt Nam.
@@ -57,83 +66,145 @@ Lưu ý: short_tips là tối đa 3 lời khuyên ngắn gọn, mỗi tip tối 
 `.trim();
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  let attemptId: string | null = null;
 
   try {
     const body = await req.json() as {
       lesson_id?: string;
       question_id?: string;
+      exercise_id?: string;
       audio_b64?: string;
       exam_attempt_id?: string;
     };
 
-    const { lesson_id, question_id, audio_b64, exam_attempt_id } = body;
+    const { lesson_id, question_id, exercise_id: bodyExerciseId, audio_b64, exam_attempt_id } = body;
 
-    if (!question_id) {
-      return new Response(JSON.stringify({ error: 'question_id is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    if (!question_id && !bodyExerciseId) {
+      return new Response(
+        JSON.stringify({ error: "question_id is required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const userId = await getAuthUserId(supabase, req);
+    const guestToken = getGuestToken(req);
+    if (userId == null && guestToken == null) {
+      return new Response(
+        JSON.stringify({ error: "Missing guest access token" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (exam_attempt_id) {
+      await assertCanAccessExamAttempt({
+        supabase,
+        req,
+        attemptId: exam_attempt_id,
       });
     }
 
-    // Get authenticated user (may be null for anonymous)
-    const authHeader = req.headers.get('Authorization');
-    let userId: string | null = null;
-    if (authHeader) {
-      const { data: { user } } = await supabase.auth.getUser(
-        authHeader.replace('Bearer ', ''),
-      );
-      userId = user?.id ?? null;
+    // Determine if question_id is a real question or an exercise ID.
+    // Exercise IDs exist in the exercises table, not in questions.
+    // Passing an exercise ID as question_id causes a FK violation.
+    let validQuestionId: string | null = question_id ?? null;
+    let validExerciseId: string | null = bodyExerciseId ?? null;
+
+    if (question_id) {
+      const { data: questionRow } = await supabase
+        .from("questions")
+        .select("id")
+        .eq("id", question_id)
+        .maybeSingle();
+      if (!questionRow) {
+        // question_id is likely an exercise ID sent by older client code
+        validExerciseId = validExerciseId ?? question_id;
+        validQuestionId = null;
+      } else {
+        // question_id is confirmed valid — if exercise_id was set to the same
+        // UUID by the client (old client bug), clear it to avoid FK violation
+        // since that UUID is in the questions table, not the exercises table.
+        if (validExerciseId === question_id) {
+          validExerciseId = null;
+        }
+      }
     }
 
     // Fetch question prompt for scoring context
-    const { data: question } = await supabase
-      .from('questions')
-      .select('prompt')
-      .eq('id', question_id)
-      .maybeSingle();
+    let questionPromptFromDb = "";
+    if (validQuestionId) {
+      const { data: question } = await supabase
+        .from("questions")
+        .select("prompt")
+        .eq("id", validQuestionId)
+        .maybeSingle();
+      questionPromptFromDb =
+        (question as Record<string, unknown> | null)?.["prompt"] as string ?? "";
+    } else if (validExerciseId) {
+      const { data: exercise } = await supabase
+        .from("exercises")
+        .select("content_json")
+        .eq("id", validExerciseId)
+        .maybeSingle();
+      const contentJson =
+        (exercise as Record<string, unknown> | null)?.["content_json"] as
+          | Record<string, unknown>
+          | null;
+      questionPromptFromDb = (contentJson?.["prompt"] as string) ?? "";
+    }
 
     // Insert attempt row with status 'processing'
+    const audioKey = `speaking/${validQuestionId ?? validExerciseId ?? "unknown"}/${Date.now()}.m4a`;
     const { data: attempt, error: insertErr } = await supabase
-      .from('ai_speaking_attempts')
+      .from("ai_speaking_attempts")
       .insert({
         user_id: userId,
-        exercise_id: null,
-        question_id: question_id ?? null,
+        guest_token: userId == null ? guestToken : null,
+        exercise_id: validExerciseId,
+        question_id: validQuestionId,
         exam_attempt_id: exam_attempt_id ?? null,
-        audio_key: `speaking/${question_id}/${Date.now()}.m4a`,
-        status: 'processing',
+        audio_key: audioKey,
+        status: "processing",
       })
-      .select('id')
+      .select("id")
       .single();
 
     if (insertErr || !attempt) {
       throw new Error(`Failed to create attempt: ${insertErr?.message}`);
     }
 
-    const attemptId: string = (attempt as Record<string, unknown>)['id'] as string;
+    attemptId = (attempt as Record<string, unknown>)["id"] as string;
 
     // If no audio provided (web MVP stub), mark error and return
     if (!audio_b64 || audio_b64.length === 0) {
       await supabase
-        .from('ai_speaking_attempts')
+        .from("ai_speaking_attempts")
         .update({
-          status: 'error',
-          error_message: 'No audio data provided',
+          status: "error",
+          error_message: "No audio data provided",
           updated_at: new Date().toISOString(),
         })
-        .eq('id', attemptId);
+        .eq("id", attemptId);
 
       return new Response(
-        JSON.stringify({ attempt_id: attemptId, error: 'No audio data' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({ attempt_id: attemptId, error: "No audio data" }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -143,60 +214,89 @@ Deno.serve(async (req) => {
 
     // Step 1: Transcribe with Whisper (auto language detection)
     const { text: transcript, detectedLanguage } = await transcribeAudio(
-      apiKey, audioBytes, `audio_${attemptId}.m4a`,
+      apiKey,
+      audioBytes,
+      `audio_${attemptId}.m4a`,
     );
 
     // Step 2: Score with GPT-4o-mini
-    const questionPrompt = (question as Record<string, unknown> | null)?.['prompt'] as string ?? '';
-    const userMessage = `Câu hỏi thi: "${questionPrompt}"\n\nNgôn ngữ Whisper phát hiện: ${detectedLanguage}\n\nPhiên âm bài nói của học viên:\n"${transcript}"`;
-    const scored = await chatComplete(apiKey, SPEAKING_SYSTEM_PROMPT, userMessage);
+    const questionPrompt = questionPromptFromDb;
+    const userMessage =
+      `Câu hỏi thi: "${questionPrompt}"\n\nNgôn ngữ Whisper phát hiện: ${detectedLanguage}\n\nPhiên âm bài nói của học viên:\n"${transcript}"`;
+    const scored = await chatComplete(
+      apiKey,
+      SPEAKING_SYSTEM_PROMPT,
+      userMessage,
+    );
 
     // Hard enforcement: if GPT or Whisper detects non-Czech, zero out all scores
-    const isCzechByGpt = scored['is_czech'] === true;
-    const isCzechByWhisper = detectedLanguage === 'czech' || detectedLanguage === 'cs';
+    const isCzechByGpt = scored["is_czech"] === true;
+    const isCzechByWhisper = detectedLanguage === "czech" ||
+      detectedLanguage === "cs";
     const isCzech = isCzechByGpt && isCzechByWhisper;
 
     const getFeedbackDetail = (val: unknown): string => {
-      if (typeof val === 'string') return val;
-      if (val && typeof val === 'object') {
-        return String((val as Record<string, unknown>)['detail'] ?? '');
+      if (typeof val === "string") return val;
+      if (val && typeof val === "object") {
+        return String((val as Record<string, unknown>)["detail"] ?? "");
       }
-      return '';
+      return "";
     };
     const getFeedbackTip = (val: unknown): string => {
-      if (val && typeof val === 'object') {
-        return String((val as Record<string, unknown>)['tip'] ?? '');
+      if (val && typeof val === "object") {
+        return String((val as Record<string, unknown>)["tip"] ?? "");
       }
-      return '';
+      return "";
     };
 
-    const overallScore = isCzech ? Number(scored['overall_score'] ?? 0) : 0;
-    const nonCzechFeedback = isCzech ? '' : String(scored['overall_feedback'] ?? `Bài thi yêu cầu trả lời bằng tiếng Séc. Whisper phát hiện ngôn ngữ: "${detectedLanguage}". Vui lòng thử lại bằng tiếng Séc.`);
+    const overallScore = isCzech ? Number(scored["overall_score"] ?? 0) : 0;
+    const nonCzechFeedback = isCzech ? "" : String(
+      scored["overall_feedback"] ??
+        `Bài thi yêu cầu trả lời bằng tiếng Séc. Whisper phát hiện ngôn ngữ: "${detectedLanguage}". Vui lòng thử lại bằng tiếng Séc.`,
+    );
     const metrics = {
-      pronunciation: isCzech ? Number(scored['pronunciation'] ?? 0) : 0,
-      pronunciation_feedback: isCzech ? getFeedbackDetail(scored['pronunciation_feedback']) : '',
-      pronunciation_tip: isCzech ? getFeedbackTip(scored['pronunciation_feedback']) : '',
-      fluency: isCzech ? Number(scored['fluency'] ?? 0) : 0,
-      fluency_feedback: isCzech ? getFeedbackDetail(scored['fluency_feedback']) : '',
-      fluency_tip: isCzech ? getFeedbackTip(scored['fluency_feedback']) : '',
-      vocabulary: isCzech ? Number(scored['vocabulary'] ?? 0) : 0,
-      vocabulary_feedback: isCzech ? getFeedbackDetail(scored['vocabulary_feedback']) : '',
-      vocabulary_tip: isCzech ? getFeedbackTip(scored['vocabulary_feedback']) : '',
-      task_achievement: isCzech ? Number(scored['task_achievement'] ?? 0) : 0,
-      content_feedback: isCzech ? getFeedbackDetail(scored['content_feedback']) : '',
-      content_tip: isCzech ? getFeedbackTip(scored['content_feedback']) : '',
-      grammar_feedback: isCzech ? getFeedbackDetail(scored['grammar_feedback']) : '',
-      grammar_tip: isCzech ? getFeedbackTip(scored['grammar_feedback']) : '',
-      overall_feedback: isCzech ? String(scored['overall_feedback'] ?? '') : nonCzechFeedback,
-      short_tips: isCzech ? ((scored['short_tips'] as string[]) ?? []) : [],
+      pronunciation: isCzech ? Number(scored["pronunciation"] ?? 0) : 0,
+      pronunciation_feedback: isCzech
+        ? getFeedbackDetail(scored["pronunciation_feedback"])
+        : "",
+      pronunciation_tip: isCzech
+        ? getFeedbackTip(scored["pronunciation_feedback"])
+        : "",
+      fluency: isCzech ? Number(scored["fluency"] ?? 0) : 0,
+      fluency_feedback: isCzech
+        ? getFeedbackDetail(scored["fluency_feedback"])
+        : "",
+      fluency_tip: isCzech ? getFeedbackTip(scored["fluency_feedback"]) : "",
+      vocabulary: isCzech ? Number(scored["vocabulary"] ?? 0) : 0,
+      vocabulary_feedback: isCzech
+        ? getFeedbackDetail(scored["vocabulary_feedback"])
+        : "",
+      vocabulary_tip: isCzech
+        ? getFeedbackTip(scored["vocabulary_feedback"])
+        : "",
+      task_achievement: isCzech ? Number(scored["task_achievement"] ?? 0) : 0,
+      content_feedback: isCzech
+        ? getFeedbackDetail(scored["content_feedback"])
+        : "",
+      content_tip: isCzech ? getFeedbackTip(scored["content_feedback"]) : "",
+      grammar_feedback: isCzech
+        ? getFeedbackDetail(scored["grammar_feedback"])
+        : "",
+      grammar_tip: isCzech ? getFeedbackTip(scored["grammar_feedback"]) : "",
+      overall_feedback: isCzech
+        ? String(scored["overall_feedback"] ?? "")
+        : nonCzechFeedback,
+      short_tips: isCzech ? ((scored["short_tips"] as string[]) ?? []) : [],
     };
-    const issues = (scored['transcript_issues'] as Array<{ word: string; type?: string; suggestion: string }>) ?? [];
-    const correctedAnswer = String(scored['corrected_answer'] ?? '');
+    const issues = (scored["transcript_issues"] as Array<
+      { word: string; type?: string; suggestion: string }
+    >) ?? [];
+    const correctedAnswer = String(scored["corrected_answer"] ?? "");
 
     await supabase
-      .from('ai_speaking_attempts')
+      .from("ai_speaking_attempts")
       .update({
-        status: 'ready',
+        status: "ready",
         transcript,
         overall_score: overallScore,
         metrics,
@@ -206,17 +306,35 @@ Deno.serve(async (req) => {
         corrected_answer: correctedAnswer,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', attemptId);
+      .eq("id", attemptId);
 
     return new Response(
       JSON.stringify({ attempt_id: attemptId }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (err) {
-    console.error('speaking-upload error:', err);
+    console.error("speaking-upload error:", err);
+    if (attemptId) {
+      try {
+        await supabase
+          .from("ai_speaking_attempts")
+          .update({
+            status: "error",
+            error_message: String(err),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", attemptId);
+      } catch (_) { /* best-effort */ }
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

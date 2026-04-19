@@ -61,12 +61,11 @@ class McqExercise extends StatelessWidget {
         // Options
         ...question.options.asMap().entries.map(
               (e) => McqOptionTile(
+                key: ValueKey('mcq_option_${question.id}_${e.key}'),
                 option: e.value,
                 optionState: _stateFor(e.value),
                 index: e.key,
-                onTap: isSubmitted
-                    ? null
-                    : () => onSelect?.call(e.value.id),
+                onTap: isSubmitted ? null : () => onSelect?.call(e.value.id),
               ),
             ),
       ],

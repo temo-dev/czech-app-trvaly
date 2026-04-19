@@ -3,7 +3,14 @@ import 'package:app_czech/core/supabase/supabase_config.dart';
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
-enum WritingFeedbackStatus { idle, submitting, pending, scoring, completed, error }
+enum WritingFeedbackStatus {
+  idle,
+  submitting,
+  pending,
+  scoring,
+  completed,
+  error
+}
 
 class WritingMetric {
   const WritingMetric({
@@ -98,6 +105,29 @@ class WritingSessionState {
       );
 }
 
+Future<String?> submitWritingAttempt({
+  required String text,
+  required String questionId,
+  String? lessonId,
+  String? examAttemptId,
+}) async {
+  try {
+    final response = await supabase.functions.invoke(
+      'writing-submit',
+      body: {
+        'text': text,
+        'question_id': questionId,
+        if (lessonId != null && lessonId.isNotEmpty) 'lesson_id': lessonId,
+        if (examAttemptId != null) 'exam_attempt_id': examAttemptId,
+      },
+    );
+    final data = response.data as Map<String, dynamic>?;
+    return data?['attempt_id'] as String?;
+  } catch (_) {
+    return null;
+  }
+}
+
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
 class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
@@ -110,6 +140,7 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
     required String text,
     required String questionId,
     required String lessonId,
+    String? examAttemptId,
   }) async {
     if (state.status == WritingFeedbackStatus.submitting) return;
     state = state.copyWith(status: WritingFeedbackStatus.submitting);
@@ -117,21 +148,12 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
     try {
       String? attemptId;
 
-      // Try edge function
-      try {
-        final response = await supabase.functions.invoke(
-          'writing-submit',
-          body: {
-            'text': text,
-            'question_id': questionId,
-            'lesson_id': lessonId,
-          },
-        );
-        final data = response.data as Map<String, dynamic>?;
-        attemptId = data?['attempt_id'] as String?;
-      } catch (_) {
-        // Edge function not deployed — insert directly
-      }
+      attemptId = await submitWritingAttempt(
+        text: text,
+        questionId: questionId,
+        lessonId: lessonId,
+        examAttemptId: examAttemptId,
+      );
 
       if (attemptId == null) {
         // writing-submit failed — there's no backend scorer for a direct DB
@@ -219,8 +241,8 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
       if (status == 'error') {
         state = state.copyWith(
           status: WritingFeedbackStatus.error,
-          errorMessage: rm['error_message'] as String? ??
-              'Không thể chấm điểm bài viết.',
+          errorMessage:
+              rm['error_message'] as String? ?? 'Không thể chấm điểm bài viết.',
         );
       }
     } catch (_) {}
@@ -229,8 +251,7 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
 
   WritingFeedbackResult _parseAiRow(
       String attemptId, Map<String, dynamic> row, String originalText) {
-    final metricsDb =
-        (row['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
+    final metricsDb = (row['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
     final spansRaw = (row['grammar_notes'] as List?) ?? [];
     final spans = spansRaw.isEmpty
         ? [AnnotatedSpan(text: originalText)]
@@ -481,8 +502,8 @@ class WritingReviewNotifier extends StateNotifier<WritingSessionState> {
       if (status == 'error' && mounted) {
         state = state.copyWith(
           status: WritingFeedbackStatus.error,
-          errorMessage: rm['error_message'] as String? ??
-              'Không thể chấm điểm bài viết.',
+          errorMessage:
+              rm['error_message'] as String? ?? 'Không thể chấm điểm bài viết.',
         );
       }
     } catch (_) {}
@@ -494,8 +515,7 @@ class WritingReviewNotifier extends StateNotifier<WritingSessionState> {
     Map<String, dynamic> row,
     String originalText,
   ) {
-    final metricsDb =
-        (row['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
+    final metricsDb = (row['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
     final spansRaw = (row['grammar_notes'] as List?) ?? [];
     final spans = spansRaw.isEmpty
         ? [AnnotatedSpan(text: originalText)]

@@ -109,13 +109,14 @@ Index: `idx_question_options_question`. RLS: public read; admin full CRUD.
 | id | uuid PK | | |
 | exam_id | uuid NOT NULL | | FK → exams(id) |
 | user_id | uuid | NULL | FK → profiles(id) ON DELETE SET NULL; NULL = anonymous |
+| guest_token | text | NULL | Anonymous ownership token; must match request header `x-guest-token` when `user_id IS NULL` |
 | status | text NOT NULL | `'in_progress'` | CHECK IN ('in_progress','submitted','abandoned') |
-| answers | jsonb NOT NULL | `'{}'` | key: `q_${globalIdx}`, value: option UUID or text |
+| answers | jsonb NOT NULL | `'{}'` | key: `question_id`, value: `{ question_id, selected_option_id?, written_answer?, ai_attempt_id? }` |
 | remaining_seconds | int NOT NULL | `0` | |
 | started_at | timestamptz NOT NULL | `now()` | |
 | submitted_at | timestamptz | | |
 
-Indexes: `idx_exam_attempts_user_id`, `idx_exam_attempts_exam_id`. RLS: own or anonymous rows; admin read.
+Indexes: `idx_exam_attempts_user_id`, `idx_exam_attempts_exam_id`, `idx_exam_attempts_guest_token`. RLS: owner rows via `auth.uid()`; anonymous rows only when `guest_token = request.headers['x-guest-token']`.
 
 ---
 
@@ -126,6 +127,7 @@ Indexes: `idx_exam_attempts_user_id`, `idx_exam_attempts_exam_id`. RLS: own or a
 | id | uuid PK | | |
 | attempt_id | uuid NOT NULL | | FK → exam_attempts(id) ON DELETE CASCADE |
 | user_id | uuid | | FK → profiles(id) ON DELETE SET NULL |
+| guest_token | text | | Mirrored from anonymous exam_attempt for guest-owned reads |
 | total_score | int NOT NULL | `0` | 0–100 |
 | pass_threshold | int NOT NULL | `60` | |
 | section_scores | jsonb NOT NULL | `'{}'` | `{ skill: { score, total } }` |
@@ -133,7 +135,29 @@ Indexes: `idx_exam_attempts_user_id`, `idx_exam_attempts_exam_id`. RLS: own or a
 | ai_grading_pending | bool NOT NULL | `false` | true khi còn speaking/writing đang chờ AI chấm — result screen hiển thị banner |
 | created_at | timestamptz NOT NULL | `now()` | |
 
-Indexes: `idx_exam_results_user_id`, `idx_exam_results_attempt_id`. RLS: own/anon read; admin read.
+Indexes: `idx_exam_results_user_id`, `idx_exam_results_attempt_id`, `idx_exam_results_guest_token`. RLS: owner rows via `auth.uid()`; anonymous rows only via matching `x-guest-token`.
+
+---
+
+### `exam_analysis`
+
+Batch AI analysis row for a submitted mock exam. Created by `analyze-exam` after `grade-exam`.
+
+| Column | Type | Default | Notes |
+|---|---|---|---|
+| id | uuid PK | | |
+| attempt_id | uuid NOT NULL | | FK → exam_attempts(id) ON DELETE CASCADE; UNIQUE |
+| user_id | uuid | | FK → profiles(id) ON DELETE SET NULL |
+| guest_token | text | | Mirrored from anonymous exam_attempt for guest-owned reads |
+| status | text NOT NULL | `'processing'` | CHECK IN (`processing`,`ready`,`error`) |
+| question_feedbacks | jsonb NOT NULL | `'{}'` | keyed by `question_id`; objective: `{ verdict, error_analysis, correct_explanation, short_tip, key_concept, matching_feedback?, skipped }`; speaking/writing: `{ verdict, summary, criteria, short_tips, skipped }` |
+| skill_insights | jsonb NOT NULL | `'{}'` | `{ reading: {summary, main_issue}, listening: {...}, writing: {...}, speaking: {...} }` |
+| overall_recommendations | jsonb NOT NULL | `'[]'` | `[{ title, detail }]` |
+| error_message | text | | |
+| created_at | timestamptz NOT NULL | `now()` | |
+| updated_at | timestamptz NOT NULL | `now()` | trigger-managed |
+
+Indexes: unique `attempt_id`, plus `user_id`, `guest_token`, `status`. RLS: service_role full access; owner rows via `auth.uid()`; anonymous rows only via matching `x-guest-token`.
 
 ---
 
@@ -276,6 +300,7 @@ Indexes: `idx_user_progress_user`, `idx_user_progress_lesson`. RLS: own rows.
 |---|---|---|---|
 | id | uuid PK | | |
 | user_id | uuid | | FK → profiles(id) ON DELETE SET NULL; nullable (anon) |
+| guest_token | text | | Anonymous ownership token for guest reads/result polling |
 | exercise_id | uuid | | FK → exercises(id) ON DELETE SET NULL |
 | question_id | uuid | | FK → questions(id) ON DELETE SET NULL — set when submitted during mock test |
 | exam_attempt_id | uuid | | FK → exam_attempts(id) ON DELETE SET NULL — used by grade-exam to JOIN real AI score |
@@ -292,7 +317,7 @@ Indexes: `idx_user_progress_user`, `idx_user_progress_lesson`. RLS: own rows.
 | created_at | timestamptz NOT NULL | `now()` | |
 | updated_at | timestamptz NOT NULL | `now()` | |
 
-Indexes: `idx_ai_speaking_user`, `idx_ai_speaking_exam` on `(exam_attempt_id)`. RLS: own rows; service_role full access.
+Indexes: `idx_ai_speaking_user`, `idx_ai_speaking_exam` on `(exam_attempt_id)`, `idx_ai_speaking_attempts_guest_token`. RLS: owner rows via `auth.uid()`; anonymous rows only via matching `x-guest-token`; service_role full access.
 
 ---
 
@@ -302,6 +327,7 @@ Indexes: `idx_ai_speaking_user`, `idx_ai_speaking_exam` on `(exam_attempt_id)`. 
 |---|---|---|---|
 | id | uuid PK | | |
 | user_id | uuid | | FK → profiles(id) ON DELETE SET NULL; nullable |
+| guest_token | text | | Anonymous ownership token for guest reads/result polling |
 | exercise_id | uuid | | FK → exercises(id) ON DELETE SET NULL |
 | question_id | uuid | | FK → questions(id) ON DELETE SET NULL — set when submitted during mock test |
 | exam_attempt_id | uuid | | FK → exam_attempts(id) ON DELETE SET NULL — used by grade-exam to JOIN real AI score |
@@ -318,7 +344,36 @@ Indexes: `idx_ai_speaking_user`, `idx_ai_speaking_exam` on `(exam_attempt_id)`. 
 | created_at | timestamptz NOT NULL | `now()` | |
 | updated_at | timestamptz NOT NULL | `now()` | |
 
-Indexes: `idx_ai_writing_user`, `idx_ai_writing_exam` on `(exam_attempt_id)`. RLS: own rows; service_role full access.
+Indexes: `idx_ai_writing_user`, `idx_ai_writing_exam` on `(exam_attempt_id)`, `idx_ai_writing_attempts_guest_token`. RLS: owner rows via `auth.uid()`; anonymous rows only via matching `x-guest-token`; service_role full access.
+
+---
+
+### `ai_teacher_reviews`
+
+| Column | Type | Default | Notes |
+|---|---|---|---|
+| id | uuid PK | | |
+| request_key | text NOT NULL | | UNIQUE dedupe key; now scoped by user or guest token |
+| user_id | uuid | | FK → profiles(id) ON DELETE SET NULL |
+| guest_token | text | | Anonymous ownership token for guest review fetches |
+| source | text NOT NULL | | `mock_test` \| `simulator` \| `practice` \| `lesson` |
+| modality | text NOT NULL | | `objective` \| `writing` \| `speaking` |
+| status | text NOT NULL | `'processing'` | `processing` \| `ready` \| `error` |
+| verdict | text | | `correct` \| `incorrect` \| `needs_retry` \| `partial` |
+| question_id | uuid NOT NULL | | FK → questions(id) |
+| exercise_id | uuid | | FK → exercises(id) |
+| lesson_id | uuid | | FK → lessons(id) |
+| exam_attempt_id | uuid | | FK → exam_attempts(id) |
+| writing_attempt_id | uuid | | FK → ai_writing_attempts(id) |
+| speaking_attempt_id | uuid | | FK → ai_speaking_attempts(id) |
+| access_level | text NOT NULL | `'basic'` | `basic` \| `premium` |
+| input_payload | jsonb NOT NULL | `'{}'` | submit payload snapshot |
+| result_payload | jsonb | | hydrated AI Teacher response |
+| error_message | text | | |
+| created_at | timestamptz NOT NULL | `now()` | |
+| updated_at | timestamptz NOT NULL | `now()` | trigger-managed |
+
+Indexes: `question_id`, `exam_attempt_id`, `user_id`, `guest_token`, `writing_attempt_id`, `speaking_attempt_id`. RLS: service_role full access; direct client update/select is limited to matching owner or `x-guest-token`.
 
 ---
 
@@ -617,6 +672,7 @@ Enums: `MessageType { text, image, file }`, `FriendshipStatus { pending, accepte
 ## Edge Function API Shapes
 
 All functions are Deno-based, deployed at `/functions/v1/<name>`. Authentication via Bearer token header (`supabase.auth.currentSession?.accessToken`).
+Anonymous client calls also send `x-guest-token`, a stable device token stored in `PrefsStorage`; functions that touch guest-owned data validate it server-side.
 
 ### `grade-exam`
 **POST** `{ attempt_id: string }`
@@ -626,10 +682,30 @@ Grading rules:
 - **MCQ / reading_mcq / listening_mcq**: option UUID match → full points
 - **fill_blank**: case-insensitive trim match → full points
 - **matching / ordering**: parse JSON answer, compare position-by-position → proportional credit (correct_positions / total)
-- **speaking**: JOIN `ai_speaking_attempts` by `exam_attempt_id` + `question_id` → `round(points * overall_score/100)`; fallback 50% if AI not ready
-- **writing**: JOIN `ai_writing_attempts` by `exam_attempt_id` + `question_id` → `round(points * overall_score/100)`; fallback 50% if AI not ready
+- **speaking**: JOIN `ai_speaking_attempts` by `exam_attempt_id` + `question_id` → `round(points * overall_score/100)`; nếu AI chưa xong thì câu này tạm 0 và bật `ai_grading_pending`
+- **writing**: JOIN `ai_writing_attempts` by `exam_attempt_id` + `question_id` → `round(points * overall_score/100)`; nếu AI chưa xong thì câu này tạm 0 và bật `ai_grading_pending`
 
 `ai_grading_pending = true` khi còn attempt nào có `status = 'processing'` — result screen hiển thị banner chờ.
+Sau khi insert `exam_results` thành công, function còn fire-and-forget `analyze-exam` để tạo `exam_analysis`.
+Guest security: caller phải là owner của `exam_attempts` qua `auth.uid()` hoặc `x-guest-token`.
+
+---
+
+### `analyze-exam`
+**POST** `{ attempt_id: string }`
+**Response** `{ success: true, attempt_id: string, status: 'ready' }` hoặc `{ error }`
+
+Flow:
+- upsert `exam_analysis(status='processing')`
+- fetch toàn bộ câu hỏi + answer của `exam_attempts`
+- hydrate speaking/writing từ `ai_speaking_attempts` / `ai_writing_attempts` (đợi tối đa ~30s; quá hạn thì `skipped: true`)
+- objective questions:
+  - đúng: ưu tiên `question.explanation` làm `correct_explanation`
+  - sai: dùng lại cache/prompt của `question-feedback`
+- 1 synthesis GPT call để tạo `skill_insights` + `overall_recommendations`
+- update `exam_analysis(status='ready')`
+
+Direct invocation chỉ hợp lệ cho service_role hoặc owner của `exam_attempts` qua `auth.uid()` / `x-guest-token`.
 
 ---
 
@@ -652,6 +728,7 @@ Grading rules:
 
 Cache: kết quả được lưu vào `question_ai_feedback` theo `(question_id, sha256(user_answer_text))`. Nếu cache hit → trả về ngay, không gọi GPT.
 Matching/ordering: `matching_feedback: [{ item, issue }]` chỉ có trong response khi `question_type` là matching/ordering.
+Function này vẫn được giữ cho lesson/practice flow; mock test review objective feedback giờ được preload sẵn bởi `analyze-exam`.
 
 ---
 
@@ -662,6 +739,9 @@ Matching/ordering: `matching_feedback: [{ item, issue }]` chỉ có trong respon
 Creates `ai_speaking_attempts` row, transcribes via Whisper, scores via GPT-4.1-mini. Czech enforcement: if Whisper language ≠ Czech OR GPT `is_czech=false` → all scores zero.
 `exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
 Poll `speaking-result` for final result.
+Nếu request anonymous thì row `ai_speaking_attempts` được gắn `guest_token` và `speaking-result` chỉ trả cho đúng token đó.
+
+**FK-safety rule (edge function):** Client chỉ nên gửi `question_id` (UUID từ bảng `questions`). KHÔNG gửi `exercise_id` khi đã có `question_id`. Edge function sẽ lookup `question_id` trong bảng `questions`; nếu tìm thấy thì `exercise_id` bị clear về `null` trước khi insert — tránh lỗi FK violation `23503` do UUID của question không tồn tại trong bảng `exercises`. Nếu `question_id` không tìm thấy trong `questions`, edge function coi đó là exercise ID (fallback cho practice flow) và chuyển sang `exercise_id`.
 
 ---
 
@@ -699,6 +779,7 @@ Poll `speaking-result` for final result.
 Detects rubric_type: 'letter' (dopis/email/napište), 'form' (formulář/form), else 'essay'.
 `exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
 Poll `writing-result` for final result.
+Nếu request anonymous thì row `ai_writing_attempts` được gắn `guest_token` và `writing-result` chỉ trả cho đúng token đó.
 
 ---
 

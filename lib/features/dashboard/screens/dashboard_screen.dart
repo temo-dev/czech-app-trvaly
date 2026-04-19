@@ -22,6 +22,7 @@ class DashboardScreen extends ConsumerWidget {
     final dashAsync = ref.watch(dashboardProvider);
 
     return Scaffold(
+      key: const Key('dashboard_screen'),
       primary: false,
       backgroundColor: AppColors.surface,
       body: Column(
@@ -189,8 +190,7 @@ class _DashboardBody extends ConsumerWidget {
                       Expanded(
                         child: _DailyGoalCard(
                           progress: data.activeCourse != null
-                              ? (data.activeCourse!.progressFraction *
-                                  1.0)
+                              ? (data.activeCourse!.progressFraction * 1.0)
                               : 0.7,
                         ),
                       ),
@@ -238,9 +238,8 @@ class _DashboardBody extends ConsumerWidget {
                           iconColor: const Color(0xFF92400E), // blue-800
                           icon: Icons.leaderboard_rounded,
                           label: 'HẠNG TUẦN',
-                          value: data.ownRank != null
-                              ? '#${data.ownRank}'
-                              : '--',
+                          value:
+                              data.ownRank != null ? '#${data.ownRank}' : '--',
                           onTap: () => context.push(AppRoutes.leaderboard),
                         ),
                       ),

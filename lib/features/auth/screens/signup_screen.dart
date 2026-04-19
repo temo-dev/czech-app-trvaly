@@ -120,6 +120,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
                           // Name field
                           AppTextField(
+                            fieldKey: const Key('name_field'),
                             controller: _nameCtrl,
                             label: 'Họ và tên',
                             hint: 'Nguyễn Văn A',
@@ -129,6 +130,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
                           // Email field
                           AppTextField(
+                            fieldKey: const Key('email_field'),
                             controller: _emailCtrl,
                             label: 'Email',
                             hint: 'example@domain.com',
@@ -140,6 +142,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
                           // Password field
                           AppTextField(
+                            fieldKey: const Key('password_field'),
                             controller: _passwordCtrl,
                             label: 'Mật khẩu',
                             hint: '••••••••',
@@ -157,6 +160,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                 width: 20,
                                 height: 20,
                                 child: Checkbox(
+                                  key: const Key('terms_checkbox'),
                                   value: _agreedToTerms,
                                   onChanged: (v) => setState(
                                       () => _agreedToTerms = v ?? false),
@@ -221,6 +225,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
                           // Submit
                           AppButton(
+                            key: const Key('signup_button'),
                             label: 'Đăng ký ngay',
                             loading: isSubmitting,
                             onPressed: isSubmitting ? null : _submit,
@@ -239,8 +244,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
                                 child: Text(
                                   'HOẶC ĐĂNG KÝ BẰNG',
                                   style: AppTypography.labelUppercase.copyWith(
@@ -314,8 +319,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   void _submit() {
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Vui lòng đồng ý với điều khoản sử dụng')),
+        const SnackBar(content: Text('Vui lòng đồng ý với điều khoản sử dụng')),
       );
       return;
     }

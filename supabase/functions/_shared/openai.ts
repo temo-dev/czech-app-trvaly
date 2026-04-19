@@ -1,6 +1,6 @@
 export function getOpenAIKey(): string {
-  const key = Deno.env.get('OPENAI_API_KEY');
-  if (!key) throw new Error('OPENAI_API_KEY secret is not set');
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (!key) throw new Error("OPENAI_API_KEY secret is not set");
   return key;
 }
 
@@ -8,23 +8,24 @@ export async function chatComplete(
   apiKey: string,
   systemPrompt: string,
   userMessage: string,
+  timeoutMs = 30_000,
 ): Promise<Record<string, unknown>> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        response_format: { type: 'json_object' },
+        model: "gpt-4.1-mini",
+        response_format: { type: "json_object" },
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
         ],
         temperature: 0.3,
       }),
@@ -38,7 +39,7 @@ export async function chatComplete(
 
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error('Empty OpenAI response');
+    if (!content) throw new Error("Empty OpenAI response");
     return JSON.parse(content);
   } finally {
     clearTimeout(timer);
@@ -60,16 +61,17 @@ export async function transcribeAudio(
 
   try {
     const form = new FormData();
-    const blob = new Blob([audioBytes], { type: 'audio/m4a' });
-    form.append('file', blob, filename);
-    form.append('model', 'whisper-1');
+    const audioChunk = audioBytes.slice();
+    const blob = new Blob([audioChunk], { type: "audio/m4a" });
+    form.append("file", blob, filename);
+    form.append("model", "whisper-1");
     // Use verbose_json to get the detected language — do NOT force 'cs' so
     // that Whisper can tell us when the student speaks the wrong language.
-    form.append('response_format', 'verbose_json');
+    form.append("response_format", "verbose_json");
 
-    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}` },
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}` },
       body: form,
       signal: controller.signal,
     });
@@ -81,8 +83,8 @@ export async function transcribeAudio(
 
     const data = await res.json();
     return {
-      text: data.text ?? '',
-      detectedLanguage: (data.language as string | undefined) ?? 'unknown',
+      text: data.text ?? "",
+      detectedLanguage: (data.language as string | undefined) ?? "unknown",
     };
   } finally {
     clearTimeout(timer);

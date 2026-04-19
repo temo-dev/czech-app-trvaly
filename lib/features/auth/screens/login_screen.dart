@@ -124,6 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                             // Email field
                             AppTextField(
+                              fieldKey: const Key('email_field'),
                               controller: _emailCtrl,
                               label: 'Email',
                               hint: 'example@email.com',
@@ -142,8 +143,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   children: [
                                     Text(
                                       'MẬT KHẨU',
-                                      style: AppTypography.labelUppercase
-                                          .copyWith(
+                                      style:
+                                          AppTypography.labelUppercase.copyWith(
                                         color: AppColors.onSurfaceVariant,
                                       ),
                                     ),
@@ -156,6 +157,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 TextFormField(
+                                  key: const Key('password_field'),
                                   controller: _passwordCtrl,
                                   obscureText: _obscurePassword,
                                   textInputAction: TextInputAction.done,
@@ -167,24 +169,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     hintText: '••••••••',
                                     filled: true,
                                     fillColor: AppColors.surfaceContainerLowest,
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(
-                                            horizontal: 16, vertical: 14),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
                                     border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(
-                                          AppRadius.sm),
+                                      borderRadius:
+                                          BorderRadius.circular(AppRadius.sm),
                                       borderSide: const BorderSide(
                                           color: AppColors.outlineVariant),
                                     ),
                                     enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(
-                                          AppRadius.sm),
+                                      borderRadius:
+                                          BorderRadius.circular(AppRadius.sm),
                                       borderSide: const BorderSide(
                                           color: AppColors.outlineVariant),
                                     ),
                                     focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(
-                                          AppRadius.sm),
+                                      borderRadius:
+                                          BorderRadius.circular(AppRadius.sm),
                                       borderSide: const BorderSide(
                                           color: AppColors.primary, width: 1.5),
                                     ),
@@ -227,6 +228,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                             // Submit button
                             AppButton(
+                              key: const Key('login_button'),
                               label: 'Đăng nhập',
                               loading: isSubmitting,
                               onPressed: isSubmitting ? null : _submit,
@@ -250,8 +252,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: Text(
                               'HOẶC TIẾP TỤC VỚI',
                               style: AppTypography.labelUppercase.copyWith(
-                                color: AppColors.onSurfaceVariant
-                                    .withOpacity(0.6),
+                                color:
+                                    AppColors.onSurfaceVariant.withOpacity(0.6),
                               ),
                             ),
                           ),

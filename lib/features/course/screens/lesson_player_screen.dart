@@ -7,7 +7,6 @@ import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/features/course/models/course_models.dart';
 import 'package:app_czech/features/course/providers/course_providers.dart';
-import 'package:app_czech/shared/widgets/app_button.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
@@ -228,8 +227,8 @@ class _HeroCard extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(AppRadius.full),
@@ -291,8 +290,7 @@ class _HeroCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress,
                   backgroundColor: AppColors.surfaceContainerHighest,
-                  valueColor:
-                      const AlwaysStoppedAnimation(AppColors.primary),
+                  valueColor: const AlwaysStoppedAnimation(AppColors.primary),
                   minHeight: 10,
                 ),
               ),
@@ -351,9 +349,7 @@ class _LearningBlocksGrid extends StatelessWidget {
 
 class _TwoColGrid extends StatelessWidget {
   const _TwoColGrid(
-      {required this.blocks,
-      required this.courseId,
-      required this.moduleId});
+      {required this.blocks, required this.courseId, required this.moduleId});
   final List<LessonBlock> blocks;
   final String courseId;
   final String moduleId;
@@ -371,16 +367,12 @@ class _TwoColGrid extends StatelessWidget {
             children: [
               Expanded(
                   child: _BlockCard(
-                      block: left,
-                      courseId: courseId,
-                      moduleId: moduleId)),
+                      block: left, courseId: courseId, moduleId: moduleId)),
               if (right != null) ...[
                 const SizedBox(width: 16),
                 Expanded(
                     child: _BlockCard(
-                        block: right,
-                        courseId: courseId,
-                        moduleId: moduleId)),
+                        block: right, courseId: courseId, moduleId: moduleId)),
               ] else
                 const Expanded(child: SizedBox()),
             ],
@@ -394,9 +386,7 @@ class _TwoColGrid extends StatelessWidget {
 
 class _BlockCard extends StatelessWidget {
   const _BlockCard(
-      {required this.block,
-      required this.courseId,
-      required this.moduleId});
+      {required this.block, required this.courseId, required this.moduleId});
 
   final LessonBlock block;
   final String courseId;
@@ -445,6 +435,7 @@ class _BlockCard extends StatelessWidget {
             extra: {
               'prompt': block.prompt ?? '',
               'questionId': firstExerciseId,
+              'exerciseId': firstExerciseId,
               'lessonId': block.lessonId,
               'lessonBlockId': block.id,
             },
@@ -465,14 +456,11 @@ class _BlockCard extends StatelessWidget {
         }
         // All other types go to PracticeScreen
         final route = switch (block.type) {
-          BlockType.grammar =>
-            AppRoutes.grammarPracticePath(firstExerciseId),
+          BlockType.grammar => AppRoutes.grammarPracticePath(firstExerciseId),
           BlockType.listening =>
             AppRoutes.listeningPracticePath(firstExerciseId),
-          BlockType.reading =>
-            AppRoutes.readingPracticePath(firstExerciseId),
-          BlockType.vocab =>
-            AppRoutes.flashcardPracticePath(firstExerciseId),
+          BlockType.reading => AppRoutes.readingPracticePath(firstExerciseId),
+          BlockType.vocab => AppRoutes.flashcardPracticePath(firstExerciseId),
           _ => AppRoutes.practiceExercisePath(firstExerciseId),
         };
         context.push(route);
@@ -639,8 +627,7 @@ class _BonusSection extends StatelessWidget {
                               horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: AppColors.onBackground,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.full),
+                            borderRadius: BorderRadius.circular(AppRadius.full),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,

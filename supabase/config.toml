@@ -354,6 +354,33 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+[functions.grade-exam]
+verify_jwt = false
+
+[functions.analyze-exam]
+verify_jwt = false
+
+[functions.speaking-upload]
+verify_jwt = false
+
+[functions.speaking-result]
+verify_jwt = false
+
+[functions.writing-submit]
+verify_jwt = false
+
+[functions.writing-result]
+verify_jwt = false
+
+[functions.question-feedback]
+verify_jwt = false
+
+[functions.ai-review-submit]
+verify_jwt = false
+
+[functions.ai-review-result]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

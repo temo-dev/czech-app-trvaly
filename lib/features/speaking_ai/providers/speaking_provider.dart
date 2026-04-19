@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -5,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:app_czech/core/supabase/supabase_config.dart';
-import 'blob_fetch_stub.dart' if (dart.library.html) 'blob_fetch_web.dart';
+import 'package:app_czech/features/speaking_ai/providers/blob_fetch_stub.dart'
+    if (dart.library.html) 'package:app_czech/features/speaking_ai/providers/blob_fetch_web.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -56,6 +58,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
   SpeakingSessionNotifier() : super(const SpeakingState());
 
   final _recorder = AudioRecorder();
+  var _disposed = false;
+  var _pollingGeneration = 0;
 
   // How many amplitude samples to keep for waveform display
   static const _maxAmplitudeSamples = 30;
@@ -70,11 +74,13 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     if (state.status == SpeakingStatus.recording) return;
 
     final hasPerms = await hasPermission();
+    if (!mounted || _disposed) return;
     if (!hasPerms) {
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         status: SpeakingStatus.error,
-        errorMessage: 'Cần quyền truy cập micro. Vui lòng cho phép trong Cài đặt.',
-      );
+        errorMessage:
+            'Cần quyền truy cập micro. Vui lòng cho phép trong Cài đặt.',
+      ));
       return;
     }
 
@@ -96,38 +102,43 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
       path: path,
     );
 
-    state = state.copyWith(
+    if (!mounted || _disposed) return;
+    _setStateSafely(state.copyWith(
       status: SpeakingStatus.recording,
       audioPath: path,
       amplitudes: [],
-    );
+    ));
 
     // Poll amplitude for waveform
-    _startAmplitudePolling();
+    _startAmplitudePolling(++_pollingGeneration);
   }
 
   Future<void> stopRecording() async {
     if (state.status != SpeakingStatus.recording) return;
+    _pollingGeneration++;
     await _recorder.stop();
-    state = state.copyWith(status: SpeakingStatus.recorded);
+    if (!mounted || _disposed) return;
+    _setStateSafely(state.copyWith(status: SpeakingStatus.recorded));
   }
 
   /// User pressed "Ghi lại" — deletes the temp file and resets to idle.
   void discardRecording() {
+    _pollingGeneration++;
     final path = state.audioPath;
     if (path != null && !kIsWeb) {
       try {
         File(path).deleteSync();
       } catch (_) {}
     }
-    state = const SpeakingState();
+    _setStateSafely(const SpeakingState());
   }
 
   /// Reset UI state. Safe to call even during upload (called from dispose
   /// only when not uploading). After a successful upload the state stays at
   /// [SpeakingStatus.uploaded] until the next widget initialises.
   void resetToIdle() {
-    state = const SpeakingState();
+    _pollingGeneration++;
+    _setStateSafely(const SpeakingState());
   }
 
   /// Restore state when navigating back to a previously answered question.
@@ -135,15 +146,15 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
   void restoreRecording(String value) {
     final isAttemptId = _looksLikeAttemptId(value);
     if (isAttemptId) {
-      state = SpeakingState(
+      _setStateSafely(SpeakingState(
         status: SpeakingStatus.uploaded,
         attemptId: value,
-      );
+      ));
     } else {
-      state = SpeakingState(
+      _setStateSafely(SpeakingState(
         status: SpeakingStatus.recorded,
         audioPath: value,
-      );
+      ));
     }
   }
 
@@ -159,11 +170,13 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
   Future<void> submitRecording({
     required String lessonId,
     required String questionId,
+    String? exerciseId,
+    String? examAttemptId,
   }) async {
     if (!mounted) return;
     if (state.audioPath == null) return;
 
-    state = state.copyWith(status: SpeakingStatus.uploading);
+    _setStateSafely(state.copyWith(status: SpeakingStatus.uploading));
 
     final audioPath = state.audioPath!;
     try {
@@ -174,26 +187,30 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
           audioPath: audioPath,
           lessonId: lessonId,
           questionId: questionId,
+          exerciseId: exerciseId,
+          examAttemptId: examAttemptId,
         );
       } else {
         resultAttemptId = await _uploadNative(
           audioPath: audioPath,
           lessonId: lessonId,
           questionId: questionId,
+          exerciseId: exerciseId,
+          examAttemptId: examAttemptId,
         );
       }
 
       if (!mounted) return;
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         status: SpeakingStatus.uploaded,
         attemptId: resultAttemptId,
-      );
+      ));
     } catch (e) {
       if (!mounted) return;
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         status: SpeakingStatus.error,
-        errorMessage: 'Không thể tải lên bài ghi âm. Vui lòng thử lại.',
-      );
+        errorMessage: _mapUploadError(e, examAttemptId: examAttemptId),
+      ));
     }
   }
 
@@ -201,6 +218,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     required String audioPath,
     required String lessonId,
     required String questionId,
+    String? exerciseId,
+    String? examAttemptId,
   }) async {
     final file = File(audioPath);
     final bytes = await file.readAsBytes();
@@ -208,6 +227,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
       bytes: bytes,
       lessonId: lessonId,
       questionId: questionId,
+      exerciseId: exerciseId,
+      examAttemptId: examAttemptId,
     );
   }
 
@@ -215,6 +236,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     required String audioPath,
     required String lessonId,
     required String questionId,
+    String? exerciseId,
+    String? examAttemptId,
   }) async {
     // Web: audioPath is a blob URL — fetch actual bytes before uploading.
     Uint8List bytes;
@@ -227,6 +250,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
       bytes: bytes,
       lessonId: lessonId,
       questionId: questionId,
+      exerciseId: exerciseId,
+      examAttemptId: examAttemptId,
     );
   }
 
@@ -234,82 +259,170 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     required Uint8List bytes,
     required String lessonId,
     required String questionId,
+    String? exerciseId,
+    String? examAttemptId,
   }) async {
     // Use a flag instead of re-throwing inside catch — that way genuine
     // network/HTTP failures still fall through to the DB insert fallback,
     // while an explicit "audio rejected" response from the edge function
     // propagates as an error to the caller.
-    String? _audioRejectedReason;
+    String? audioRejectedReason;
+    Object? requestFailure;
 
     try {
-      final response = await supabase.functions.invoke(
-        'speaking-upload',
-        body: {
-          'lesson_id': lessonId,
-          'question_id': questionId,
-          'audio_b64': bytes.isNotEmpty ? base64Encode(bytes) : '',
-        },
+      final response = await _invokeUploadFunction(
+        bytes: bytes,
+        lessonId: lessonId,
+        questionId: questionId,
+        exerciseId: exerciseId,
+        examAttemptId: examAttemptId,
       );
       final data = response.data as Map<String, dynamic>?;
       final attemptId = data?['attempt_id'] as String?;
       final responseError = data?['error'] as String?;
       if (attemptId != null && responseError == null) return attemptId;
       if (responseError != null) {
-        _audioRejectedReason = responseError;
+        audioRejectedReason = responseError;
       }
-    } catch (_) {
-      // Network error or edge function not deployed — fall through to DB insert
+    } catch (error) {
+      requestFailure = error;
+      if (examAttemptId != null &&
+          _isExamAttemptSchemaMismatch(error.toString())) {
+        try {
+          final retryResponse = await _invokeUploadFunction(
+            bytes: bytes,
+            lessonId: lessonId,
+            questionId: questionId,
+            exerciseId: exerciseId,
+          );
+          final retryData = retryResponse.data as Map<String, dynamic>?;
+          final retryAttemptId = retryData?['attempt_id'] as String?;
+          final retryError = retryData?['error'] as String?;
+          if (retryAttemptId != null && retryError == null) {
+            return retryAttemptId;
+          }
+          if (retryError != null) {
+            audioRejectedReason = retryError;
+          }
+        } catch (_) {
+          // Fall through to direct DB fallback below.
+        }
+      }
+      // Network error or edge function not deployed — surface the failure to
+      // the recording UI instead of creating a synthetic error attempt row.
     }
 
     // Edge function explicitly rejected the audio (e.g. empty bytes on web)
-    if (_audioRejectedReason != null) {
-      throw Exception(_audioRejectedReason);
+    if (audioRejectedReason != null) {
+      throw Exception(audioRejectedReason);
     }
 
-    // Fallback: insert ai_speaking_attempts row directly
-    final userId = supabase.auth.currentUser?.id;
-    final row = await supabase
-        .from('ai_speaking_attempts')
-        .insert({
-          if (userId != null) 'user_id': userId,
-          'audio_key':
-              'speaking/$questionId/${DateTime.now().millisecondsSinceEpoch}.m4a',
-          'status': 'processing',
-        })
-        .select('id')
-        .maybeSingle();
+    if (requestFailure != null) {
+      throw Exception(requestFailure.toString());
+    }
 
-    if (row != null) return (row as Map)['id'] as String;
+    throw Exception('Không thể tải lên bài ghi âm. Vui lòng thử lại.');
+  }
 
-    // Last resort — return a placeholder so the screen can still navigate
-    return 'pending_${DateTime.now().millisecondsSinceEpoch}';
+  Future<dynamic> _invokeUploadFunction({
+    required Uint8List bytes,
+    required String lessonId,
+    required String questionId,
+    String? exerciseId,
+    String? examAttemptId,
+  }) {
+    return supabase.functions.invoke(
+      'speaking-upload',
+      body: {
+        if (lessonId.isNotEmpty) 'lesson_id': lessonId,
+        'question_id': questionId,
+        if (exerciseId?.isNotEmpty ?? false) 'exercise_id': exerciseId,
+        'audio_b64': bytes.isNotEmpty ? base64Encode(bytes) : '',
+        if (examAttemptId != null) 'exam_attempt_id': examAttemptId,
+      },
+    );
+  }
+
+  bool _isExamAttemptSchemaMismatch(String message) {
+    return message.contains('exam_attempt_id') ||
+        message.contains('PGRST204') ||
+        message.contains('Could not find the');
+  }
+
+  String _mapUploadError(
+    Object error, {
+    String? examAttemptId,
+  }) {
+    final message = error.toString();
+
+    if (message.contains('No audio data')) {
+      return 'Không đọc được dữ liệu ghi âm. Vui lòng ghi lại và thử lại.';
+    }
+
+    final missingExamAttemptColumn =
+        message.contains('exam_attempt_id') && message.contains('PGRST204');
+    if (examAttemptId != null && missingExamAttemptColumn) {
+      return 'Server chấm bài nói của exam chưa được cập nhật schema exam_attempt_id. Cần apply migration backend rồi thử lại.';
+    }
+
+    if (message.contains('question_id') && message.contains('PGRST204')) {
+      return 'Server chấm bài nói đang thiếu cột question_id. Cần cập nhật backend rồi thử lại.';
+    }
+
+    if (message.contains('question_id is required')) {
+      return 'Thiếu thông tin câu hỏi để nộp bài nói. Vui lòng thoát vào lại bài thi rồi thử lại.';
+    }
+
+    return 'Không thể tải lên bài ghi âm. Vui lòng thử lại.';
   }
 
   void reset() {
+    _pollingGeneration++;
     discardRecording();
-    state = const SpeakingState();
+    _setStateSafely(const SpeakingState());
   }
 
   // ── Amplitude polling ────────────────────────────────────────────────────────
 
-  void _startAmplitudePolling() async {
-    while (state.status == SpeakingStatus.recording) {
+  void _startAmplitudePolling(int generation) async {
+    while (mounted &&
+        !_disposed &&
+        generation == _pollingGeneration &&
+        state.status == SpeakingStatus.recording) {
       await Future.delayed(const Duration(milliseconds: 80));
-      if (!mounted) return;
+      if (!mounted || _disposed || generation != _pollingGeneration) return;
       if (state.status != SpeakingStatus.recording) return;
 
       try {
         final amp = await _recorder.getAmplitude();
+        if (!mounted || _disposed || generation != _pollingGeneration) return;
         final normalized = _normalizeAmplitude(amp.current);
         final updated = [...state.amplitudes, normalized];
         if (updated.length > _maxAmplitudeSamples) {
           updated.removeAt(0);
         }
-        state = state.copyWith(amplitudes: updated);
+        _setStateSafely(state.copyWith(amplitudes: updated));
       } catch (_) {
         // Amplitude not available on all platforms — ignore
       }
     }
+  }
+
+  void _setStateSafely(SpeakingState next) {
+    if (!mounted || _disposed) return;
+    // runZonedGuarded is required here: Riverpod notifies listeners via
+    // Zone.runBinaryGuarded, which swallows AssertionError from defunct
+    // ConsumerStatefulElements and re-routes it through the zone error handler
+    // instead of normal exception propagation. A plain try/catch won't intercept
+    // those errors; runZonedGuarded creates a child zone whose error handler
+    // catches them before they reach the root zone.
+    runZonedGuarded(
+      () {
+        if (!mounted || _disposed) return;
+        state = next;
+      },
+      (_, __) {}, // swallow zone errors from defunct widget listeners
+    );
   }
 
   double _normalizeAmplitude(double db) {
@@ -323,6 +436,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
 
   @override
   void dispose() {
+    _disposed = true;
+    _pollingGeneration++;
     _recorder.dispose();
     super.dispose();
   }

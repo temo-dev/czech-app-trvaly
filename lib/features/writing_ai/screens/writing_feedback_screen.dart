@@ -5,11 +5,14 @@ import 'package:app_czech/core/router/app_routes.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/features/ai_teacher/models/ai_teacher_review.dart';
+import 'package:app_czech/features/ai_teacher/providers/ai_teacher_review_provider.dart';
+import 'package:app_czech/features/ai_teacher/widgets/ai_teacher_review_widgets.dart';
 import 'package:app_czech/features/course/providers/course_providers.dart';
 import 'package:app_czech/features/writing_ai/providers/writing_provider.dart';
+import 'package:app_czech/shared/models/question_model.dart';
 import 'package:app_czech/shared/widgets/circular_progress_ring.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
-import 'package:app_czech/shared/widgets/responsive_page_container.dart';
 
 /// Writing feedback screen — matches writing_ai_feedback.html Stitch design.
 class WritingFeedbackScreen extends ConsumerWidget {
@@ -19,62 +22,60 @@ class WritingFeedbackScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     final attemptId = extra?['attemptId'] as String?;
+    final questionId = extra?['questionId'] as String? ?? '';
     final lessonId = extra?['lessonId'] as String? ?? '';
     final lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
+    final source = extra?['source'] as String? ??
+        (lessonId.isNotEmpty ? 'lesson' : 'practice');
 
     if (attemptId == null) {
       return _buildShell(context, child: _ScoringInProgress());
     }
 
-    // When navigated from mock-test review (no active writingSessionProvider),
-    // fetch the already-scored attempt directly by ID.
-    final sessionState = ref.watch(writingSessionProvider);
-    final fromSession = sessionState.status != WritingFeedbackStatus.idle;
+    final request = AiTeacherReviewRequest(
+      source: source,
+      questionId: questionId,
+      lessonId: lessonId.isNotEmpty ? lessonId : null,
+      aiAttemptId: attemptId,
+      questionType: QuestionType.writing,
+    );
+    final reviewAsync = ref.watch(aiTeacherReviewEntryProvider(request));
 
-    if (fromSession) {
-      // Mark block complete when AI scoring finishes (lesson flow)
-      ref.listen(writingSessionProvider, (_, next) {
-        if (next.status == WritingFeedbackStatus.completed &&
+    ref.listen(aiTeacherReviewEntryProvider(request), (_, next) {
+      next.whenData((response) {
+        if (response.isReady &&
             lessonId.isNotEmpty &&
             lessonBlockId.isNotEmpty) {
           markBlockComplete(lessonId: lessonId, lessonBlockId: lessonBlockId);
           ref.invalidate(lessonDetailProvider(lessonId));
         }
       });
+    });
 
-      return _buildShell(
-        context,
-        child: switch (sessionState.status) {
-          WritingFeedbackStatus.submitting ||
-          WritingFeedbackStatus.pending ||
-          WritingFeedbackStatus.scoring =>
-            _ScoringInProgress(),
-          WritingFeedbackStatus.completed when sessionState.result != null =>
-            _FeedbackBody(result: sessionState.result!),
-          WritingFeedbackStatus.error => ErrorState(
-              message: sessionState.errorMessage ?? 'Không thể tải kết quả.',
-              onRetry: () =>
-                  ref.read(writingSessionProvider.notifier).retry(),
-            ),
-          _ => _ScoringInProgress(),
-        },
-      );
-    }
-
-    // Review context: load by attemptId directly
-    final resultAsync = ref.watch(writingAttemptResultProvider(attemptId));
     return _buildShell(
       context,
-      child: resultAsync.when(
+      child: reviewAsync.when(
         loading: () => _ScoringInProgress(),
         error: (_, __) => ErrorState(
           message: 'Không thể tải kết quả.',
-          onRetry: () =>
-              ref.invalidate(writingAttemptResultProvider(attemptId)),
+          onRetry: () => ref.invalidate(aiTeacherReviewEntryProvider(request)),
         ),
-        data: (result) => result == null
-            ? _ScoringInProgress()
-            : _FeedbackBody(result: result),
+        data: (response) {
+          if (response.isPending) return _ScoringInProgress();
+          if (response.isError || response.review == null) {
+            return ErrorState(
+              message: response.message ?? 'Không thể tải kết quả.',
+              onRetry: () =>
+                  ref.invalidate(aiTeacherReviewEntryProvider(request)),
+            );
+          }
+          return AiTeacherDetailView(
+            review: response.review!,
+            title: 'Kết quả Viết',
+            subtitle:
+                'AI Teacher đang chấm và chỉ ra lỗi trong bài viết của bạn.',
+          );
+        },
       ),
     );
   }
@@ -189,58 +190,6 @@ class _ScoringInProgress extends StatelessWidget {
   }
 }
 
-// ── Feedback body ─────────────────────────────────────────────────────────────
-
-class _FeedbackBody extends StatelessWidget {
-  const _FeedbackBody({required this.result});
-  final WritingFeedbackResult result;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: ResponsivePageContainer(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 80),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Score overview hero
-              _ScoreHero(result: result),
-              const SizedBox(height: 24),
-
-              // Short tips card
-              if (result.shortTips.isNotEmpty) ...[
-                _ShortTipsCard(tips: result.shortTips),
-                const SizedBox(height: 16),
-              ],
-
-              // AI Summary card
-              if (result.overallFeedback.isNotEmpty) ...[
-                _AiSummaryCard(feedback: result.overallFeedback),
-                const SizedBox(height: 24),
-              ],
-
-              // Error categories
-              _WritingErrorCategories(result: result),
-              const SizedBox(height: 24),
-
-              // Corrected version
-              if (result.correctedVersion.isNotEmpty ||
-                  result.annotatedSpans.isNotEmpty) ...[
-                _CorrectedVersionCard(result: result),
-                const SizedBox(height: 32),
-              ],
-
-              // CTAs
-              _CtaRow(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ── Score Hero ────────────────────────────────────────────────────────────────
 
 class _ScoreHero extends StatelessWidget {
@@ -253,12 +202,11 @@ class _ScoreHero extends StatelessWidget {
 
     // Try to find task fit metric
     final taskFit = result.metrics
-        .where((m) => m.label.toLowerCase().contains('task') ||
+        .where((m) =>
+            m.label.toLowerCase().contains('task') ||
             m.label.toLowerCase().contains('nội dung'))
         .firstOrNull;
-    final taskFitPct = taskFit != null
-        ? (taskFit.fraction * 100).round()
-        : 85;
+    final taskFitPct = taskFit != null ? (taskFit.fraction * 100).round() : 85;
 
     return Container(
       padding: const EdgeInsets.all(32),
@@ -400,7 +348,9 @@ class _WritingErrorCategories extends StatelessWidget {
     final contentErrors = <String>[];
     for (final m in result.metrics) {
       final l = m.label.toLowerCase();
-      if ((l.contains('content') || l.contains('nội dung') || l.contains('task')) &&
+      if ((l.contains('content') ||
+              l.contains('nội dung') ||
+              l.contains('task')) &&
           m.feedback != null &&
           m.feedback!.isNotEmpty) {
         contentErrors.add(m.feedback!);
@@ -411,8 +361,10 @@ class _WritingErrorCategories extends StatelessWidget {
     final grammarVocabErrors = <String>[];
     for (final m in result.metrics) {
       final l = m.label.toLowerCase();
-      if ((l.contains('grammar') || l.contains('ngữ pháp') ||
-              l.contains('vocab') || l.contains('từ vựng')) &&
+      if ((l.contains('grammar') ||
+              l.contains('ngữ pháp') ||
+              l.contains('vocab') ||
+              l.contains('từ vựng')) &&
           m.feedback != null &&
           m.feedback!.isNotEmpty) {
         grammarVocabErrors.add(m.feedback!);
@@ -423,7 +375,8 @@ class _WritingErrorCategories extends StatelessWidget {
             s.issueType == 'grammar' ||
             s.issueType == 'vocabulary' ||
             s.issueType == 'spelling')
-        .map((s) => s.explanation ??
+        .map((s) =>
+            s.explanation ??
             (s.correction != null
                 ? '"${s.text}" → ${s.correction}'
                 : '"${s.text}"'))
@@ -514,8 +467,7 @@ class _WritingErrorCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: hasErrors
                       ? AppColors.tertiaryFixed
@@ -724,10 +676,7 @@ class _AnnotatedText extends StatelessWidget {
         }
 
         final (bg, fg) = switch (span.issueType) {
-          'grammar' => (
-              AppColors.primary.withOpacity(0.15),
-              AppColors.primary
-            ),
+          'grammar' => (AppColors.primary.withOpacity(0.15), AppColors.primary),
           'vocabulary' => (
               AppColors.tertiary.withOpacity(0.15),
               AppColors.tertiary

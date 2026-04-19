@@ -23,10 +23,13 @@ class _SpeakingRecordingScreenState
     extends ConsumerState<SpeakingRecordingScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
+  ProviderSubscription<SpeakingState>? _speakingSubscription;
   String _prompt = '';
   String _questionId = '';
+  String _exerciseId = '';
   String _lessonId = '';
   String _lessonBlockId = '';
+  String _examAttemptId = '';
 
   @override
   void initState() {
@@ -35,21 +38,42 @@ class _SpeakingRecordingScreenState
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
+    _speakingSubscription = ref.listenManual<SpeakingState>(
+      speakingSessionProvider,
+      (_, next) {
+        if (!mounted || next.status != SpeakingStatus.uploaded) return;
+        context.push(
+          AppRoutes.speakingFeedback,
+          extra: {
+            'attemptId': next.attemptId,
+            'questionId': _questionId,
+            'exerciseId': _exerciseId,
+            'lessonId': _lessonId,
+            'lessonBlockId': _lessonBlockId,
+            'source': _lessonId.isNotEmpty
+                ? 'lesson'
+                : (_examAttemptId.isNotEmpty ? 'mock_test' : 'practice'),
+          },
+        );
+      },
+    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final extra =
-        GoRouterState.of(context).extra as Map<String, dynamic>?;
+    final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     _prompt = extra?['prompt'] as String? ?? '';
     _questionId = extra?['questionId'] as String? ?? '';
+    _exerciseId = extra?['exerciseId'] as String? ?? '';
     _lessonId = extra?['lessonId'] as String? ?? '';
     _lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
+    _examAttemptId = extra?['examAttemptId'] as String? ?? '';
   }
 
   @override
   void dispose() {
+    _speakingSubscription?.close();
     _pulseController.dispose();
     super.dispose();
   }
@@ -69,20 +93,6 @@ class _SpeakingRecordingScreenState
         _pulseController.stop();
       }
     }
-
-    // Navigate after successful upload
-    ref.listen(speakingSessionProvider, (_, next) {
-      if (next.status == SpeakingStatus.uploaded) {
-        context.push(
-          AppRoutes.speakingFeedback,
-          extra: {
-            'attemptId': next.attemptId,
-            'lessonId': _lessonId,
-            'lessonBlockId': _lessonBlockId,
-          },
-        );
-      }
-    });
 
     final cs = Theme.of(context).colorScheme;
 
@@ -196,6 +206,12 @@ class _SpeakingRecordingScreenState
                               ? () => notifier.submitRecording(
                                     lessonId: _lessonId,
                                     questionId: _questionId,
+                                    exerciseId: _exerciseId.isEmpty
+                                        ? null
+                                        : _exerciseId,
+                                    examAttemptId: _examAttemptId.isEmpty
+                                        ? null
+                                        : _examAttemptId,
                                   )
                               : null,
                         ),
@@ -348,11 +364,10 @@ class _WaveformPainter extends CustomPainter {
       double normalized;
       if (amplitudes.isNotEmpty) {
         // Map bar index to amplitude buffer
-        final bufIdx =
-            ((i / barCount) * amplitudes.length).floor().clamp(
-                  0,
-                  amplitudes.length - 1,
-                );
+        final bufIdx = ((i / barCount) * amplitudes.length).floor().clamp(
+              0,
+              amplitudes.length - 1,
+            );
         normalized = amplitudes[bufIdx];
       } else {
         // Animate placeholder bars
@@ -361,12 +376,14 @@ class _WaveformPainter extends CustomPainter {
             0.2 *
                 (0.5 +
                         0.5 *
-                            math.sin(animationValue * math.pi * 2 + phase)
+                            math
+                                .sin(animationValue * math.pi * 2 + phase)
                                 .abs())
                     .abs();
       }
 
-      final barHeight = (size.height * 0.8 * normalized).clamp(4.0, size.height * 0.9);
+      final barHeight =
+          (size.height * 0.8 * normalized).clamp(4.0, size.height * 0.9);
       final top = (size.height - barHeight) / 2;
 
       canvas.drawRRect(
@@ -407,8 +424,7 @@ class _RecordButton extends StatelessWidget {
       child: AnimatedBuilder(
         animation: pulseController,
         builder: (context, _) {
-          final scale =
-              isRecording ? 1.0 + pulseController.value * 0.1 : 1.0;
+          final scale = isRecording ? 1.0 + pulseController.value * 0.1 : 1.0;
           return Transform.scale(
             scale: scale,
             child: Container(
@@ -423,9 +439,7 @@ class _RecordButton extends StatelessWidget {
                         : AppColors.primary,
                 boxShadow: [
                   BoxShadow(
-                    color: (isRecording
-                            ? AppColors.error
-                            : AppColors.primary)
+                    color: (isRecording ? AppColors.error : AppColors.primary)
                         .withValues(alpha: 0.35),
                     blurRadius: isRecording ? 20 : 8,
                     spreadRadius: isRecording ? 6 : 0,
