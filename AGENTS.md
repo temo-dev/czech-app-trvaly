@@ -8,15 +8,21 @@ This file provides guidance to Codex when working with code in this repository.
 
 **Trvalý Prep** — Vietnamese-first exam prep app for the Czech permanent residency exam. Flutter Web + iOS from one shared codebase.
 
-Canonical implementation docs live in `docs/product/`:
-- `architecture.md` — stack, runtime topology, routing, DB access patterns, AI pipeline
-- `data-contract-map.md` — Supabase tables, key models, Edge Function payloads
-- `route-map.md` — canonical route list and GoRouter config
-- `screen-map.md` — screen-level contracts, states, and actions
-- `state-map.md` — provider/state-machine definitions and operational notes
-- `component-map.md` — widget inventory
+Canonical implementation docs live in [`docs/product/`](docs/product/):
+- [`architecture.md`](docs/product/architecture.md) — stack, runtime topology, routing, DB access patterns, AI pipeline
+- [`data-contract-map.md`](docs/product/data-contract-map.md) — Supabase tables, key models, Edge Function payloads
+- [`route-map.md`](docs/product/route-map.md) — canonical route list and GoRouter config
+- [`screen-map.md`](docs/product/screen-map.md) — screen-level contracts, states, and actions
+- [`state-map.md`](docs/product/state-map.md) — provider/state-machine definitions and operational notes
+- [`component-map.md`](docs/product/component-map.md) — widget inventory
 
-When this file and product docs disagree, follow `docs/product/*`.
+Companion instruction files:
+- [`CLAUDE.md`](CLAUDE.md)
+- [`cms/AGENTS.md`](cms/AGENTS.md)
+- [`cms/CLAUDE.md`](cms/CLAUDE.md)
+
+When this file and product docs disagree, follow [`docs/product/*`](docs/product/).
+Before making a non-trivial plan or changing code in a feature/flow, read the relevant files in [`docs/product/`](docs/product/) first.
 
 ---
 
@@ -257,7 +263,7 @@ UI and AI explanations are Vietnamese-first. Czech terms appear where required b
 1. Create `lib/features/<module>/screens/<name>_screen.dart`
 2. Add route constant to `lib/core/router/app_routes.dart`
 3. Register `GoRoute` in `lib/core/router/app_router.dart`
-4. Update `docs/product/screen-map.md`
+4. Update [`docs/product/screen-map.md`](docs/product/screen-map.md)
 
 ### Adding a Provider
 
@@ -289,5 +295,4 @@ Lesson block completion should be idempotent. Avoid re-writing `user_progress` f
 
 ### Documentation Rule
 
-If behavior changes in routing, AI flows, progress sync, Edge Function payloads, or Supabase schemas, update the matching files in `docs/product/`.
-
+If behavior changes in routing, AI flows, progress sync, Edge Function payloads, or Supabase schemas, update the matching files in [`docs/product/`](docs/product/).
