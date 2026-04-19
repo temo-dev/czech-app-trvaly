@@ -50,8 +50,7 @@ class ModuleDetailScreen extends ConsumerWidget {
           child: SafeArea(
             bottom: false,
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(
                 children: [
                   IconButton(
@@ -225,8 +224,8 @@ class _HeroCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(AppRadius.full),
@@ -328,6 +327,7 @@ class _LessonCard extends StatelessWidget {
   bool get _isCompleted => lesson.status == LessonStatus.completed;
   bool get _isInProgress => lesson.status == LessonStatus.inProgress;
   bool get _isLocked => lesson.status == LessonStatus.locked;
+  bool get _canReplay => lesson.canReplay;
 
   @override
   Widget build(BuildContext context) {
@@ -399,9 +399,8 @@ class _LessonCard extends StatelessWidget {
                     Text(
                       '${lesson.orderIndex + 1}. ${lesson.title}',
                       style: AppTypography.bodyMedium.copyWith(
-                        fontWeight: _isInProgress
-                            ? FontWeight.w700
-                            : FontWeight.w600,
+                        fontWeight:
+                            _isInProgress ? FontWeight.w700 : FontWeight.w600,
                         color: _isLocked
                             ? AppColors.onBackground.withOpacity(0.7)
                             : AppColors.onBackground,
@@ -425,18 +424,34 @@ class _LessonCard extends StatelessWidget {
                                 .withOpacity(_isLocked ? 0.7 : 1),
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        Text(
+                          '${lesson.completedBlockCount}/${lesson.totalBlockCount} blocks',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.onSurfaceVariant
+                                .withOpacity(_isLocked ? 0.7 : 1),
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
               // Trailing
-              if (_isCompleted)
-                Text(
-                  'XONG',
-                  style: AppTypography.labelUppercase.copyWith(
-                    color: AppColors.primary,
-                    fontSize: 10,
+              if (_isCompleted && _canReplay)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                  ),
+                  child: Text(
+                    'HỌC LẠI',
+                    style: AppTypography.labelUppercase.copyWith(
+                      color: AppColors.primary,
+                      fontSize: 9,
+                    ),
                   ),
                 )
               else if (_isInProgress)

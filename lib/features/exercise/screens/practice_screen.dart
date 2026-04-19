@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:app_czech/core/supabase/supabase_config.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
@@ -25,11 +26,15 @@ class PracticeScreen extends ConsumerStatefulWidget {
     required this.exerciseId,
     this.lessonId,
     this.lessonBlockId,
+    this.courseId,
+    this.moduleId,
   });
 
   final String exerciseId;
   final String? lessonId;
   final String? lessonBlockId;
+  final String? courseId;
+  final String? moduleId;
 
   @override
   ConsumerState<PracticeScreen> createState() => _PracticeScreenState();
@@ -127,6 +132,8 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
     if (_answer == null || _isSubmitting) return;
 
     final correct = _evaluate(question, _answer!);
+    final xpAwarded =
+        correct ? (question.points > 0 ? question.points : 10) : 0;
 
     setState(() {
       _isSubmitting = true;
@@ -134,8 +141,9 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
     });
 
     await Future.wait([
-      _handleXp(question, correct),
-      _markComplete(correct),
+      _handleXp(xpAwarded),
+      _recordAttempt(correct, xpAwarded),
+      _markComplete(),
     ]);
 
     if (!mounted) return;
@@ -180,21 +188,48 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
     }
   }
 
-  Future<void> _handleXp(Question question, bool correct) async {
-    if (!correct) return;
-    final xp = question.points > 0 ? question.points : 10;
-    await awardXp(ref, xp);
-    if (mounted) setState(() => _xpAwarded = xp);
+  Future<void> _handleXp(int xpAwarded) async {
+    if (xpAwarded <= 0) return;
+    await awardXp(ref, xpAwarded);
+    if (mounted) setState(() => _xpAwarded = xpAwarded);
   }
 
-  Future<void> _markComplete(bool correct) async {
+  Future<void> _recordAttempt(bool correct, int xpAwarded) async {
+    final userId = supabase.auth.currentUser?.id;
+    final answer = _answer;
+    if (userId == null || answer == null) return;
+
+    await supabase.from('exercise_attempts').insert({
+      'exercise_id': widget.exerciseId,
+      'user_id': userId,
+      'lesson_block_id': widget.lessonBlockId,
+      'answer': answer.toJson(),
+      'is_correct': correct,
+      'xp_awarded': xpAwarded,
+      'attempted_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> _markComplete() async {
     final lessonId = widget.lessonId;
     final blockId = widget.lessonBlockId;
-    if (lessonId == null || blockId == null) return;
+    final courseId = widget.courseId;
+    final moduleId = widget.moduleId;
+    if (lessonId == null ||
+        blockId == null ||
+        courseId == null ||
+        moduleId == null) {
+      return;
+    }
 
     await markBlockComplete(lessonId: lessonId, lessonBlockId: blockId);
     await updateActivityStreak(ref);
-    ref.invalidate(lessonDetailProvider(lessonId));
+    refreshCourseProgressProviders(
+      ref,
+      courseId: courseId,
+      moduleId: moduleId,
+      lessonId: lessonId,
+    );
   }
 }
 

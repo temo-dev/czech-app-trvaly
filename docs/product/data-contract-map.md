@@ -290,7 +290,17 @@ Indexes: `idx_exercise_attempts_user`, `idx_exercise_attempts_exercise`. RLS: ow
 | completed_at | timestamptz NOT NULL | |
 | UNIQUE | (user_id, lesson_block_id) | |
 
-Indexes: `idx_user_progress_user`, `idx_user_progress_lesson`. RLS: own rows.
+Indexes: `idx_user_progress_user`, `idx_user_progress_lesson`.
+RLS:
+- `SELECT` own rows
+- `INSERT` own rows
+- `UPDATE` own rows
+- `DELETE` own rows
+
+Note:
+- Lesson/course flow uses `upsert` on `(user_id, lesson_block_id)` to mark a block complete.
+- Because `upsert` can fall through to `UPDATE` on conflict, `user_progress` needs an explicit `UPDATE` policy in addition to `INSERT`.
+- This was added in migration `20260419204926_user_progress_update_policy.sql`.
 
 ---
 
@@ -634,13 +644,15 @@ DateTime createdAt
 | Class | Key fields |
 |---|---|
 | `CourseDetail` | id, slug, title, description, skill, isPremium, modules, overallProgress, thumbnailUrl?, instructorName?, instructorBio?, durationDays |
-| `ModuleSummary` | id, courseId, title, orderIndex, lessonCount, completedCount, isLocked, description? — computed: `progressFraction` |
+| `ModuleSummary` | id, courseId, title, orderIndex, lessonCount, completedCount, status (ModuleStatus), isLocked, description? — computed: `progressFraction` |
 | `ModuleDetail` | module, courseTitle, lessons |
-| `LessonSummary` | id, moduleId, title, orderIndex, status (LessonStatus), durationMinutes |
-| `LessonDetail` | lesson, courseId, courseTitle, moduleId, moduleTitle, blocks, bonusUnlocked, bonusXpCost — computed: `completedBlockCount`, `allBlocksDone` |
+| `LessonSummary` | id, moduleId, title, orderIndex, status (LessonStatus), completedBlockCount, totalBlockCount, durationMinutes, canReplay |
+| `LessonDetail` | lesson, courseId, courseTitle, moduleId, moduleTitle, blocks, isCompleted, bonusUnlocked, bonusXpCost — computed: `completedBlockCount`, `allBlocksDone` |
 | `LessonBlock` | id, lessonId, type (BlockType), exerciseIds (List\<String\>), orderIndex, status (BlockStatus), prompt? — computed: `hasExercises` |
 
-Enums: `LessonStatus { locked, available, inProgress, completed }`, `BlockType { vocab, grammar, reading, listening, speaking, writing }`, `BlockStatus { pending, inProgress, completed }`.
+Enums: `ModuleStatus { locked, notStarted, inProgress, completed }`, `LessonStatus { locked, available, inProgress, completed }`, `BlockType { vocab, grammar, reading, listening, speaking, writing }`, `BlockStatus { pending, inProgress, completed }`.
+
+`exercise_attempts` is also written by lesson practice flows so replay history is preserved separately from `user_progress`.
 
 ---
 

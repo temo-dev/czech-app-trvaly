@@ -69,8 +69,7 @@ GoRouter appRouter(Ref ref) {
     debugLogDiagnostics: true,
     initialLocation: AppRoutes.splash,
     refreshListenable: notifier,
-    errorBuilder: (context, state) =>
-        ErrorState(message: state.error?.message),
+    errorBuilder: (context, state) => ErrorState(message: state.error?.message),
     redirect: (context, state) {
       final session = Supabase.instance.client.auth.currentSession;
       final isAuthenticated = session != null;
@@ -204,6 +203,8 @@ GoRouter appRouter(Ref ref) {
                 exerciseId: exerciseId,
                 lessonId: extra?['lessonId'] as String?,
                 lessonBlockId: extra?['lessonBlockId'] as String?,
+                courseId: extra?['courseId'] as String?,
+                moduleId: extra?['moduleId'] as String?,
               );
             },
           ),

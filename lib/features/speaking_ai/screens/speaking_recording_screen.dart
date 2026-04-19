@@ -29,6 +29,8 @@ class _SpeakingRecordingScreenState
   String _exerciseId = '';
   String _lessonId = '';
   String _lessonBlockId = '';
+  String _courseId = '';
+  String _moduleId = '';
   String _examAttemptId = '';
 
   @override
@@ -50,6 +52,8 @@ class _SpeakingRecordingScreenState
             'exerciseId': _exerciseId,
             'lessonId': _lessonId,
             'lessonBlockId': _lessonBlockId,
+            'courseId': _courseId,
+            'moduleId': _moduleId,
             'source': _lessonId.isNotEmpty
                 ? 'lesson'
                 : (_examAttemptId.isNotEmpty ? 'mock_test' : 'practice'),
@@ -68,6 +72,8 @@ class _SpeakingRecordingScreenState
     _exerciseId = extra?['exerciseId'] as String? ?? '';
     _lessonId = extra?['lessonId'] as String? ?? '';
     _lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
+    _courseId = extra?['courseId'] as String? ?? '';
+    _moduleId = extra?['moduleId'] as String? ?? '';
     _examAttemptId = extra?['examAttemptId'] as String? ?? '';
   }
 

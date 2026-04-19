@@ -3,6 +3,8 @@
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
+enum ModuleStatus { locked, notStarted, inProgress, completed }
+
 enum LessonStatus { locked, available, inProgress, completed }
 
 enum BlockType { vocab, grammar, reading, listening, speaking, writing }
@@ -51,6 +53,7 @@ class ModuleSummary {
     required this.orderIndex,
     required this.lessonCount,
     required this.completedCount,
+    required this.status,
     this.isLocked = false,
     this.description,
   });
@@ -61,11 +64,15 @@ class ModuleSummary {
   final int orderIndex;
   final int lessonCount;
   final int completedCount;
+  final ModuleStatus status;
   final bool isLocked;
   final String? description;
 
   double get progressFraction =>
       lessonCount > 0 ? completedCount / lessonCount : 0;
+
+  bool get isCompleted => status == ModuleStatus.completed;
+  bool get isInProgress => status == ModuleStatus.inProgress;
 }
 
 // ── Module detail (ModuleDetailScreen) ───────────────────────────────────────
@@ -91,7 +98,10 @@ class LessonSummary {
     required this.title,
     required this.orderIndex,
     required this.status,
+    required this.completedBlockCount,
+    required this.totalBlockCount,
     this.durationMinutes = 15,
+    this.canReplay = false,
   });
 
   final String id;
@@ -99,7 +109,12 @@ class LessonSummary {
   final String title;
   final int orderIndex;
   final LessonStatus status;
+  final int completedBlockCount;
+  final int totalBlockCount;
   final int durationMinutes;
+  final bool canReplay;
+
+  bool get isCompleted => status == LessonStatus.completed;
 }
 
 // ── Lesson detail (LessonPlayerScreen) ───────────────────────────────────────
@@ -112,6 +127,7 @@ class LessonDetail {
     required this.moduleId,
     required this.moduleTitle,
     required this.blocks,
+    required this.isCompleted,
     this.bonusUnlocked = false,
     this.bonusXpCost = 50,
   });
@@ -122,6 +138,7 @@ class LessonDetail {
   final String moduleId;
   final String moduleTitle;
   final List<LessonBlock> blocks;
+  final bool isCompleted;
   final bool bonusUnlocked;
   final int bonusXpCost;
 
@@ -170,10 +187,12 @@ class LessonBlock {
   final String id;
   final String lessonId;
   final BlockType type;
+
   /// Ordered list of exercise IDs belonging to this block.
   final List<String> exerciseIds;
   final int orderIndex;
   final BlockStatus status;
+
   /// Prompt from the first exercise — used for speaking/writing AI screens.
   final String? prompt;
 
@@ -200,4 +219,26 @@ LessonStatus lessonStatusFromCounts(int completedBlocks, int totalBlocks,
     return LessonStatus.completed;
   }
   return LessonStatus.inProgress;
+}
+
+ModuleStatus moduleStatusFromLessons(
+  List<LessonStatus> lessonStatuses, {
+  bool isLocked = false,
+}) {
+  if (isLocked) return ModuleStatus.locked;
+  if (lessonStatuses.isEmpty) return ModuleStatus.notStarted;
+  if (lessonStatuses.every((status) => status == LessonStatus.completed)) {
+    return ModuleStatus.completed;
+  }
+  if (lessonStatuses.any((status) => status == LessonStatus.inProgress)) {
+    return ModuleStatus.inProgress;
+  }
+
+  final hasCompleted =
+      lessonStatuses.any((status) => status == LessonStatus.completed);
+  final hasRemaining = lessonStatuses.any((status) =>
+      status == LessonStatus.available || status == LessonStatus.locked);
+
+  if (hasCompleted && hasRemaining) return ModuleStatus.inProgress;
+  return ModuleStatus.notStarted;
 }

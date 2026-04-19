@@ -133,6 +133,21 @@ Key methods: `answerQuestion(globalIndex, QuestionAnswer)`, `flagQuestion(global
 | `moduleDetailProvider` | `AsyncNotifier<ModuleDetail>` | Module with lesson list (arg) |
 | `lessonDetailProvider` | `AsyncNotifier<LessonDetail>` | Lesson with blocks + exercises (arg) |
 
+Helpers in the same file:
+- `markBlockComplete(lessonId, lessonBlockId)` — upsert `user_progress`
+- `resetLessonProgress(lessonId)` — delete current user's `user_progress` rows for one lesson so it can be replayed
+- `refreshCourseProgressProviders(courseId, moduleId, lessonId)` — invalidates lesson/module/course/dashboard progress state together
+
+Operational note:
+- `markBlockComplete` depends on `user_progress` having `UPDATE` RLS permission because it uses `upsert` with conflict target `(user_id, lesson_block_id)`.
+- Speaking/Writing feedback screens only sync lesson progress after AI result reaches `ready`; progress sync is wrapped defensively so an RLS/config issue does not crash the screen.
+
+Progress rules:
+- `LessonStatus.available` = 0 completed blocks
+- `LessonStatus.inProgress` = partial completed blocks
+- `LessonStatus.completed` = all blocks completed
+- `ModuleStatus.inProgress` only appears when the module has real progress, not just because another module is active
+
 ---
 
 ### `exercise` (Lesson Feedback) — `lib/features/exercise/providers/lesson_feedback_provider.dart`

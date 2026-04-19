@@ -135,6 +135,7 @@ class _LessonBody extends StatelessWidget {
                       blocks: blocks,
                       courseId: courseId,
                       moduleId: moduleId,
+                      lessonId: lessonId,
                     ),
                     const SizedBox(height: 32),
                   ],
@@ -159,8 +160,32 @@ class _LessonBody extends StatelessWidget {
           left: 0,
           right: 0,
           child: _BottomCta(
-            onContinue: () {
-              // Navigate to next available block or module
+            label: detail.isCompleted ? 'Học lại bài này' : 'Tiếp tục bài học',
+            icon: detail.isCompleted
+                ? Icons.refresh_rounded
+                : Icons.play_arrow_rounded,
+            onContinue: () async {
+              if (detail.isCompleted) {
+                final shouldReplay = await _showReplayDialog(context);
+                if (shouldReplay != true) return;
+                await resetLessonProgress(lessonId: lessonId);
+                refreshCourseProgressProviders(
+                  ref,
+                  courseId: courseId,
+                  moduleId: moduleId,
+                  lessonId: lessonId,
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Đã reset tiến độ bài học. Bạn có thể học lại từ đầu.'),
+                    ),
+                  );
+                }
+                return;
+              }
+
               context.push(
                 AppRoutes.moduleDetailPath(courseId, moduleId),
               );
@@ -320,18 +345,25 @@ class _LearningBlocksGrid extends StatelessWidget {
     required this.blocks,
     required this.courseId,
     required this.moduleId,
+    required this.lessonId,
   });
 
   final List<LessonBlock> blocks;
   final String courseId;
   final String moduleId;
+  final String lessonId;
 
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.sizeOf(context).width >= 600;
 
     return isWide
-        ? _TwoColGrid(blocks: blocks, courseId: courseId, moduleId: moduleId)
+        ? _TwoColGrid(
+            blocks: blocks,
+            courseId: courseId,
+            moduleId: moduleId,
+            lessonId: lessonId,
+          )
         : Column(
             children: blocks
                 .map((b) => Padding(
@@ -340,6 +372,7 @@ class _LearningBlocksGrid extends StatelessWidget {
                         block: b,
                         courseId: courseId,
                         moduleId: moduleId,
+                        lessonId: lessonId,
                       ),
                     ))
                 .toList(),
@@ -349,10 +382,14 @@ class _LearningBlocksGrid extends StatelessWidget {
 
 class _TwoColGrid extends StatelessWidget {
   const _TwoColGrid(
-      {required this.blocks, required this.courseId, required this.moduleId});
+      {required this.blocks,
+      required this.courseId,
+      required this.moduleId,
+      required this.lessonId});
   final List<LessonBlock> blocks;
   final String courseId;
   final String moduleId;
+  final String lessonId;
 
   @override
   Widget build(BuildContext context) {
@@ -367,12 +404,18 @@ class _TwoColGrid extends StatelessWidget {
             children: [
               Expanded(
                   child: _BlockCard(
-                      block: left, courseId: courseId, moduleId: moduleId)),
+                      block: left,
+                      courseId: courseId,
+                      moduleId: moduleId,
+                      lessonId: lessonId)),
               if (right != null) ...[
                 const SizedBox(width: 16),
                 Expanded(
                     child: _BlockCard(
-                        block: right, courseId: courseId, moduleId: moduleId)),
+                        block: right,
+                        courseId: courseId,
+                        moduleId: moduleId,
+                        lessonId: lessonId)),
               ] else
                 const Expanded(child: SizedBox()),
             ],
@@ -386,11 +429,15 @@ class _TwoColGrid extends StatelessWidget {
 
 class _BlockCard extends StatelessWidget {
   const _BlockCard(
-      {required this.block, required this.courseId, required this.moduleId});
+      {required this.block,
+      required this.courseId,
+      required this.moduleId,
+      required this.lessonId});
 
   final LessonBlock block;
   final String courseId;
   final String moduleId;
+  final String lessonId;
 
   bool get _isCompleted => block.status == BlockStatus.completed;
 
@@ -438,6 +485,8 @@ class _BlockCard extends StatelessWidget {
               'exerciseId': firstExerciseId,
               'lessonId': block.lessonId,
               'lessonBlockId': block.id,
+              'courseId': courseId,
+              'moduleId': moduleId,
             },
           );
           return;
@@ -450,6 +499,8 @@ class _BlockCard extends StatelessWidget {
               'questionId': firstExerciseId,
               'lessonId': block.lessonId,
               'lessonBlockId': block.id,
+              'courseId': courseId,
+              'moduleId': moduleId,
             },
           );
           return;
@@ -463,7 +514,15 @@ class _BlockCard extends StatelessWidget {
           BlockType.vocab => AppRoutes.flashcardPracticePath(firstExerciseId),
           _ => AppRoutes.practiceExercisePath(firstExerciseId),
         };
-        context.push(route);
+        context.push(
+          route,
+          extra: {
+            'lessonId': lessonId,
+            'lessonBlockId': block.id,
+            'courseId': courseId,
+            'moduleId': moduleId,
+          },
+        );
       },
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -660,8 +719,15 @@ class _BonusSection extends StatelessWidget {
 // ── Bottom CTA ────────────────────────────────────────────────────────────────
 
 class _BottomCta extends StatelessWidget {
-  const _BottomCta({required this.onContinue});
+  const _BottomCta({
+    required this.onContinue,
+    required this.label,
+    required this.icon,
+  });
+
   final VoidCallback onContinue;
+  final String label;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -699,7 +765,7 @@ class _BottomCta extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Tiếp tục bài học',
+                  label,
                   style: AppTypography.labelMedium.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -707,8 +773,7 @@ class _BottomCta extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.play_arrow_rounded,
-                    color: Colors.white, size: 22),
+                Icon(icon, color: Colors.white, size: 22),
               ],
             ),
           ),
@@ -716,4 +781,26 @@ class _BottomCta extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<bool?> _showReplayDialog(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Học lại bài này?'),
+      content: const Text(
+        'Tiến độ hoàn thành của bài sẽ được reset để bạn làm lại từ đầu. XP đã nhận trước đó vẫn được giữ nguyên.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Reset và học lại'),
+        ),
+      ],
+    ),
+  );
 }

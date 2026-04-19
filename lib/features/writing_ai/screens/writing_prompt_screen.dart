@@ -27,6 +27,8 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
   String _questionId = '';
   String _lessonId = '';
   String _lessonBlockId = '';
+  String _courseId = '';
+  String _moduleId = '';
   String _examAttemptId = '';
 
   static const _minWords = 30;
@@ -40,6 +42,8 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
     _questionId = extra?['questionId'] as String? ?? '';
     _lessonId = extra?['lessonId'] as String? ?? '';
     _lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
+    _courseId = extra?['courseId'] as String? ?? '';
+    _moduleId = extra?['moduleId'] as String? ?? '';
     _examAttemptId = extra?['examAttemptId'] as String? ?? '';
   }
 
@@ -72,6 +76,8 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
             'questionId': _questionId,
             'lessonId': _lessonId,
             'lessonBlockId': _lessonBlockId,
+            'courseId': _courseId,
+            'moduleId': _moduleId,
             'source': _lessonId.isNotEmpty ? 'lesson' : 'practice',
             'originalText': _controller.text,
           },

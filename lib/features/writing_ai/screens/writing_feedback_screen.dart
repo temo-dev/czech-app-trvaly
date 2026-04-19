@@ -25,6 +25,8 @@ class WritingFeedbackScreen extends ConsumerWidget {
     final questionId = extra?['questionId'] as String? ?? '';
     final lessonId = extra?['lessonId'] as String? ?? '';
     final lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
+    final courseId = extra?['courseId'] as String? ?? '';
+    final moduleId = extra?['moduleId'] as String? ?? '';
     final source = extra?['source'] as String? ??
         (lessonId.isNotEmpty ? 'lesson' : 'practice');
 
@@ -45,9 +47,16 @@ class WritingFeedbackScreen extends ConsumerWidget {
       next.whenData((response) {
         if (response.isReady &&
             lessonId.isNotEmpty &&
-            lessonBlockId.isNotEmpty) {
-          markBlockComplete(lessonId: lessonId, lessonBlockId: lessonBlockId);
-          ref.invalidate(lessonDetailProvider(lessonId));
+            lessonBlockId.isNotEmpty &&
+            courseId.isNotEmpty &&
+            moduleId.isNotEmpty) {
+          _syncLessonProgress(
+            ref,
+            courseId: courseId,
+            moduleId: moduleId,
+            lessonId: lessonId,
+            lessonBlockId: lessonBlockId,
+          );
         }
       });
     });
@@ -140,6 +149,30 @@ class WritingFeedbackScreen extends ConsumerWidget {
       ),
       body: child,
     );
+  }
+}
+
+Future<void> _syncLessonProgress(
+  WidgetRef ref, {
+  required String courseId,
+  required String moduleId,
+  required String lessonId,
+  required String lessonBlockId,
+}) async {
+  try {
+    await markBlockComplete(
+      lessonId: lessonId,
+      lessonBlockId: lessonBlockId,
+    );
+    refreshCourseProgressProviders(
+      ref,
+      courseId: courseId,
+      moduleId: moduleId,
+      lessonId: lessonId,
+    );
+  } catch (error, stackTrace) {
+    debugPrint('Failed to sync writing lesson progress: $error');
+    debugPrintStack(stackTrace: stackTrace);
   }
 }
 

@@ -1,7 +1,38 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:app_czech/core/supabase/supabase_config.dart';
 import 'package:app_czech/features/course/models/course_models.dart';
+import 'package:app_czech/features/dashboard/providers/dashboard_provider.dart';
 import 'package:app_czech/shared/providers/auth_provider.dart';
+
+class _LessonProgressSnapshot {
+  const _LessonProgressSnapshot({
+    required this.lessonId,
+    required this.moduleId,
+    required this.completedBlockCount,
+    required this.totalBlockCount,
+    required this.status,
+  });
+
+  final String lessonId;
+  final String moduleId;
+  final int completedBlockCount;
+  final int totalBlockCount;
+  final LessonStatus status;
+
+  bool get isCompleted => status == LessonStatus.completed;
+}
+
+class _ModuleProgressSnapshot {
+  const _ModuleProgressSnapshot({
+    required this.lessonCount,
+    required this.completedCount,
+    required this.status,
+  });
+
+  final int lessonCount;
+  final int completedCount;
+  final ModuleStatus status;
+}
 
 // ── Course detail ─────────────────────────────────────────────────────────────
 
@@ -9,7 +40,6 @@ import 'package:app_czech/shared/providers/auth_provider.dart';
 /// courseId can be a UUID or slug — tries both.
 final courseDetailProvider = FutureProvider.autoDispose
     .family<CourseDetail, String>((ref, courseId) async {
-  // Try by id, then by slug
   final courseRaw = await _fetchCourse(courseId);
   if (courseRaw == null) throw Exception('Không tìm thấy khóa học.');
 
@@ -23,83 +53,70 @@ final courseDetailProvider = FutureProvider.autoDispose
       .eq('course_id', actualId)
       .order('order_index');
 
-  final moduleIds =
-      (modulesRaw as List).map((m) => (m as Map)['id'] as String).toList();
+  final modules = _toMapList(modulesRaw);
+  final moduleIds = modules.map((module) => module['id'] as String).toList();
+  final moduleLockById = {
+    for (final module in modules)
+      module['id'] as String: module['is_locked'] as bool? ?? false,
+  };
 
-  // Fetch lesson counts per module
-  final Map<String, int> lessonCountPerModule = {};
-  final Map<String, int> completedCountPerModule = {};
+  final lessons = moduleIds.isEmpty
+      ? <Map<String, dynamic>>[]
+      : _toMapList(await supabase
+          .from('lessons')
+          .select('id, module_id')
+          .inFilter('module_id', moduleIds));
+  final lessonIds = lessons.map((lesson) => lesson['id'] as String).toList();
 
-  if (moduleIds.isNotEmpty) {
-    final lessonsRaw = await supabase
-        .from('lessons')
-        .select('id, module_id')
-        .inFilter('module_id', moduleIds);
+  final blocks = lessonIds.isEmpty
+      ? <Map<String, dynamic>>[]
+      : _toMapList(await supabase
+          .from('lesson_blocks')
+          .select('id, lesson_id')
+          .inFilter('lesson_id', lessonIds));
 
-    for (final l in (lessonsRaw as List)) {
-      final lm = Map<String, dynamic>.from(l as Map);
-      final mId = lm['module_id'] as String;
-      lessonCountPerModule[mId] = (lessonCountPerModule[mId] ?? 0) + 1;
-    }
+  final userId = supabase.auth.currentUser?.id;
+  final progressRows = userId == null || lessonIds.isEmpty
+      ? <Map<String, dynamic>>[]
+      : _toMapList(await supabase
+          .from('user_progress')
+          .select('lesson_id, lesson_block_id')
+          .eq('user_id', userId)
+          .inFilter('lesson_id', lessonIds));
 
-    // Fetch user's completed lessons
-    final userId = supabase.auth.currentUser?.id;
-    if (userId != null) {
-      final lessonIds =
-          (lessonsRaw).map((l) => (l as Map)['id'] as String).toList();
-      if (lessonIds.isNotEmpty) {
-        final progressRaw = await supabase
-            .from('user_progress')
-            .select('lesson_id, lesson_block_id')
-            .eq('user_id', userId)
-            .inFilter('lesson_id', lessonIds);
+  final lessonSnapshots = _buildLessonProgressSnapshots(
+    lessons: lessons,
+    blocks: blocks,
+    progressRows: progressRows,
+    moduleLockById: moduleLockById,
+  );
 
-        // A lesson is "complete" when it has ≥ 6 block entries
-        final Map<String, Set<String>> blocksPerLesson = {};
-        for (final p in (progressRaw as List)) {
-          final pm = Map<String, dynamic>.from(p as Map);
-          final lId = pm['lesson_id'] as String;
-          final bId = pm['lesson_block_id'] as String;
-          blocksPerLesson.putIfAbsent(lId, () => {}).add(bId);
-        }
-
-        // Map lesson → module
-        final Map<String, String> lessonToModule = {};
-        for (final l in lessonsRaw) {
-          final lm2 = Map<String, dynamic>.from(l as Map);
-          lessonToModule[lm2['id'] as String] = lm2['module_id'] as String;
-        }
-
-        for (final entry in blocksPerLesson.entries) {
-          if (entry.value.length >= 6) {
-            final mId = lessonToModule[entry.key];
-            if (mId != null) {
-              completedCountPerModule[mId] =
-                  (completedCountPerModule[mId] ?? 0) + 1;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  final modules = (modulesRaw as List).asMap().entries.map((e) {
+  final modulesData = modules.asMap().entries.map((e) {
     final mm = Map<String, dynamic>.from(e.value as Map);
     final mId = mm['id'] as String;
+    final moduleLessons = lessonSnapshots.values
+        .where((lesson) => lesson.moduleId == mId)
+        .toList();
+    final progress = _buildModuleProgressSnapshot(
+      lessons: moduleLessons,
+      isLocked: mm['is_locked'] as bool? ?? false,
+    );
+
     return ModuleSummary(
       id: mId,
       courseId: actualId,
       title: mm['title'] as String,
       orderIndex: mm['order_index'] as int? ?? e.key,
-      lessonCount: lessonCountPerModule[mId] ?? 0,
-      completedCount: completedCountPerModule[mId] ?? 0,
+      lessonCount: progress.lessonCount,
+      completedCount: progress.completedCount,
+      status: progress.status,
       isLocked: mm['is_locked'] as bool? ?? false,
       description: mm['description'] as String?,
     );
   }).toList();
 
-  final total = modules.fold<int>(0, (s, m) => s + m.lessonCount);
-  final done = modules.fold<int>(0, (s, m) => s + m.completedCount);
+  final total = modulesData.fold<int>(0, (s, m) => s + m.lessonCount);
+  final done = modulesData.fold<int>(0, (s, m) => s + m.completedCount);
 
   return CourseDetail(
     id: actualId,
@@ -109,7 +126,7 @@ final courseDetailProvider = FutureProvider.autoDispose
     skill: course['skill'] as String? ?? '',
     isPremium: course['is_premium'] as bool? ?? false,
     thumbnailUrl: course['thumbnail_url'] as String?,
-    modules: modules,
+    modules: modulesData,
     overallProgress: total > 0 ? done / total : 0,
     instructorName: course['instructor_name'] as String?,
     instructorBio: course['instructor_bio'] as String?,
@@ -118,17 +135,10 @@ final courseDetailProvider = FutureProvider.autoDispose
 });
 
 Future<dynamic> _fetchCourse(String courseId) async {
-  final byId = await supabase
-      .from('courses')
-      .select()
-      .eq('id', courseId)
-      .maybeSingle();
+  final byId =
+      await supabase.from('courses').select().eq('id', courseId).maybeSingle();
   if (byId != null) return byId;
-  return supabase
-      .from('courses')
-      .select()
-      .eq('slug', courseId)
-      .maybeSingle();
+  return supabase.from('courses').select().eq('slug', courseId).maybeSingle();
 }
 
 // ── Module detail ─────────────────────────────────────────────────────────────
@@ -139,19 +149,19 @@ final moduleDetailProvider = FutureProvider.autoDispose
   final userId = supabase.auth.currentUser?.id;
 
   // Fetch module
-  final moduleRaw = await supabase
-      .from('modules')
-      .select()
-      .eq('id', moduleId)
-      .maybeSingle();
+  final moduleRaw =
+      await supabase.from('modules').select().eq('id', moduleId).maybeSingle();
   if (moduleRaw == null) throw Exception('Không tìm thấy module.');
 
   final module = Map<String, dynamic>.from(moduleRaw as Map);
   final courseId = module['course_id'] as String;
 
   // Fetch course title for breadcrumb
-  final courseRaw =
-      await supabase.from('courses').select('title').eq('id', courseId).single();
+  final courseRaw = await supabase
+      .from('courses')
+      .select('title')
+      .eq('id', courseId)
+      .single();
   final courseTitle = (courseRaw as Map)['title'] as String? ?? '';
 
   // Fetch lessons ordered
@@ -160,63 +170,50 @@ final moduleDetailProvider = FutureProvider.autoDispose
       .select()
       .eq('module_id', moduleId)
       .order('order_index');
-
-  // Fetch user progress block counts per lesson
-  final Map<String, int> completedBlocksPerLesson = {};
-  final Map<String, int> totalBlocksPerLesson = {};
-
-  if ((lessonsRaw as List).isNotEmpty) {
-    final lessonIds =
-        lessonsRaw.map((l) => (l as Map)['id'] as String).toList();
-
-    // Count blocks per lesson
-    final blocksRaw = await supabase
-        .from('lesson_blocks')
-        .select('id, lesson_id')
-        .inFilter('lesson_id', lessonIds);
-
-    for (final b in (blocksRaw as List)) {
-      final bm = Map<String, dynamic>.from(b as Map);
-      final lId = bm['lesson_id'] as String;
-      totalBlocksPerLesson[lId] = (totalBlocksPerLesson[lId] ?? 0) + 1;
-    }
-
-    if (userId != null) {
-      final progressRaw = await supabase
+  final lessons = _toMapList(lessonsRaw);
+  final lessonIds = lessons.map((lesson) => lesson['id'] as String).toList();
+  final blocks = lessonIds.isEmpty
+      ? <Map<String, dynamic>>[]
+      : _toMapList(await supabase
+          .from('lesson_blocks')
+          .select('id, lesson_id')
+          .inFilter('lesson_id', lessonIds));
+  final progressRows = userId == null || lessonIds.isEmpty
+      ? <Map<String, dynamic>>[]
+      : _toMapList(await supabase
           .from('user_progress')
           .select('lesson_id, lesson_block_id')
           .eq('user_id', userId)
-          .inFilter('lesson_id', lessonIds);
-
-      for (final p in (progressRaw as List)) {
-        final pm = Map<String, dynamic>.from(p as Map);
-        final lId = pm['lesson_id'] as String;
-        completedBlocksPerLesson[lId] =
-            (completedBlocksPerLesson[lId] ?? 0) + 1;
-      }
-    }
-  }
+          .inFilter('lesson_id', lessonIds));
 
   final isModuleLocked = module['is_locked'] as bool? ?? false;
+  final lessonSnapshots = _buildLessonProgressSnapshots(
+    lessons: lessons,
+    blocks: blocks,
+    progressRows: progressRows,
+    moduleLockById: {moduleId: isModuleLocked},
+  );
 
-  final lessons = (lessonsRaw as List).asMap().entries.map((e) {
+  final lessonItems = lessons.asMap().entries.map((e) {
     final lm = Map<String, dynamic>.from(e.value as Map);
     final lId = lm['id'] as String;
-    final completed = completedBlocksPerLesson[lId] ?? 0;
-    final total = totalBlocksPerLesson[lId] ?? 6;
+    final snapshot = lessonSnapshots[lId]!;
     return LessonSummary(
       id: lId,
       moduleId: moduleId,
       title: lm['title'] as String,
       orderIndex: lm['order_index'] as int? ?? e.key,
-      status: lessonStatusFromCounts(
-        completed,
-        total,
-        isLocked: isModuleLocked,
-      ),
+      status: snapshot.status,
+      completedBlockCount: snapshot.completedBlockCount,
+      totalBlockCount: snapshot.totalBlockCount,
       durationMinutes: lm['duration_minutes'] as int? ?? 15,
+      canReplay: snapshot.isCompleted,
     );
   }).toList();
+  final moduleProgress = _buildModuleProgressSnapshot(
+    lessons: lessonSnapshots.values,
+    isLocked: isModuleLocked,
+  );
 
   return ModuleDetail(
     module: ModuleSummary(
@@ -224,15 +221,14 @@ final moduleDetailProvider = FutureProvider.autoDispose
       courseId: courseId,
       title: module['title'] as String,
       orderIndex: module['order_index'] as int? ?? 0,
-      lessonCount: lessons.length,
-      completedCount: lessons
-          .where((l) => l.status == LessonStatus.completed)
-          .length,
+      lessonCount: moduleProgress.lessonCount,
+      completedCount: moduleProgress.completedCount,
+      status: moduleProgress.status,
       isLocked: isModuleLocked,
       description: module['description'] as String?,
     ),
     courseTitle: courseTitle,
-    lessons: lessons,
+    lessons: lessonItems,
   );
 });
 
@@ -244,11 +240,8 @@ final lessonDetailProvider = FutureProvider.autoDispose
   final userId = supabase.auth.currentUser?.id;
 
   // Fetch lesson
-  final lessonRaw = await supabase
-      .from('lessons')
-      .select()
-      .eq('id', lessonId)
-      .maybeSingle();
+  final lessonRaw =
+      await supabase.from('lessons').select().eq('id', lessonId).maybeSingle();
   if (lessonRaw == null) throw Exception('Không tìm thấy bài học.');
 
   final lesson = Map<String, dynamic>.from(lessonRaw as Map);
@@ -278,9 +271,8 @@ final lessonDetailProvider = FutureProvider.autoDispose
       .order('order_index');
 
   // Fetch exercises per block via junction table (includes first exercise prompt)
-  final blockIds = (blocksRaw as List)
-      .map((b) => (b as Map)['id'] as String)
-      .toList();
+  final blockIds =
+      (blocksRaw as List).map((b) => (b as Map)['id'] as String).toList();
 
   final Map<String, List<String>> exerciseIdsPerBlock = {};
   final Map<String, String?> promptPerBlock = {};
@@ -337,8 +329,8 @@ final lessonDetailProvider = FutureProvider.autoDispose
     );
   }).toList();
 
-  final allDone =
-      blocks.isNotEmpty && blocks.every((b) => b.status == BlockStatus.completed);
+  final allDone = blocks.isNotEmpty &&
+      blocks.every((b) => b.status == BlockStatus.completed);
 
   return LessonDetail(
     lesson: LessonInfo(
@@ -355,6 +347,7 @@ final lessonDetailProvider = FutureProvider.autoDispose
     moduleId: moduleId,
     moduleTitle: moduleMeta['title'] as String? ?? '',
     blocks: blocks,
+    isCompleted: allDone,
     bonusUnlocked: lesson['bonus_unlocked'] as bool? ?? allDone,
     bonusXpCost: lesson['bonus_xp_cost'] as int? ?? 50,
   );
@@ -381,6 +374,31 @@ Future<void> markBlockComplete({
     },
     onConflict: 'user_id,lesson_block_id',
   );
+}
+
+Future<void> resetLessonProgress({
+  required String lessonId,
+}) async {
+  final userId = supabase.auth.currentUser?.id;
+  if (userId == null) return;
+
+  await supabase
+      .from('user_progress')
+      .delete()
+      .eq('user_id', userId)
+      .eq('lesson_id', lessonId);
+}
+
+void refreshCourseProgressProviders(
+  WidgetRef ref, {
+  required String courseId,
+  required String moduleId,
+  required String lessonId,
+}) {
+  ref.invalidate(lessonDetailProvider(lessonId));
+  ref.invalidate(moduleDetailProvider(moduleId));
+  ref.invalidate(courseDetailProvider(courseId));
+  ref.invalidate(dashboardProvider);
 }
 
 // ── Course list (catalog) ─────────────────────────────────────────────────────
@@ -413,3 +431,66 @@ final unlockBonusProvider =
   ref.invalidate(lessonDetailProvider(lessonId));
   ref.invalidate(currentUserProvider);
 });
+
+List<Map<String, dynamic>> _toMapList(dynamic rows) {
+  return (rows as List)
+      .map((row) => Map<String, dynamic>.from(row as Map))
+      .toList();
+}
+
+Map<String, _LessonProgressSnapshot> _buildLessonProgressSnapshots({
+  required List<Map<String, dynamic>> lessons,
+  required List<Map<String, dynamic>> blocks,
+  required List<Map<String, dynamic>> progressRows,
+  required Map<String, bool> moduleLockById,
+}) {
+  final totalBlocksPerLesson = <String, int>{};
+  for (final block in blocks) {
+    final lessonId = block['lesson_id'] as String;
+    totalBlocksPerLesson[lessonId] = (totalBlocksPerLesson[lessonId] ?? 0) + 1;
+  }
+
+  final completedBlockIdsPerLesson = <String, Set<String>>{};
+  for (final row in progressRows) {
+    final lessonId = row['lesson_id'] as String;
+    final blockId = row['lesson_block_id'] as String;
+    completedBlockIdsPerLesson.putIfAbsent(lessonId, () => <String>{}).add(
+          blockId,
+        );
+  }
+
+  final snapshots = <String, _LessonProgressSnapshot>{};
+  for (final lesson in lessons) {
+    final lessonId = lesson['id'] as String;
+    final moduleId = lesson['module_id'] as String;
+    final completedBlocks = completedBlockIdsPerLesson[lessonId]?.length ?? 0;
+    final totalBlocks = totalBlocksPerLesson[lessonId] ?? 0;
+    snapshots[lessonId] = _LessonProgressSnapshot(
+      lessonId: lessonId,
+      moduleId: moduleId,
+      completedBlockCount: completedBlocks,
+      totalBlockCount: totalBlocks,
+      status: lessonStatusFromCounts(
+        completedBlocks,
+        totalBlocks,
+        isLocked: moduleLockById[moduleId] ?? false,
+      ),
+    );
+  }
+  return snapshots;
+}
+
+_ModuleProgressSnapshot _buildModuleProgressSnapshot({
+  required Iterable<_LessonProgressSnapshot> lessons,
+  required bool isLocked,
+}) {
+  final lessonList = lessons.toList();
+  return _ModuleProgressSnapshot(
+    lessonCount: lessonList.length,
+    completedCount: lessonList.where((lesson) => lesson.isCompleted).length,
+    status: moduleStatusFromLessons(
+      lessonList.map((lesson) => lesson.status).toList(),
+      isLocked: isLocked,
+    ),
+  );
+}

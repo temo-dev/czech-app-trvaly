@@ -111,8 +111,8 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **File**: `lib/features/course/screens/module_detail_screen.dart`
 **Provider**: `moduleDetailProvider`
 **States**: `loading`, `success`, `error`
-**UI**: module header card, lesson list (status badges: locked/available/in-progress/completed)
-**Actions**: tap available lesson → `/app/courses/.../lessons/:lessonId`
+**UI**: module header card, lesson list (status badges: locked/available/in-progress/completed), block progress counts, replay badge for completed lessons
+**Actions**: tap available/in-progress/completed lesson → `/app/courses/.../lessons/:lessonId`
 
 ---
 
@@ -121,8 +121,8 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **Provider**: `lessonDetailProvider`, `exerciseSessionProvider`
 **States**: `loading`, `active`, `blockComplete`, `allComplete`, `error`
 **UI**: lesson header card, block cards (vocab/grammar/reading/listening/speaking/writing), exercise progress footer
-**Special**: hides `AppShell` bottom nav. On completion: `awardXp()` + `updateActivityStreak()` + marks `user_progress` rows.
-**Actions**: "Mở bài thưởng" (if bonus available) → `/app/unlock-bonus/:lessonId`
+**Special**: hides `AppShell` bottom nav. Every block flow can mark `user_progress`; completed lessons can be reset and replayed.
+**Actions**: normal CTA → module detail, completed CTA `Học lại bài này` → reset lesson progress, "Mở bài thưởng" (if bonus available) → `/app/unlock-bonus/:lessonId`
 
 ---
 

@@ -7,7 +7,6 @@ import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/features/course/models/course_models.dart';
 import 'package:app_czech/features/course/providers/course_providers.dart';
-import 'package:app_czech/shared/widgets/app_button.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
@@ -162,10 +161,10 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pct = (course.overallProgress * 100).round();
-    final completedLessons = course.modules
-        .fold(0, (sum, m) => sum + m.completedCount);
-    final totalLessons = course.modules
-        .fold(0, (sum, m) => sum + m.lessonCount);
+    final completedLessons =
+        course.modules.fold(0, (sum, m) => sum + m.completedCount);
+    final totalLessons =
+        course.modules.fold(0, (sum, m) => sum + m.lessonCount);
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -244,10 +243,11 @@ class _BentoGrid extends StatelessWidget {
 
   ModuleSummary? get _activeModule {
     for (final m in course.modules) {
-      if (!m.isLocked && m.completedCount > 0 &&
-          m.completedCount < m.lessonCount) return m;
+      if (!m.isLocked && m.status == ModuleStatus.inProgress) return m;
     }
-    // Fallback: first unlocked module
+    for (final m in course.modules) {
+      if (!m.isLocked && m.status != ModuleStatus.completed) return m;
+    }
     for (final m in course.modules) {
       if (!m.isLocked) return m;
     }
@@ -296,10 +296,19 @@ class _CtaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final moduleNum = activeModule != null
-        ? activeModule!.orderIndex + 1
-        : 1;
+    final moduleNum = activeModule != null ? activeModule!.orderIndex + 1 : 1;
     final moduleTitle = activeModule?.title ?? 'Bắt đầu học';
+    final isInProgress = activeModule?.status == ModuleStatus.inProgress;
+    final badgeLabel = isInProgress
+        ? 'ĐANG HỌC: MODULE $moduleNum'
+        : 'SẴN SÀNG: MODULE $moduleNum';
+    final headline = isInProgress
+        ? 'Tiếp tục học: $moduleTitle'
+        : 'Bắt đầu học: $moduleTitle';
+    final actionLabel = isInProgress ? 'Tiếp tục học ngay' : 'Bắt đầu học ngay';
+    final statusText = isInProgress
+        ? 'Bạn đã hoàn thành ${(activeModule?.progressFraction ?? 0) * 100 ~/ 1}% module này. Tiếp tục để mở rộng tiến độ thật của khóa học.'
+        : 'Module này chưa có tiến độ. Bạn có thể bắt đầu từ bài đầu tiên bất cứ lúc nào.';
 
     return Container(
       padding: const EdgeInsets.all(32),
@@ -331,14 +340,14 @@ class _CtaCard extends StatelessWidget {
             children: [
               // Badge
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Text(
-                  'ĐANG HỌC: MODULE $moduleNum',
+                  badgeLabel,
                   style: AppTypography.labelUppercase.copyWith(
                     color: Colors.white,
                   ),
@@ -346,7 +355,7 @@ class _CtaCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'Tiếp tục học: $moduleTitle',
+                headline,
                 style: AppTypography.headlineMedium.copyWith(
                   color: Colors.white,
                   fontSize: 28,
@@ -357,7 +366,7 @@ class _CtaCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Bạn đã hoàn thành ${(activeModule?.progressFraction ?? 0) * 100 ~/ 1}% module này. Cố gắng hoàn thành thêm để mở khóa module tiếp theo!',
+                statusText,
                 style: AppTypography.bodyMedium.copyWith(
                   color: Colors.white.withOpacity(0.8),
                   height: 1.5,
@@ -387,7 +396,7 @@ class _CtaCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Bắt đầu học ngay',
+                          actionLabel,
                           style: AppTypography.labelMedium.copyWith(
                             color: AppColors.surface,
                             fontWeight: FontWeight.w700,
@@ -461,21 +470,24 @@ class _GoalCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                  width: 32, height: 4,
+                  width: 32,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   )),
               const SizedBox(width: 8),
               Container(
-                  width: 32, height: 4,
+                  width: 32,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.primary.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   )),
               const SizedBox(width: 8),
               Container(
-                  width: 32, height: 4,
+                  width: 32,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.primary.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(AppRadius.full),
@@ -509,16 +521,15 @@ class _ModuleListState extends State<_ModuleList> {
     _expandedIndex = -1;
     for (var i = 0; i < widget.course.modules.length; i++) {
       final m = widget.course.modules[i];
-      if (!m.isLocked && m.completedCount > 0 &&
-          m.completedCount < m.lessonCount) {
+      if (!m.isLocked && m.status == ModuleStatus.inProgress) {
         _expandedIndex = i;
         break;
       }
     }
     if (_expandedIndex < 0) {
-      // Expand first unlocked module
       for (var i = 0; i < widget.course.modules.length; i++) {
-        if (!widget.course.modules[i].isLocked) {
+        if (!widget.course.modules[i].isLocked &&
+            widget.course.modules[i].status != ModuleStatus.completed) {
           _expandedIndex = i;
           break;
         }
@@ -584,24 +595,19 @@ class _ModuleCard extends StatelessWidget {
   final bool isExpanded;
   final VoidCallback onTap;
 
-  bool get _isCompleted =>
-      module.lessonCount > 0 &&
-      module.completedCount >= module.lessonCount;
-
-  bool get _isActive =>
-      !module.isLocked &&
-      module.completedCount > 0 &&
-      !_isCompleted;
+  bool get _isCompleted => module.status == ModuleStatus.completed;
+  bool get _isActive => module.status == ModuleStatus.inProgress;
 
   @override
   Widget build(BuildContext context) {
     final status = module.isLocked
         ? 'Đang khóa'
-        : _isCompleted
-            ? 'Hoàn thành'
-            : _isActive
-                ? 'Đang học'
-                : 'Chưa bắt đầu';
+        : switch (module.status) {
+            ModuleStatus.completed => 'Hoàn thành',
+            ModuleStatus.inProgress => 'Đang học',
+            ModuleStatus.notStarted => 'Chưa bắt đầu',
+            ModuleStatus.locked => 'Đang khóa',
+          };
 
     return Opacity(
       opacity: module.isLocked ? 0.7 : 1.0,
@@ -609,14 +615,14 @@ class _ModuleCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: _isActive
               ? Colors.white
-              : AppColors.surfaceContainerLow.withOpacity(
-                  module.isLocked ? 0.5 : 1.0),
+              : AppColors.surfaceContainerLow
+                  .withOpacity(module.isLocked ? 0.5 : 1.0),
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
             color: _isActive
                 ? AppColors.primary.withOpacity(0.2)
-                : AppColors.outlineVariant.withOpacity(
-                    module.isLocked ? 0.2 : 0.3),
+                : AppColors.outlineVariant
+                    .withOpacity(module.isLocked ? 0.2 : 0.3),
             width: _isActive ? 2.0 : 1.0,
           ),
           boxShadow: _isActive
@@ -682,8 +688,7 @@ class _ModuleCard extends StatelessWidget {
                             style: AppTypography.titleSmall.copyWith(
                               fontSize: 17,
                               color: module.isLocked
-                                  ? AppColors.onSurfaceVariant
-                                      .withOpacity(0.6)
+                                  ? AppColors.onSurfaceVariant.withOpacity(0.6)
                                   : AppColors.onBackground,
                             ),
                           ),
@@ -747,7 +752,8 @@ class _LessonTileList extends StatelessWidget {
     return Column(
       children: List.generate(module.lessonCount, (i) {
         final isCompleted = i < module.completedCount;
-        final isActive = i == module.completedCount;
+        final isActive = module.status == ModuleStatus.inProgress &&
+            i == module.completedCount;
 
         return _LessonTile(
           number: i + 1,

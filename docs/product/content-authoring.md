@@ -297,6 +297,13 @@ VALUES (gen_random_uuid(), 'Tên đề mới', 60, true);
 
 Không cần xoá gì — chỉ cần INSERT course + modules + lessons + exercises + blocks vào cuối migration mới.
 
+### Lưu ý về progress khi sửa lesson flow
+
+- `user_progress` được ghi bằng `upsert` theo key `(user_id, lesson_block_id)` để đánh dấu block đã hoàn thành.
+- Vì vậy nếu reset hoặc deploy schema ở môi trường mới, cần đảm bảo bảng `user_progress` có đủ RLS policy cho `UPDATE`, không chỉ `INSERT`.
+- Migration đã thêm policy này là: `20260419204926_user_progress_update_policy.sql`.
+- Nếu thiếu migration trên, speaking/writing hoặc lesson replay flow có thể log lỗi `42501 new row violates row-level security policy` khi đánh dấu tiến độ.
+
 ---
 
 ## Nội dung hiện tại (tính đến 2026-04-21)
