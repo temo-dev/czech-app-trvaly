@@ -520,14 +520,19 @@ class _CourseProgressCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                course.courseTitle,
-                style: AppTypography.headlineSmall.copyWith(
-                  color: AppColors.onBackground,
-                  fontSize: 22,
-                  fontStyle: FontStyle.normal,
+              Expanded(
+                child: Text(
+                  course.courseTitle,
+                  style: AppTypography.headlineSmall.copyWith(
+                    color: AppColors.onBackground,
+                    fontSize: 22,
+                    fontStyle: FontStyle.normal,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '${(progress * 100).round()}%',
                 style: AppTypography.titleMedium.copyWith(
