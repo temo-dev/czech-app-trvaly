@@ -108,6 +108,7 @@ class WritingSessionState {
 Future<String?> submitWritingAttempt({
   required String text,
   required String questionId,
+  String? exerciseId,
   String? lessonId,
   String? examAttemptId,
 }) async {
@@ -116,7 +117,9 @@ Future<String?> submitWritingAttempt({
       'writing-submit',
       body: {
         'text': text,
-        'question_id': questionId,
+        if (questionId.isNotEmpty) 'question_id': questionId,
+        if (exerciseId != null && exerciseId.isNotEmpty)
+          'exercise_id': exerciseId,
         if (lessonId != null && lessonId.isNotEmpty) 'lesson_id': lessonId,
         if (examAttemptId != null) 'exam_attempt_id': examAttemptId,
       },
@@ -139,6 +142,7 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
   Future<void> submitWriting({
     required String text,
     required String questionId,
+    String? exerciseId,
     required String lessonId,
     String? examAttemptId,
   }) async {
@@ -151,6 +155,7 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
       attemptId = await submitWritingAttempt(
         text: text,
         questionId: questionId,
+        exerciseId: exerciseId,
         lessonId: lessonId,
         examAttemptId: examAttemptId,
       );

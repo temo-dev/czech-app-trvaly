@@ -23,6 +23,7 @@ class WritingFeedbackScreen extends ConsumerWidget {
     final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     final attemptId = extra?['attemptId'] as String?;
     final questionId = extra?['questionId'] as String? ?? '';
+    final exerciseId = extra?['exerciseId'] as String? ?? '';
     final lessonId = extra?['lessonId'] as String? ?? '';
     final lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
     final courseId = extra?['courseId'] as String? ?? '';
@@ -37,6 +38,7 @@ class WritingFeedbackScreen extends ConsumerWidget {
     final request = AiTeacherReviewRequest(
       source: source,
       questionId: questionId,
+      exerciseId: exerciseId.isNotEmpty ? exerciseId : null,
       lessonId: lessonId.isNotEmpty ? lessonId : null,
       aiAttemptId: attemptId,
       questionType: QuestionType.writing,

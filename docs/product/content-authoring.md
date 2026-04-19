@@ -299,10 +299,14 @@ Không cần xoá gì — chỉ cần INSERT course + modules + lessons + exerci
 
 ### Lưu ý về progress khi sửa lesson flow
 
-- `user_progress` được ghi bằng `upsert` theo key `(user_id, lesson_block_id)` để đánh dấu block đã hoàn thành.
-- Vì vậy nếu reset hoặc deploy schema ở môi trường mới, cần đảm bảo bảng `user_progress` có đủ RLS policy cho `UPDATE`, không chỉ `INSERT`.
-- Migration đã thêm policy này là: `20260419204926_user_progress_update_policy.sql`.
-- Nếu thiếu migration trên, speaking/writing hoặc lesson replay flow có thể log lỗi `42501 new row violates row-level security policy` khi đánh dấu tiến độ.
+- Client hiện tại ghi `user_progress` theo cách idempotent: check row hiện có theo
+  `(user_id, lesson_block_id)`, chỉ `INSERT` khi block chưa được đánh dấu xong.
+- Cách này tránh duplicate write khi AI feedback screen rebuild hoặc ready nhiều lần.
+- `UPDATE` policy vẫn nên tồn tại ở môi trường thật để tương thích với client cũ
+  hoặc flow cũ từng dùng `upsert`.
+- Migration compatibility là: `20260419204926_user_progress_update_policy.sql`.
+- Nếu môi trường remote thiếu migration trên, các client cũ vẫn có thể log lỗi
+  `42501 new row violates row-level security policy` khi đi vào nhánh update của `upsert`.
 
 ---
 

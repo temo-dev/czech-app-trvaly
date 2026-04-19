@@ -302,7 +302,7 @@ class AiTeacherReviewRequest {
   Map<String, dynamic> toBody() {
     return {
       'source': source,
-      'question_id': questionId,
+      if (_hasText(questionId)) 'question_id': questionId,
       if (_hasText(exerciseId)) 'exercise_id': exerciseId,
       if (_hasText(lessonId)) 'lesson_id': lessonId,
       if (_hasText(examAttemptId)) 'exam_attempt_id': examAttemptId,

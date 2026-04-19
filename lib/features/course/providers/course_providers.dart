@@ -365,15 +365,20 @@ Future<void> markBlockComplete({
   final userId = supabase.auth.currentUser?.id;
   if (userId == null) return;
 
-  await supabase.from('user_progress').upsert(
-    {
-      'user_id': userId,
-      'lesson_id': lessonId,
-      'lesson_block_id': lessonBlockId,
-      'completed_at': DateTime.now().toIso8601String(),
-    },
-    onConflict: 'user_id,lesson_block_id',
-  );
+  final existing = await supabase
+      .from('user_progress')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('lesson_block_id', lessonBlockId)
+      .maybeSingle();
+  if (existing != null) return;
+
+  await supabase.from('user_progress').insert({
+    'user_id': userId,
+    'lesson_id': lessonId,
+    'lesson_block_id': lessonBlockId,
+    'completed_at': DateTime.now().toIso8601String(),
+  });
 }
 
 Future<void> resetLessonProgress({

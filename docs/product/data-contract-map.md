@@ -298,9 +298,14 @@ RLS:
 - `DELETE` own rows
 
 Note:
-- Lesson/course flow uses `upsert` on `(user_id, lesson_block_id)` to mark a block complete.
-- Because `upsert` can fall through to `UPDATE` on conflict, `user_progress` needs an explicit `UPDATE` policy in addition to `INSERT`.
-- This was added in migration `20260419204926_user_progress_update_policy.sql`.
+- Current lesson/course client flow marks a block complete idempotently:
+  `SELECT user_progress WHERE (user_id, lesson_block_id)` first, then `INSERT`
+  only when the row does not exist yet.
+- This avoids unnecessary conflict updates and prevents duplicate progress writes
+  when a feedback screen re-renders.
+- `UPDATE` policy is still present for backward compatibility and any legacy
+  client path that still uses `upsert`.
+- The compatibility migration is `20260419204926_user_progress_update_policy.sql`.
 
 ---
 
@@ -312,7 +317,7 @@ Note:
 | user_id | uuid | | FK → profiles(id) ON DELETE SET NULL; nullable (anon) |
 | guest_token | text | | Anonymous ownership token for guest reads/result polling |
 | exercise_id | uuid | | FK → exercises(id) ON DELETE SET NULL |
-| question_id | uuid | | FK → questions(id) ON DELETE SET NULL — set when submitted during mock test |
+| question_id | uuid | | FK → questions(id) ON DELETE SET NULL — used for exam/mock-test context; lesson/practice writing may leave this null and use `exercise_id` instead |
 | exam_attempt_id | uuid | | FK → exam_attempts(id) ON DELETE SET NULL — used by grade-exam to JOIN real AI score |
 | audio_key | text | | Storage path |
 | status | text NOT NULL | `'processing'` | CHECK IN ('processing','ready','error') |
@@ -785,13 +790,20 @@ Nếu request anonymous thì row `ai_speaking_attempts` được gắn `guest_to
 ---
 
 ### `writing-submit`
-**POST** `{ text, question_id, lesson_id?, exam_attempt_id? }`
+**POST** `{ text, question_id?, exercise_id?, lesson_id?, exam_attempt_id? }`
 **Response** `{ attempt_id: string }`
 
 Detects rubric_type: 'letter' (dopis/email/napište), 'form' (formulář/form), else 'essay'.
 `exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
 Poll `writing-result` for final result.
 Nếu request anonymous thì row `ai_writing_attempts` được gắn `guest_token` và `writing-result` chỉ trả cho đúng token đó.
+
+**Reference resolution rule (edge function):**
+- Mock test sends real `question_id` from `questions`.
+- Lesson/practice writing sends `exercise_id`; `question_id` can be omitted.
+- For backward compatibility, nếu client cũ gửi exercise UUID qua `question_id`,
+  edge function sẽ thử lookup `questions.id`; nếu không thấy thì tự coi đó là
+  `exercise_id` để tránh FK violation `23503`.
 
 ---
 

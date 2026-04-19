@@ -134,12 +134,17 @@ Key methods: `answerQuestion(globalIndex, QuestionAnswer)`, `flagQuestion(global
 | `lessonDetailProvider` | `AsyncNotifier<LessonDetail>` | Lesson with blocks + exercises (arg) |
 
 Helpers in the same file:
-- `markBlockComplete(lessonId, lessonBlockId)` — upsert `user_progress`
+- `markBlockComplete(lessonId, lessonBlockId)` — idempotent `SELECT` + `INSERT`
+  into `user_progress`
 - `resetLessonProgress(lessonId)` — delete current user's `user_progress` rows for one lesson so it can be replayed
 - `refreshCourseProgressProviders(courseId, moduleId, lessonId)` — invalidates lesson/module/course/dashboard progress state together
 
 Operational note:
-- `markBlockComplete` depends on `user_progress` having `UPDATE` RLS permission because it uses `upsert` with conflict target `(user_id, lesson_block_id)`.
+- `markBlockComplete` no longer relies on conflict-update semantics in the
+  current client path, so repeated ready/rebuild events do not rewrite the same
+  progress row.
+- `user_progress` still keeps an `UPDATE` policy for backward compatibility with
+  legacy clients or older flows that used `upsert`.
 - Speaking/Writing feedback screens only sync lesson progress after AI result reaches `ready`; progress sync is wrapped defensively so an RLS/config issue does not crash the screen.
 
 Progress rules:

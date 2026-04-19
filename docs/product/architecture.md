@@ -70,6 +70,7 @@ Run `make gen` after any change to `@riverpod` annotated code.
 - **Client reads**: direct Supabase PostgREST calls with RLS enforced via anon key
 - **Anonymous ownership**: client sends stable `x-guest-token` header on every Supabase request; guest-owned rows persist the same token and RLS/Edge Functions check it before read/update
 - **AI scoring writes**: service_role key inside Edge Functions only — client never holds service_role key
+- **Lesson progress writes**: current client flow marks `user_progress` idempotently (`SELECT` by `(user_id, lesson_block_id)` first, then `INSERT` only when missing) so repeated ready/rebuild events do not rewrite the same row
 - **Admin CMS**: service_role key in Next.js server-side — bypasses all RLS
 - **RPC calls**: `increment_xp`, `unlock_lesson_bonus`, `find_or_create_dm` — SECURITY DEFINER functions invoked by authenticated client
 
@@ -90,6 +91,15 @@ Client                          Edge Function              OpenAI
   │◄── { status: pending|ready|error }
   │    (poll every 3s, max 10 retries)
   │
+  │── POST writing-submit ───► resolve question_id/exercise_id
+  │                             chatComplete() ───────────► GPT-4.1-mini
+  │                             INSERT ai_writing_attempts (status: processing → ready/error)
+  │◄── { attempt_id } ─────────
+  │
+  │── POST writing-result ───► SELECT ai_writing_attempts WHERE id = attempt_id
+  │◄── { status: pending|ready|error }
+  │    (poll every 3s, max 10 retries)
+  │
   │── POST grade-exam ───────► INSERT exam_results
   │                           fire-and-forget analyze-exam()
   │                           ├─ objective questions → cache/GPT via question-feedback
@@ -101,6 +111,8 @@ Client                          Edge Function              OpenAI
 ```
 
 Czech language enforcement: if Whisper detects non-Czech OR GPT returns `is_czech: false` → all metric scores zeroed, Vietnamese explanation returned.
+
+Writing reference resolution: mock test sends real `question_id` from `questions`, while lesson/practice writing can send `exercise_id` from `exercises`. `writing-submit` normalizes these references server-side and also tolerates older clients that accidentally send an exercise UUID through `question_id`, preventing FK violation `23503` on `ai_writing_attempts.question_id`.
 
 Guest security: anonymous mock-test and AI rows (`exam_attempts`, `exam_results`, `exam_analysis`, `ai_*_attempts`, `ai_teacher_reviews`) are scoped by persisted `guest_token`. Edge Functions using service-role also re-check ownership against `user_id` or `guest_token` instead of trusting raw UUIDs.
 
@@ -126,6 +138,8 @@ Omitting this causes a 401 `UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM` before any
 Rule: one codebase, one logical flow. Web gets wider containers, not different widgets or screens.
 
 Full-screen flows that hide `AppShell` nav: lesson player, simulator question, speaking recording, speaking/writing feedback, exercise question/explanation.
+
+Subjective lesson flows (speaking/writing) only sync `user_progress` after the AI Teacher review reaches `ready`.
 
 ---
 

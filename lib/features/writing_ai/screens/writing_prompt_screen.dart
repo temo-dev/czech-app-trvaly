@@ -11,7 +11,7 @@ import 'package:app_czech/shared/widgets/responsive_page_container.dart';
 import 'package:app_czech/shared/widgets/writing_text_area.dart';
 
 /// Writing exercise screen — shows prompt + text area, submits for AI scoring.
-/// Receives [prompt], [questionId], [lessonId] via GoRouter extra.
+/// Receives prompt/question or exercise context via GoRouter extra.
 class WritingPromptScreen extends ConsumerStatefulWidget {
   const WritingPromptScreen({super.key});
 
@@ -22,9 +22,11 @@ class WritingPromptScreen extends ConsumerStatefulWidget {
 
 class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
   final _controller = TextEditingController();
+  ProviderSubscription<WritingSessionState>? _writingSubscription;
   int _wordCount = 0;
   String _prompt = '';
   String _questionId = '';
+  String _exerciseId = '';
   String _lessonId = '';
   String _lessonBlockId = '';
   String _courseId = '';
@@ -35,11 +37,39 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
   static const _maxWords = 250;
 
   @override
+  void initState() {
+    super.initState();
+    _writingSubscription = ref.listenManual<WritingSessionState>(
+      writingSessionProvider,
+      (_, next) {
+        if (!mounted || next.status != WritingFeedbackStatus.pending) return;
+        context.push(
+          AppRoutes.writingFeedback,
+          extra: {
+            'attemptId': next.attemptId,
+            'questionId': _questionId,
+            'exerciseId': _exerciseId,
+            'lessonId': _lessonId,
+            'lessonBlockId': _lessonBlockId,
+            'courseId': _courseId,
+            'moduleId': _moduleId,
+            'source': _lessonId.isNotEmpty
+                ? 'lesson'
+                : (_examAttemptId.isNotEmpty ? 'mock_test' : 'practice'),
+            'originalText': _controller.text,
+          },
+        );
+      },
+    );
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     _prompt = extra?['prompt'] as String? ?? '';
     _questionId = extra?['questionId'] as String? ?? '';
+    _exerciseId = extra?['exerciseId'] as String? ?? '';
     _lessonId = extra?['lessonId'] as String? ?? '';
     _lessonBlockId = extra?['lessonBlockId'] as String? ?? '';
     _courseId = extra?['courseId'] as String? ?? '';
@@ -49,6 +79,7 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
 
   @override
   void dispose() {
+    _writingSubscription?.close();
     _controller.dispose();
     super.dispose();
   }
@@ -63,27 +94,6 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(writingSessionProvider);
     final isSubmitting = state.status == WritingFeedbackStatus.submitting;
-
-    // Navigate to feedback screen after submission
-    ref.listen(writingSessionProvider, (_, next) {
-      if (next.status == WritingFeedbackStatus.pending ||
-          next.status == WritingFeedbackStatus.scoring ||
-          next.status == WritingFeedbackStatus.completed) {
-        context.push(
-          AppRoutes.writingFeedback,
-          extra: {
-            'attemptId': next.attemptId,
-            'questionId': _questionId,
-            'lessonId': _lessonId,
-            'lessonBlockId': _lessonBlockId,
-            'courseId': _courseId,
-            'moduleId': _moduleId,
-            'source': _lessonId.isNotEmpty ? 'lesson' : 'practice',
-            'originalText': _controller.text,
-          },
-        );
-      }
-    });
 
     final cs = Theme.of(context).colorScheme;
     final canSubmit = _wordCount >= _minWords && !isSubmitting;
@@ -187,6 +197,8 @@ class _WritingPromptScreenState extends ConsumerState<WritingPromptScreen> {
                           .submitWriting(
                             text: _controller.text,
                             questionId: _questionId,
+                            exerciseId:
+                                _exerciseId.isEmpty ? null : _exerciseId,
                             lessonId: _lessonId,
                             examAttemptId:
                                 _examAttemptId.isEmpty ? null : _examAttemptId,

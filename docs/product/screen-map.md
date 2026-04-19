@@ -242,7 +242,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **Provider**: `exerciseSessionProvider`, `isPremiumProvider`
 **States**: `loading`, `success`, `locked`
 **UI**: question prompt, text input area (1–500 chars), character counter
-**Actions**: "Nộp bài" → `writingProvider.submit()` → polls → `/app/writing/feedback`
+**Actions**: "Nộp bài" → `writingProvider.submit()` → first `pending` state pushes exactly once to `/app/writing/feedback`; lesson flow passes `exercise_id`, mock test passes `question_id + exam_attempt_id`
 
 ---
 

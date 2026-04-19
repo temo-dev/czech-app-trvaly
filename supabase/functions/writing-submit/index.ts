@@ -67,15 +67,18 @@ Deno.serve(async (req) => {
     const body = await req.json() as {
       text?: string;
       question_id?: string;
+      exercise_id?: string;
       lesson_id?: string;
       exam_attempt_id?: string;
     };
 
-    const { text, question_id, exam_attempt_id } = body;
+    const { text, question_id, exercise_id, exam_attempt_id } = body;
 
-    if (!text || !question_id) {
+    if (!text || (!question_id && !exercise_id)) {
       return new Response(
-        JSON.stringify({ error: "text and question_id are required" }),
+        JSON.stringify({
+          error: "text and question_id or exercise_id are required",
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -102,15 +105,48 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch question prompt
-    const { data: question } = await supabase
-      .from("questions")
-      .select("prompt")
-      .eq("id", question_id)
-      .maybeSingle();
+    // Determine if question_id is a real question or an exercise ID.
+    // Older lesson flows sent the exercise UUID as question_id.
+    let validQuestionId: string | null = question_id ?? null;
+    let validExerciseId: string | null = exercise_id ?? null;
 
-    const promptText =
-      (question as Record<string, unknown> | null)?.["prompt"] as string ?? "";
+    if (question_id) {
+      const { data: questionRow } = await supabase
+        .from("questions")
+        .select("id")
+        .eq("id", question_id)
+        .maybeSingle();
+      if (!questionRow) {
+        validExerciseId = validExerciseId ?? question_id;
+        validQuestionId = null;
+      } else if (validExerciseId === question_id) {
+        validExerciseId = null;
+      }
+    }
+
+    // Fetch prompt from the resolved source.
+    let promptText = "";
+    if (validQuestionId) {
+      const { data: question } = await supabase
+        .from("questions")
+        .select("prompt")
+        .eq("id", validQuestionId)
+        .maybeSingle();
+      promptText =
+        (question as Record<string, unknown> | null)?.["prompt"] as string ??
+          "";
+    } else if (validExerciseId) {
+      const { data: exercise } = await supabase
+        .from("exercises")
+        .select("content_json")
+        .eq("id", validExerciseId)
+        .maybeSingle();
+      const contentJson = (exercise as Record<string, unknown> | null)
+        ?.["content_json"] as
+          | Record<string, unknown>
+          | null;
+      promptText = String(contentJson?.["prompt"] ?? "");
+    }
     const rubricType = detectRubricType(promptText);
 
     // Insert attempt row
@@ -119,8 +155,8 @@ Deno.serve(async (req) => {
       .insert({
         user_id: userId,
         guest_token: userId == null ? guestToken : null,
-        exercise_id: null,
-        question_id: question_id ?? null,
+        exercise_id: validExerciseId,
+        question_id: validQuestionId,
         exam_attempt_id: exam_attempt_id ?? null,
         prompt_text: promptText,
         answer_text: text,

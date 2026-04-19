@@ -1,54 +1,56 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to Codex when working with code in this repository.
 
 ---
 
 ## Project
 
-**Trvalý Prep** — Vietnamese-first exam prep app for the Czech permanent residency (Trvalý pobyt) exam. Flutter Web + iOS, same codebase.
+**Trvalý Prep** — Vietnamese-first exam prep app for the Czech permanent residency exam. Flutter Web + iOS from one shared codebase.
 
-Full implementation documentation lives in `docs/product/`:
-- `architecture.md` — stack, startup sequence, routing, DB access patterns, subscription gating
-- `data-contract-map.md` — Supabase tables, Dart models, Edge Function API shapes
+Canonical implementation docs live in `docs/product/`:
+- `architecture.md` — stack, runtime topology, routing, DB access patterns, AI pipeline
+- `data-contract-map.md` — Supabase tables, key models, Edge Function payloads
 - `route-map.md` — canonical route list and GoRouter config
-- `screen-map.md` — per-screen contracts (file, provider, states, interactions)
-- `state-map.md` — Riverpod provider + Freezed state class definitions
-- `component-map.md` — widget inventory with file paths and props
+- `screen-map.md` — screen-level contracts, states, and actions
+- `state-map.md` — provider/state-machine definitions and operational notes
+- `component-map.md` — widget inventory
+
+When this file and product docs disagree, follow `docs/product/*`.
 
 ---
 
 ## Commands
 
 ```bash
-# First-time setup
+# Setup
 flutter pub get
-make gen                    # run build_runner (freezed + Riverpod codegen)
+make gen
 
 # Run
-make run-web-dev            # Chrome, dev flavor
-make run-dev                # connected device, dev flavor
+make run-web-dev
+make run-dev
 make run-staging
 
 # Build
 make build-web-prod
 make build-ios-prod
 
-# Code generation (required after editing any model or @riverpod provider)
-make gen                    # one-shot
-make gen-watch              # watch mode during active development
+# Codegen
+make gen
+make gen-watch
 
-# Full reset
-make clean                  # flutter clean + pub get + gen
+# Reset
+make clean
 
 # Tests
-flutter test                                          # all tests
-make test-unit                                        # unit tests only
-make test-widget                                      # widget tests only
-make test-integration-web                             # integration tests on Chrome (headless, staging)
-make test-integration-ios                             # integration tests on iPhone 15 Pro simulator
-make test-coverage                                    # run tests + open HTML coverage report
-flutter test test/features/auth/login_test.dart       # single file
+flutter test
+make test-unit
+make test-widget
+make test-integration-web
+make test-integration-ios
+make test-coverage
+flutter test test/features/auth/login_test.dart
 
 # Lint
 flutter analyze
@@ -56,124 +58,236 @@ flutter analyze
 
 ---
 
-## Environment setup
+## Environment Setup
 
-Environment values are baked in at compile time via `--dart-define-from-file`. **Never use runtime dotenv.**
-
-Copy and fill in real Supabase credentials:
-```bash
-cp env.dev.json env.dev.json   # edit SUPABASE_URL + SUPABASE_ANON_KEY
-```
+Environment values are compile-time only via `--dart-define-from-file=env.<flavor>.json`.
 
 | Flavor | Entry point | Env file |
-|--------|-------------|----------|
+|---|---|---|
 | `dev` | `lib/main_dev.dart` | `env.dev.json` |
 | `staging` | `lib/main_staging.dart` | `env.staging.json` |
 | `prod` | `lib/main_prod.dart` | `env.prod.json` |
 
-`AppEnv.validate()` asserts both Supabase keys are non-empty on startup.
+`AppEnv.validate()` asserts `SUPABASE_URL` and `SUPABASE_ANON_KEY` are non-empty before app startup.
 
-Font files must be manually placed in `assets/fonts/` — download from Google Fonts:
-- **EB Garamond** (weights 400, 500, 600, 700 + Italic 400) → headlines/display
-- **Manrope** (weights 400, 500, 600, 700) → body, labels, buttons
+Do not add runtime dotenv loading.
+
+Fonts must exist in `assets/fonts/`:
+- **EB Garamond** — display/headlines
+- **Manrope** — body, labels, buttons
 
 ---
 
 ## Architecture
 
-### Startup sequence
-`main_<flavor>.dart` → `AppEnv.validate()` → `PrefsStorage.init()` → `initSupabase()` → `runApp(ProviderScope(child: App()))`.
+### Startup Sequence
 
-`App` (`lib/app.dart`) is a `ConsumerWidget` that reads `appRouterProvider` and constructs `MaterialApp.router`.
+`main_<flavor>.dart` → `AppEnv.validate()` → `PrefsStorage.init()` → `initSupabase()` → `runApp(ProviderScope(child: App()))`
 
-### State management — Riverpod
-All providers use the `riverpod_annotation` codegen pattern. After adding or modifying any `@riverpod` annotated class or function, run `make gen`.
+`App` in `lib/app.dart` is a `ConsumerWidget` that reads `appRouterProvider` and builds `MaterialApp.router`.
 
-- `AsyncNotifier<T>` — for async data with mutations (screens, features)
-- `Notifier<T>` — for sync state machines (form state, recording state)
-- `StreamProvider` — for real-time streams (auth session, connectivity)
+### State Management
 
-Provider files live in `features/<module>/providers/` or `shared/providers/`. State classes are `@freezed`.
+All providers use `riverpod_annotation` codegen. Run `make gen` after changing any `@riverpod` provider or Freezed model.
 
-### Routing — GoRouter
-Route constants: `lib/core/router/app_routes.dart` — always use `AppRoutes.*`, never hardcode strings.
+- `AsyncNotifier<T>` — async data + mutations
+- `Notifier<T>` — sync state machines
+- `StreamProvider` — auth/realtime/connectivity streams
 
-Router: `lib/core/router/app_router.dart` — a single `@riverpod GoRouter` provider. `_RouterNotifier extends ChangeNotifier` bridges Supabase auth state changes → GoRouter `refreshListenable`.
+### Routing
 
-Guard logic in the `redirect` callback:
-- `/` (splash) → redirects to `/landing` or `/app/dashboard` depending on auth
-- Authenticated users hitting `/auth/**` → redirect to dashboard
-- `/app/**` routes → `authGuard` returns login path if no session
+Use route constants from `lib/core/router/app_routes.dart`. Never hardcode route strings.
 
-Public routes (no auth): `/landing`, `/mock-test/**`, `/auth/**`  
-Authenticated shell routes: everything under `/app/**`, wrapped in `ShellRoute` → `AppShell`
+Router lives in `lib/core/router/app_router.dart` as a single `@riverpod GoRouter` provider. `_RouterNotifier` bridges Supabase auth changes and subscription state into GoRouter refreshes.
 
-### Shell & adaptive layout
-`AppShell` (`lib/features/shell/app_shell.dart`) wraps all authenticated routes.
+High-level routing rules:
+- `/` redirects to `/landing` or `/app/dashboard`
+- authenticated users are redirected away from `/auth/**`
+- `/app/**` uses `authGuard`
+- public surface includes `/landing`, `/auth/**`, `/mock-test/**`, `/onboarding`
+
+### Adaptive Layout
+
+`AppShell` wraps authenticated routes.
 
 | Width | Layout |
-|-------|--------|
-| < 900px | `NavigationBar` (bottom) |
-| ≥ 900px | `NavigationRail` (left side), content capped at `maxWidth: 1200` |
+|---|---|
+| `< 900px` | bottom `NavigationBar` |
+| `>= 900px` | left `NavigationRail`, content capped to `maxWidth: 1200` |
 
-Breakpoint check: `MediaQuery.sizeOf(context).width >= 900`
+Full-screen flows that hide shell nav include lesson player, simulator question, exercise question/explanation, speaking recording, and speaking/writing feedback.
 
-Bottom nav is hidden on full-screen flows (exam session, practice, lesson player, AI feedback).
+### Design Tokens
 
-### Design tokens
-All design values come from token classes — never raw literals in widget code:
-- Colors: `AppColors.*` (`lib/core/theme/app_colors.dart`) — Sahara palette (primary `#c2652a` burnt sienna, bg `#faf5ee` warm linen)
-- Typography: `AppTypography.*` (`lib/core/theme/app_typography.dart`) — EB Garamond (headlines) + Manrope (body/labels)
-- Spacing: `AppSpacing.*` — 4px base grid (`lib/core/theme/app_spacing.dart`)
-- Radii + Shadows: `AppRadius.*` / `AppShadows.*` (`lib/core/theme/app_radius.dart`) — default 8px, ultra-soft warm shadows
-- Theme: `AppTheme.light` / `AppTheme.dark` built from the above tokens
+Never scatter raw design literals in widget code.
 
-### Models — freezed
-All domain models in `lib/shared/models/` and `lib/features/<module>/models/` use `@freezed`. Generated files (`.freezed.dart`, `.g.dart`) are gitignored.
+- Colors: `AppColors.*`
+- Typography: `AppTypography.*`
+- Spacing: `AppSpacing.*`
+- Radius/Shadows: `AppRadius.*`, `AppShadows.*`
+- Theme: `AppTheme.light` / `AppTheme.dark`
 
-Key shared models: `AppUser`, `Question`, `QuestionAnswer`, `ExamResult` — see `docs/product/data-contract-map.md` for full field definitions and Supabase table mappings.
+### Models
 
-### Supabase integration
-`lib/core/supabase/supabase_config.dart` exposes a top-level `supabase` getter (`Supabase.instance.client`). Use this throughout — no need to pass the client as a dependency.
+Domain models in `lib/shared/models/` and `lib/features/<module>/models/` use Freezed and JSON serialization. Generated files are gitignored.
 
-All AI service calls (speaking scoring, writing correction) go through Supabase Edge Functions in `supabase/functions/` — API keys are never on the client. Edge functions: `speaking-upload`, `speaking-result`, `writing-submit`, `writing-result`, `grade-exam`, `question-feedback`.
+---
 
-### Local storage
-- `PrefsStorage` (`lib/core/storage/prefs_storage.dart`) — wraps `shared_preferences` for non-sensitive data (e.g. `pendingAttemptId`)
-- `SecureStorage` (`lib/core/storage/secure_storage.dart`) — wraps `flutter_secure_storage` for tokens/sensitive values
-- Hive — offline caching for questions and progress
+## Supabase Integration
 
-### Localisation
-`lib/core/l10n/` contains ARB files for `vi` (primary), `cs`, `en`. Generated via `flutter gen-l10n` (configured in `l10n.yaml`). Access strings with `AppLocalizations.of(context)`.
+Use the top-level client from `lib/core/supabase/supabase_config.dart`.
+
+Access patterns:
+- client reads use PostgREST with RLS
+- anonymous ownership uses persisted `x-guest-token`
+- privileged AI writes happen only inside Edge Functions via service-role
+- admin CMS uses service-role server-side
+- lesson progress writes are idempotent in the current client path: `SELECT` existing `user_progress` row by `(user_id, lesson_block_id)` first, then `INSERT` only if missing
+
+Important RLS note:
+- `user_progress` still keeps an `UPDATE` policy for backward compatibility with legacy clients/flows that used `upsert`
+- compatibility migration: `20260419204926_user_progress_update_policy.sql`
+
+### Edge Functions
+
+Main functions:
+- `speaking-upload`
+- `speaking-result`
+- `writing-submit`
+- `writing-result`
+- `grade-exam`
+- `analyze-exam`
+- `question-feedback`
+- `ai-review-submit`
+- `ai-review-result`
+
+### JWT Config
+
+This project uses ES256 JWT signing. Supabase Edge pre-verification only supports HS256, so functions must be deployed with `verify_jwt = false`.
+
+Rules:
+- every function must be declared in `supabase/config.toml`
+- deploy new/updated functions with `--no-verify-jwt`
+- auth is checked manually inside functions via shared helpers in `supabase/functions/_shared/guest_access.ts`
+
+Example:
+
+```bash
+supabase functions deploy <function-name> --no-verify-jwt
+```
+
+If you forget this, functions can fail before your code runs with `UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM`.
+
+---
+
+## AI Flows
+
+### Speaking / Writing
+
+Speaking and writing are polling-based, not webhook-pushed.
+
+- submit/upload → returns `attempt_id`
+- poll every 3s
+- max 10 retries
+- final states: `ready` or `error`
+
+Subjective lesson progress rule:
+- speaking/writing lesson flows only sync `user_progress` after AI Teacher review reaches `ready`
+
+### Writing Reference Resolution
+
+`writing-submit` accepts:
+- mock test: real `question_id` from `questions`
+- lesson/practice: `exercise_id` from `exercises`, with `question_id` omitted
+
+Backward compatibility rule:
+- if an older client sends an exercise UUID via `question_id`, the edge function resolves it server-side and treats it as `exercise_id`
+- this avoids FK violation `23503` on `ai_writing_attempts.question_id`
+
+### Czech Enforcement
+
+If Whisper or GPT determines a speaking answer is not Czech, scores are zeroed and the learner gets a Vietnamese explanation.
+
+### Exam Analysis
+
+`grade-exam` writes `exam_results`, then triggers `analyze-exam`.
+
+`analyze-exam`:
+- reuses objective feedback via `question-feedback`
+- hydrates speaking/writing from existing AI attempt rows
+- synthesizes exam-level insights
+- writes `exam_analysis`
+
+Result screens poll `exam_analysis` until it becomes ready/error.
+
+---
+
+## Local Storage
+
+- `PrefsStorage` — shared preferences for non-sensitive state such as guest token and `pendingAttemptId`
+- `SecureStorage` — sensitive storage
+- Hive — offline caches
+
+### Guest → Auth Linking
+
+When a guest completes the free mock test:
+- `pendingAttemptId` is stored locally
+- after signup success, the app links `exam_attempts`, `exam_results`, `exam_analysis`, `ai_speaking_attempts`, and `ai_writing_attempts` by `exam_attempt_id`
+- then clears the pending key
+
+---
+
+## Localisation
+
+ARB files live in `lib/core/l10n/` for:
+- `vi` primary
+- `cs`
+- `en`
+
+Generated via `flutter gen-l10n` with `l10n.yaml`.
+
+UI and AI explanations are Vietnamese-first. Czech terms appear where required by the exam domain.
 
 ---
 
 ## Conventions
 
-### Adding a screen
-1. Create `lib/features/<module>/screens/<name>_screen.dart`
-2. Add path constant to `lib/core/router/app_routes.dart`
-3. Add `GoRoute` to `lib/core/router/app_router.dart`
-4. Register in `docs/product/screen-map.md`
+### Adding a Screen
 
-### Adding a provider
+1. Create `lib/features/<module>/screens/<name>_screen.dart`
+2. Add route constant to `lib/core/router/app_routes.dart`
+3. Register `GoRoute` in `lib/core/router/app_router.dart`
+4. Update `docs/product/screen-map.md`
+
+### Adding a Provider
+
 ```dart
 @riverpod
 class MyFeatureNotifier extends _$MyFeatureNotifier {
   @override
   Future<MyState> build() async { ... }
 }
-// Then: make gen
 ```
 
-### State variants every screen must handle
-`loading` (shimmer skeleton, not spinner) · `success` · `empty` · `error` (with retry that calls `.refresh()`)
+Then run `make gen`.
 
-### Responsive rule
-Mobile-first. Web gets wider containers — not different flows or separate widgets. One codebase, one logical flow.
+### Screen States
 
-### AI feedback polling
-Both speaking and writing AI results are polled (not webhook-pushed). Poll every 3s, max 10 retries, then surface `scoringError` state with retry option. See `docs/product/state-map.md` for state machines.
+Every screen should explicitly handle:
+- `loading` with shimmer/skeleton, not spinner-only
+- `success`
+- `empty`
+- `error` with retry
 
-### Anonymous → authenticated session linking
-When a guest completes the free mock test, `pendingAttemptId` is stored in `shared_preferences`. On signup success, PATCH `exam_attempts/:id` with the new `user_id` and clear the prefs key.
+### Responsive Rule
+
+Mobile-first. Web gets wider containers, not separate flows.
+
+### Progress Rule
+
+Lesson block completion should be idempotent. Avoid re-writing `user_progress` for the same `(user_id, lesson_block_id)` when the block is already complete.
+
+### Documentation Rule
+
+If behavior changes in routing, AI flows, progress sync, Edge Function payloads, or Supabase schemas, update the matching files in `docs/product/`.
+

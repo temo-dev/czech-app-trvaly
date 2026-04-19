@@ -496,7 +496,8 @@ class _BlockCard extends StatelessWidget {
             AppRoutes.writingPrompt,
             extra: {
               'prompt': block.prompt ?? '',
-              'questionId': firstExerciseId,
+              'questionId': '',
+              'exerciseId': firstExerciseId,
               'lessonId': block.lessonId,
               'lessonBlockId': block.id,
               'courseId': courseId,
