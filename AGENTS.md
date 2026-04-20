@@ -73,6 +73,13 @@ Prefer `code-review-graph` as the first step when exploring the codebase.
 - Use `rg`/file reads only after the graph narrows the likely files, symbols, or flows, or when verifying exact string usage and generated code details.
 - Treat graph output as the default map of the codebase. Do not begin broad exploration with manual `grep`/`glob` unless the graph is unavailable or the task is purely literal text lookup.
 
+### Claude Worktrees
+
+When using Claude/Antigravity agents in parallel:
+- keep `.claude/worktrees/` local-only and never track agent worktree directories in Git
+- keep `.claude/settings.local.json` local-only and never commit it
+- if agent worktrees are deleted locally, do not re-add their gitlinks or metadata to the repo
+
 ---
 
 ## Environment Setup
