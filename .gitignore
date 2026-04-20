@@ -33,3 +33,6 @@ assets/fonts/
 
 # Claude agent worktrees
 .claude/worktrees/
+
+# Claude local settings
+.claude/settings.local.json
