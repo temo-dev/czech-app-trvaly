@@ -28,3 +28,5 @@ macos/Pods/
 
 # Assets (placeholders only — real assets managed outside VCS)
 assets/fonts/
+# Added by code-review-graph
+.code-review-graph/
