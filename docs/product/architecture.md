@@ -2,6 +2,8 @@
 
 High-level decisions and runtime topology for Trvalý Prep.
 
+Operational runbook cho AI flows nằm ở [ai-ops.md](/Users/daniel.dev/Desktop/app-czech/docs/product/ai-ops.md).
+
 ---
 
 ## Stack
@@ -12,11 +14,20 @@ High-level decisions and runtime topology for Trvalý Prep.
 | State | Riverpod 2 (riverpod_annotation codegen) |
 | Navigation | GoRouter 14 |
 | Backend | Supabase (Postgres, Auth, Storage, Edge Functions, Realtime) |
-| AI scoring | OpenAI Whisper (transcription) + GPT-4.1-mini (grading) via Edge Functions |
+| AI scoring | OpenAI GPT-4o Transcribe (transcription) + GPT-5 mini (interactive grading) via Edge Functions |
 | Admin CMS | Next.js (service_role key, bypasses RLS) in `cms/` |
 | Offline cache | Hive |
 | Secure storage | flutter_secure_storage |
 | Models | Freezed + json_serializable |
+
+Model selection is env-overridable at the Edge Function layer. Current defaults:
+- `OPENAI_SPEAKING_TRANSCRIBE_MODEL` → `gpt-4o-transcribe`
+- `OPENAI_SPEAKING_SCORING_MODEL` → `gpt-5-mini`
+- `OPENAI_WRITING_SCORING_MODEL` → `gpt-5-mini`
+- `OPENAI_QUESTION_FEEDBACK_MODEL` → `gpt-5-mini`
+- `OPENAI_OBJECTIVE_REVIEW_MODEL` → `gpt-5-mini`
+- `OPENAI_EXAM_SYNTHESIS_MODEL` → `gpt-5.1`
+- `OPENAI_DEFAULT_CHAT_MODEL` → `gpt-4.1-mini` (fallback only)
 
 ---
 
@@ -82,9 +93,11 @@ Access the client anywhere: `import 'package:app_czech/core/supabase/supabase_co
 
 ```
 Client                          Edge Function              OpenAI
-  │── POST speaking-upload ──►  transcribeAudio() ──────► Whisper
-  │                             chatComplete() ───────────► GPT-4.1-mini
-  │                             INSERT ai_speaking_attempts (status: ready)
+  │── POST speaking-upload ──►  INSERT ai_speaking_attempts (status: processing)
+  │                             background task:
+  │                               transcribeAudio() ─────► GPT-4o Transcribe
+  │                               chatComplete() ────────► GPT-5 mini
+  │                               UPDATE ai_speaking_attempts (ready/error)
   │◄── { attempt_id } ─────────
   │
   │── POST speaking-result ──► SELECT ai_speaking_attempts WHERE id = attempt_id
@@ -92,8 +105,10 @@ Client                          Edge Function              OpenAI
   │    (poll every 3s, max 10 retries)
   │
   │── POST writing-submit ───► resolve question_id/exercise_id
-  │                             chatComplete() ───────────► GPT-4.1-mini
-  │                             INSERT ai_writing_attempts (status: processing → ready/error)
+  │                             INSERT ai_writing_attempts (status: processing)
+  │                             background task:
+  │                               chatComplete() ────────► GPT-5 mini
+  │                               UPDATE ai_writing_attempts (ready/error)
   │◄── { attempt_id } ─────────
   │
   │── POST writing-result ───► SELECT ai_writing_attempts WHERE id = attempt_id
@@ -102,19 +117,35 @@ Client                          Edge Function              OpenAI
   │
   │── POST grade-exam ───────► INSERT exam_results
   │                           fire-and-forget analyze-exam()
-  │                           ├─ objective questions → cache/GPT via question-feedback
+  │                           ├─ objective questions → cache/GPT-5 mini via question-feedback
   │                           ├─ speaking/writing → hydrate from ai_*_attempts
-  │                           └─ 1 synthesis GPT call → INSERT/UPDATE exam_analysis
+  │                           └─ 1 synthesis GPT-5.1 call → INSERT/UPDATE exam_analysis
   │
   │── result screen ─────────► poll exam_analysis until ready/error
   │◄── preload per-question feedback + skill insights + recommendations
 ```
 
-Czech language enforcement: if Whisper detects non-Czech OR GPT returns `is_czech: false` → all metric scores zeroed, Vietnamese explanation returned.
+Czech language enforcement: speaking grading prompt explicitly classifies whether the transcript is Czech. If the model returns `is_czech: false` → all metric scores are zeroed and the learner gets a Vietnamese explanation.
+
+Language contract for AI feedback: all user-facing AI explanations, summaries, tips, suggestions, and review labels must be returned in Vietnamese. Czech may appear only inside quoted examples, transcripts, or corrected answers where the exam domain requires it.
+
+Vietnamese guardrail: if a model response still contains suspicious English in user-facing feedback fields, Edge Functions run a final JSON normalization pass (`OPENAI_VIETNAMESE_GUARD_MODEL`, default `gpt-5-mini`) before persisting or returning the payload. This pass preserves Czech learner content such as transcripts, corrected answers, and original text spans.
+
+Operational logging: the guard emits structured log events with `event: "vietnamese_guard"` whenever it is triggered. Logs include only metadata such as `context`, `context_group`, `context_slug`, model name, suspicious field paths/counts, rewrite result, and fallback errors; they do not include learner transcript or feedback text.
+
+Quick monitoring workflow:
+- Tất cả event guard: lọc `event="vietnamese_guard"`
+- Lỗi/timeout guard: lọc thêm `status="fallback"`
+- Rewrite chưa sạch hoàn toàn: lọc `status="partial"`
+- Theo luồng nghiệp vụ: lọc `context_group` (`speaking`, `writing`, `question_feedback`, `objective_review`, `exam_analysis`)
+- Theo caller cụ thể: lọc `context_slug`
+- Ưu tiên điều tra nếu `suspicious_count` cao, `remaining_count > 0`, hoặc `changed=false` dù status là `rewritten`
 
 Writing reference resolution: mock test sends real `question_id` from `questions`, while lesson/practice writing can send `exercise_id` from `exercises`. `writing-submit` normalizes these references server-side and also tolerates older clients that accidentally send an exercise UUID through `question_id`, preventing FK violation `23503` on `ai_writing_attempts.question_id`.
 
-Objective review write sequence: `ai-review-submit` inserts the `ai_teacher_reviews` row with `status: 'processing'` and `result_payload: null`, calls GPT, then does a single UPDATE to `status: 'ready'` with the full payload atomically. This ensures the row is never visible as `ready` with a null payload if the update fails.
+Objective review write sequence: `ai-review-submit` inserts the `ai_teacher_reviews` row with `status: 'processing'` and `result_payload: null`, calls `gpt-5-mini`, then does a single UPDATE to `status: 'ready'` with the full payload atomically. This ensures the row is never visible as `ready` with a null payload if the update fails.
+
+AI Teacher polling note: `ai-review-result` can now return a pending `message` that explains whether the review is still waiting on speaking/writing scoring or is already generating feedback. Flutter review providers auto-poll again while the response remains pending.
 
 Guest security: anonymous mock-test and AI rows (`exam_attempts`, `exam_results`, `exam_analysis`, `ai_*_attempts`, `ai_teacher_reviews`) are scoped by persisted `guest_token`. Edge Functions using service-role also re-check ownership against `user_id` or `guest_token` instead of trusting raw UUIDs.
 

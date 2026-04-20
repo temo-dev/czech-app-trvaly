@@ -10,6 +10,7 @@ This file provides guidance to Codex when working with code in this repository.
 
 Canonical implementation docs live in [`docs/product/`](docs/product/):
 - [`architecture.md`](docs/product/architecture.md) — stack, runtime topology, routing, DB access patterns, AI pipeline
+- [`ai-ops.md`](docs/product/ai-ops.md) — AI operations runbook: model/env mapping, rollout checklist, logs, incident debugging
 - [`data-contract-map.md`](docs/product/data-contract-map.md) — Supabase tables, key models, Edge Function payloads
 - [`route-map.md`](docs/product/route-map.md) — canonical route list and GoRouter config
 - [`screen-map.md`](docs/product/screen-map.md) — screen-level contracts, states, and actions

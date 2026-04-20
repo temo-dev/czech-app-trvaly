@@ -361,24 +361,6 @@ class WritingSessionNotifier extends StateNotifier<WritingSessionState> {
     );
   }
 
-  WritingFeedbackResult _parseRow(
-      String attemptId, Map<String, dynamic> row, String originalText) {
-    final scoreRaw = row['score'] as num?;
-    final corrected = row['corrected_text'] as String? ?? '';
-    final feedback = row['feedback'] as String? ?? '';
-
-    return WritingFeedbackResult(
-      attemptId: attemptId,
-      totalScore: scoreRaw?.toDouble() ?? 0,
-      maxScore: 100,
-      metrics: [],
-      originalText: originalText,
-      annotatedSpans: [AnnotatedSpan(text: originalText)],
-      correctedVersion: corrected,
-      overallFeedback: feedback,
-    );
-  }
-
   void retry() => state = const WritingSessionState();
 }
 
@@ -397,7 +379,7 @@ final writingSessionProvider = StateNotifierProvider.autoDispose<
 class WritingReviewNotifier extends StateNotifier<WritingSessionState> {
   WritingReviewNotifier() : super(const WritingSessionState());
 
-  static const _maxRetries = 6;
+  static const _maxRetries = 10;
   static const _pollInterval = Duration(seconds: 3);
 
   bool _submitted = false;
@@ -435,8 +417,8 @@ class WritingReviewNotifier extends StateNotifier<WritingSessionState> {
         attemptId: attemptId,
       );
 
-      // writing-submit is synchronous — result should be ready immediately.
-      // Poll a few times as a safety net for DB propagation lag.
+      // writing-submit returns the attempt id immediately and the backend
+      // finishes scoring in the background, so review screens poll here too.
       int count = 0;
       while (mounted && count < _maxRetries) {
         await Future.delayed(_pollInterval);
@@ -655,7 +637,7 @@ final writingAttemptResultProvider =
       }).toList();
       final spansRaw = data['annotated_spans'] as List<dynamic>? ?? [];
       final spans = spansRaw.isEmpty
-          ? [AnnotatedSpan(text: '')]
+          ? [const AnnotatedSpan(text: '')]
           : spansRaw.map((s) {
               final sm = Map<String, dynamic>.from(s as Map);
               return AnnotatedSpan(

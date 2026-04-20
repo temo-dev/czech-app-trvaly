@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app_czech/core/supabase/supabase_config.dart';
 import 'package:app_czech/features/ai_teacher/models/ai_teacher_review.dart';
 import 'package:app_czech/features/mock_test/providers/exam_result_provider.dart';
@@ -10,7 +12,7 @@ class AiTeacherReviewController {
   final AiTeacherReviewRequest request;
 
   static const _pollRetries = 10;
-  static const _pollInterval = Duration(seconds: 3);
+  static const pollInterval = Duration(seconds: 3);
 
   Future<String?> submit() async {
     final response = await supabase.functions.invoke(
@@ -44,7 +46,7 @@ class AiTeacherReviewController {
       final result = await fetch(reviewId);
       if (!result.isPending) return result;
       if (i < _pollRetries - 1) {
-        await Future.delayed(_pollInterval);
+        await Future.delayed(pollInterval);
       }
     }
 
@@ -72,9 +74,20 @@ final aiTeacherReviewProvider = FutureProvider.autoDispose
 });
 
 final aiTeacherReviewEntryProvider = FutureProvider.autoDispose
-    .family<AiTeacherReviewResponse, AiTeacherReviewRequest>((ref, request) {
+    .family<AiTeacherReviewResponse, AiTeacherReviewRequest>(
+        (ref, request) async {
   final controller = ref.watch(aiTeacherReviewControllerProvider(request));
-  return controller.fetchOrSubmit();
+  final response = await controller.fetchOrSubmit();
+
+  if (response.isPending) {
+    final timer = Timer(
+      AiTeacherReviewController.pollInterval,
+      ref.invalidateSelf,
+    );
+    ref.onDispose(timer.cancel);
+  }
+
+  return response;
 });
 
 final aiTeacherReviewBatchProvider =

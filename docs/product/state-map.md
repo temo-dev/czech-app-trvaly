@@ -303,10 +303,10 @@ Reads/writes `profiles.notification_prefs` jsonb column.
 
 ## AI Polling Pattern
 
-Both speaking and writing use identical polling flow:
+Both speaking and writing use polling-based result screens, but speaking now returns faster from submit and finishes AI work in the background:
 
 ```
-submit (upload/submit edge fn) → { attempt_id }
+submit (upload/submit edge fn) → create attempt row (`processing`) → { attempt_id }
     ↓
 poll every 3s (result edge fn) → { status: 'pending' | 'ready' | 'error' }
     ↓ (max 10 retries)
@@ -316,6 +316,12 @@ timeout (10 retries exhausted) → *.error('scoring_timeout')
 ```
 
 **Mock test context:** Khi submit speaking/writing trong mock test, `exam_attempt_id` phải được truyền vào `speaking-upload` / `writing-submit`. `grade-exam` JOIN các bảng AI attempt theo `exam_attempt_id + question_id`; nếu AI chưa xong thì câu đó tạm thời chưa có điểm và `exam_results.ai_grading_pending = true` để result screen hiển thị banner chờ. Sau khi ghi `exam_results`, edge function còn trigger `analyze-exam` để batch toàn bộ feedback vào `exam_analysis`.
+
+**Operational note:** `speaking-upload` no longer blocks on OpenAI scoring. It inserts the attempt row first, returns `attempt_id` immediately, then uses an Edge Runtime background task to run transcription + grading and update the same row to `ready/error`.
+
+`writing-submit` now follows the same async pattern: it resolves `question_id`/`exercise_id`, inserts `ai_writing_attempts(status='processing')`, returns `attempt_id` immediately, then uses an Edge Runtime background task to score the essay with `gpt-5-mini` and update the same row to `ready/error`.
+
+`aiTeacherReviewEntryProvider` also auto-polls while `ai-review-result` returns `pending`. Pending responses now include a user-facing `message` so review cards/detail screens can distinguish between “đang đợi speaking/writing scoring” and “đang tạo nhận xét”.
 
 ## Question Feedback Pattern (Lesson + Review)
 

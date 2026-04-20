@@ -3,7 +3,12 @@ import {
   type SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { chatComplete, getOpenAIKey } from "../_shared/openai.ts";
+import {
+  chatComplete,
+  getObjectiveReviewModel,
+  getOpenAIKey,
+} from "../_shared/openai.ts";
+import { VIETNAMESE_FEEDBACK_REQUIREMENT } from "../_shared/vietnamese.ts";
 import {
   buildSpeakingReviewPayload,
   buildWritingReviewPayload,
@@ -14,6 +19,7 @@ import {
   assertCanAccessExamAttempt,
   assertCanAccessOwnedRow,
 } from "../_shared/guest_access.ts";
+import { ensureVietnameseUserFacingJson } from "../_shared/vietnamese_guard.ts";
 
 const OBJECTIVE_REVIEW_PROMPT = `
 Bạn là giáo viên tiếng Séc cho người học Việt Nam đang luyện thi Trvalý pobyt A2.
@@ -43,6 +49,8 @@ Yêu cầu:
 - Không dùng lời khen sáo rỗng.
 - Nếu làm đúng, mistakes có thể là [].
 - Nếu làm sai, reinforcement phải để trống.
+
+${VIETNAMESE_FEEDBACK_REQUIREMENT}
 `.trim();
 
 Deno.serve(async (req) => {
@@ -239,7 +247,9 @@ async function createSubjectiveReview(args: {
     validExerciseId,
   } = args;
   const attemptId = body.ai_attempt_id!;
+  const apiKey = getOpenAIKey();
 
+  let writingPayload: ReviewPayload | null = null;
   const { data: writingAttempt } = await supabase
     .from("ai_writing_attempts")
     .select("*")
@@ -262,6 +272,17 @@ async function createSubjectiveReview(args: {
         body.exercise_id ??
         null,
     });
+    if (row["status"] === "ready") {
+      writingPayload = await ensureVietnameseUserFacingJson(
+        apiKey,
+        buildWritingReviewPayload({
+          reviewId: "",
+          source,
+          row,
+        }),
+        "writing.teacher_review_subjective",
+      );
+    }
     const inserted = await insertReviewRow({
       supabase,
       requestKey,
@@ -278,20 +299,8 @@ async function createSubjectiveReview(args: {
         : row["status"] === "error"
         ? "error"
         : "processing",
-      verdict: row["status"] === "ready"
-        ? buildWritingReviewPayload({
-          reviewId: "",
-          source,
-          row,
-        }).verdict
-        : null,
-      resultPayload: row["status"] === "ready"
-        ? buildWritingReviewPayload({
-          reviewId: "",
-          source,
-          row,
-        })
-        : null,
+      verdict: writingPayload?.verdict ?? null,
+      resultPayload: writingPayload,
       inputPayload: { ai_attempt_id: attemptId },
       writingAttemptId: attemptId,
       errorMessage: row["status"] === "error"
@@ -299,11 +308,15 @@ async function createSubjectiveReview(args: {
         : null,
     });
     if (row["status"] === "ready") {
-      const payload = buildWritingReviewPayload({
-        reviewId: inserted.id,
-        source,
-        row,
-      });
+      const payload = await ensureVietnameseUserFacingJson(
+        apiKey,
+        buildWritingReviewPayload({
+          reviewId: inserted.id,
+          source,
+          row,
+        }),
+        "writing.teacher_review_subjective",
+      );
       await supabase
         .from("ai_teacher_reviews")
         .update({
@@ -341,6 +354,18 @@ async function createSubjectiveReview(args: {
       body.exercise_id ??
       null,
   });
+  let speakingPayload: ReviewPayload | null = null;
+  if (row["status"] === "ready") {
+    speakingPayload = await ensureVietnameseUserFacingJson(
+      apiKey,
+      buildSpeakingReviewPayload({
+        reviewId: "",
+        source,
+        row,
+      }),
+      "speaking.teacher_review_subjective",
+    );
+  }
   const inserted = await insertReviewRow({
     supabase,
     requestKey,
@@ -357,20 +382,8 @@ async function createSubjectiveReview(args: {
       : row["status"] === "error"
       ? "error"
       : "processing",
-    verdict: row["status"] === "ready"
-      ? buildSpeakingReviewPayload({
-        reviewId: "",
-        source,
-        row,
-      }).verdict
-      : null,
-    resultPayload: row["status"] === "ready"
-      ? buildSpeakingReviewPayload({
-        reviewId: "",
-        source,
-        row,
-      })
-      : null,
+    verdict: speakingPayload?.verdict ?? null,
+    resultPayload: speakingPayload,
     inputPayload: { ai_attempt_id: attemptId },
     speakingAttemptId: attemptId,
     errorMessage: row["status"] === "error"
@@ -379,11 +392,15 @@ async function createSubjectiveReview(args: {
   });
 
   if (row["status"] === "ready") {
-    const payload = buildSpeakingReviewPayload({
-      reviewId: inserted.id,
-      source,
-      row,
-    });
+    const payload = await ensureVietnameseUserFacingJson(
+      apiKey,
+      buildSpeakingReviewPayload({
+        reviewId: inserted.id,
+        source,
+        row,
+      }),
+      "speaking.teacher_review_subjective",
+    );
     await supabase
       .from("ai_teacher_reviews")
       .update({
@@ -455,34 +472,86 @@ async function buildObjectiveReviewPayload(args: {
         }`
         : "",
     ].filter((line) => line.length > 0).join("\n"),
+    { model: getObjectiveReviewModel(), timeoutMs: 30_000 },
   );
 
-  return {
-    review_id: "",
-    status: "ready",
-    modality: "objective",
-    source,
-    verdict: correctness.verdict,
-    summary: String(result["summary"] ?? ""),
-    reinforcement: String(result["reinforcement"] ?? ""),
-    criteria: ((result["criteria"] as unknown[]) ?? []).map((item) =>
-      item as Record<string, unknown>
-    ),
-    mistakes: ((result["mistakes"] as unknown[]) ?? []).map((item) =>
-      item as Record<string, unknown>
-    ),
-    suggestions: ((result["suggestions"] as unknown[]) ?? []).map((item) =>
-      item as Record<string, unknown>
-    ),
-    corrected_answer: String(result["corrected_answer"] ?? correctAnswerText),
-    artifacts: {
-      short_tips: ((result["suggestions"] as unknown[]) ?? [])
-        .map((item) => item as Record<string, unknown>)
-        .map((item) => String(item["detail"] ?? ""))
-        .filter((item) => item.length > 0)
-        .slice(0, 3),
+  return await ensureVietnameseUserFacingJson(
+    apiKey,
+    {
+      review_id: "",
+      status: "ready",
+      modality: "objective",
+      source,
+      verdict: correctness.verdict,
+      summary: String(result["summary"] ?? ""),
+      reinforcement: String(result["reinforcement"] ?? ""),
+      criteria: ((result["criteria"] as unknown[]) ?? []).map((item, index) =>
+        normalizeObjectiveCriterion(item, index)
+      ),
+      mistakes: ((result["mistakes"] as unknown[]) ?? []).map((item, index) =>
+        normalizeObjectiveMistake(item, index)
+      ),
+      suggestions: ((result["suggestions"] as unknown[]) ?? []).map((
+        item,
+        index,
+      ) => normalizeObjectiveSuggestion(item, index)),
+      corrected_answer: String(result["corrected_answer"] ?? correctAnswerText),
+      artifacts: {
+        short_tips: ((result["suggestions"] as unknown[]) ?? [])
+          .map((item) => item as Record<string, unknown>)
+          .map((item) => String(item["detail"] ?? ""))
+          .filter((item) => item.length > 0)
+          .slice(0, 3),
+      },
     },
+    "objective_review.teacher_review_payload",
+  );
+}
+
+function normalizeObjectiveCriterion(
+  item: unknown,
+  index: number,
+): Record<string, unknown> {
+  const criterion = (item as Record<string, unknown> | null) ?? {};
+  return {
+    title: normalizeTitle(
+      criterion["title"],
+      index == 0 ? "Độ chính xác" : `Tiêu chí ${index + 1}`,
+    ),
+    score: criterion["score"] ?? null,
+    max_score: criterion["max_score"] ?? null,
+    feedback: String(criterion["feedback"] ?? ""),
+    tip: String(criterion["tip"] ?? ""),
   };
+}
+
+function normalizeObjectiveMistake(
+  item: unknown,
+  index: number,
+): Record<string, unknown> {
+  const mistake = (item as Record<string, unknown> | null) ?? {};
+  return {
+    title: normalizeTitle(mistake["title"], `Lỗi ${index + 1}`),
+    explanation: String(mistake["explanation"] ?? ""),
+    correction: String(mistake["correction"] ?? ""),
+    tip: String(mistake["tip"] ?? ""),
+  };
+}
+
+function normalizeObjectiveSuggestion(
+  item: unknown,
+  index: number,
+): Record<string, unknown> {
+  const suggestion = (item as Record<string, unknown> | null) ?? {};
+  return {
+    title: normalizeTitle(suggestion["title"], `Gợi ý ${index + 1}`),
+    detail: String(suggestion["detail"] ?? ""),
+  };
+}
+
+function normalizeTitle(value: unknown, fallback: string): string {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text : fallback;
 }
 
 function computeObjectiveCorrectness(args: {

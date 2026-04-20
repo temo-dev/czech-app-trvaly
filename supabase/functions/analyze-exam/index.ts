@@ -7,7 +7,13 @@ import {
   buildWritingReviewPayload,
 } from "../_shared/ai_teacher.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { chatComplete, getOpenAIKey } from "../_shared/openai.ts";
+import {
+  chatComplete,
+  getExamSynthesisModel,
+  getOpenAIKey,
+} from "../_shared/openai.ts";
+import { VIETNAMESE_FEEDBACK_REQUIREMENT } from "../_shared/vietnamese.ts";
+import { ensureVietnameseUserFacingJson } from "../_shared/vietnamese_guard.ts";
 import {
   fetchOrGenerateQuestionFeedback,
   normalizeQuestionFeedbackType,
@@ -82,7 +88,6 @@ const SUBJECTIVE_WAIT_INTERVAL = 3_000;
 const OBJECTIVE_CONCURRENCY = 5;
 const OBJECTIVE_TIMEOUT_MS = 15_000;
 const SYNTHESIS_TIMEOUT_MS = 20_000;
-
 const SYNTHESIS_PROMPT = `
 Bạn là AI Teacher tổng hợp kết quả bài thi tiếng Séc cho học viên người Việt đang luyện thi A2 Trvalý pobyt.
 
@@ -109,6 +114,8 @@ Trả về JSON:
     { "title": "...", "detail": "..." }
   ]
 }
+
+${VIETNAMESE_FEEDBACK_REQUIREMENT}
 `.trim();
 
 Deno.serve(async (req) => {
@@ -546,11 +553,11 @@ async function fetchObjectiveFeedbackFromAi(args: {
   }
 }
 
-function buildSpeakingQuestionFeedback(args: {
+async function buildSpeakingQuestionFeedback(args: {
   attemptId: string;
   context: AnalysisQuestionContext;
   subjectiveAttempts: SubjectiveAttempts;
-}): Record<string, unknown> {
+}): Promise<Record<string, unknown>> {
   const { attemptId, context, subjectiveAttempts } = args;
   const row = findSubjectiveAttemptRow(
     subjectiveAttempts.speaking,
@@ -588,11 +595,15 @@ function buildSpeakingQuestionFeedback(args: {
     };
   }
 
-  const payload = buildSpeakingReviewPayload({
-    reviewId: `exam-analysis:${attemptId}:${context.question.id}`,
-    source: "mock_test",
-    row: row as unknown as Record<string, unknown>,
-  });
+  const payload = await ensureVietnameseUserFacingJson(
+    getOpenAIKey(),
+    buildSpeakingReviewPayload({
+      reviewId: `exam-analysis:${attemptId}:${context.question.id}`,
+      source: "mock_test",
+      row: row as unknown as Record<string, unknown>,
+    }),
+    "exam_analysis.speaking_review_payload",
+  );
 
   return {
     verdict: payload.verdict,
@@ -609,11 +620,11 @@ function buildSpeakingQuestionFeedback(args: {
   };
 }
 
-function buildWritingQuestionFeedback(args: {
+async function buildWritingQuestionFeedback(args: {
   attemptId: string;
   context: AnalysisQuestionContext;
   subjectiveAttempts: SubjectiveAttempts;
-}): Record<string, unknown> {
+}): Promise<Record<string, unknown>> {
   const { attemptId, context, subjectiveAttempts } = args;
   const row = findSubjectiveAttemptRow(
     subjectiveAttempts.writing,
@@ -651,11 +662,15 @@ function buildWritingQuestionFeedback(args: {
     };
   }
 
-  const payload = buildWritingReviewPayload({
-    reviewId: `exam-analysis:${attemptId}:${context.question.id}`,
-    source: "mock_test",
-    row: row as unknown as Record<string, unknown>,
-  });
+  const payload = await ensureVietnameseUserFacingJson(
+    getOpenAIKey(),
+    buildWritingReviewPayload({
+      reviewId: `exam-analysis:${attemptId}:${context.question.id}`,
+      source: "mock_test",
+      row: row as unknown as Record<string, unknown>,
+    }),
+    "exam_analysis.writing_review_payload",
+  );
 
   return {
     verdict: payload.verdict,
@@ -709,11 +724,16 @@ async function buildExamSynthesis(args: {
       }),
     });
 
-    const result = await chatComplete(
+    const rawResult = await chatComplete(
       apiKey,
       SYNTHESIS_PROMPT,
       userMessage,
-      SYNTHESIS_TIMEOUT_MS,
+      { model: getExamSynthesisModel(), timeoutMs: SYNTHESIS_TIMEOUT_MS },
+    );
+    const result = await ensureVietnameseUserFacingJson(
+      apiKey,
+      rawResult,
+      "exam_analysis.synthesis_payload",
     );
     const rawInsights = isRecord(result["skill_insights"])
       ? result["skill_insights"]

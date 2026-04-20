@@ -11,6 +11,8 @@ import {
   type ReviewPayload,
 } from "../_shared/ai_teacher.ts";
 import { assertCanAccessOwnedRow } from "../_shared/guest_access.ts";
+import { getOpenAIKey } from "../_shared/openai.ts";
+import { ensureVietnameseUserFacingJson } from "../_shared/vietnamese_guard.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -55,13 +57,7 @@ Deno.serve(async (req) => {
     const status = String(hydrated["status"] ?? "processing");
 
     if (status === "processing") {
-      return jsonResponse(
-        {
-          status: "pending",
-          review_id: hydrated["id"],
-        },
-        200,
-      );
+      return jsonResponse(buildPendingPayload(hydrated), 200);
     }
 
     if (status === "error") {
@@ -128,11 +124,15 @@ async function hydrateReviewIfNeeded(
       };
     }
 
-    const payload = buildWritingReviewPayload({
-      reviewId: rowId,
-      source,
-      row: attempt,
-    });
+    const payload = await ensureVietnameseUserFacingJson(
+      getOpenAIKey(),
+      buildWritingReviewPayload({
+        reviewId: rowId,
+        source,
+        row: attempt,
+      }),
+      "writing.teacher_review_hydration",
+    );
     await supabase
       .from("ai_teacher_reviews")
       .update({
@@ -181,11 +181,15 @@ async function hydrateReviewIfNeeded(
     };
   }
 
-  const payload = buildSpeakingReviewPayload({
-    reviewId: rowId,
-    source,
-    row: attempt,
-  });
+  const payload = await ensureVietnameseUserFacingJson(
+    getOpenAIKey(),
+    buildSpeakingReviewPayload({
+      reviewId: rowId,
+      source,
+      row: attempt,
+    }),
+    "speaking.teacher_review_hydration",
+  );
   await supabase
     .from("ai_teacher_reviews")
     .update({
@@ -209,4 +213,24 @@ function jsonResponse(body: Record<string, unknown>, status: number) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function buildPendingPayload(row: Record<string, unknown>) {
+  const modality = String(row["modality"] ?? "objective");
+  let message = "AI Teacher đang tạo nhận xét cho câu này.";
+
+  if (row["writing_attempt_id"]) {
+    message = "AI Teacher đang đợi bài viết được chấm xong để tạo nhận xét.";
+  } else if (row["speaking_attempt_id"]) {
+    message =
+      "AI Teacher đang đợi transcript và kết quả chấm bài nói để tạo nhận xét.";
+  } else if (modality === "objective") {
+    message = "AI Teacher đang phân tích câu trả lời và tạo nhận xét.";
+  }
+
+  return {
+    status: "pending",
+    review_id: row["id"],
+    message,
+  };
 }

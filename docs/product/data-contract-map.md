@@ -721,8 +721,8 @@ Flow:
 - hydrate speaking/writing từ `ai_speaking_attempts` / `ai_writing_attempts` (đợi tối đa ~30s; quá hạn thì `skipped: true`)
 - objective questions:
   - đúng: ưu tiên `question.explanation` làm `correct_explanation`
-  - sai: dùng lại cache/prompt của `question-feedback`
-- 1 synthesis GPT call để tạo `skill_insights` + `overall_recommendations`
+  - sai: dùng lại cache/prompt của `question-feedback` (`gpt-5-mini` nếu cache miss)
+- 1 synthesis `gpt-5.1` call để tạo `skill_insights` + `overall_recommendations`
 - update `exam_analysis(status='ready')`
 
 Direct invocation chỉ hợp lệ cho service_role hoặc owner của `exam_attempts` qua `auth.uid()` / `x-guest-token`.
@@ -746,6 +746,8 @@ Direct invocation chỉ hợp lệ cho service_role hoặc owner của `exam_att
 ```
 **Response** `{ error_analysis, correct_explanation, short_tip, key_concept, matching_feedback?, from_cache: boolean }` (all in Vietnamese)
 
+Cache-first flow: lookup `question_ai_feedback` by `(question_id, user_answer_hash)`; nếu cache miss thì generate bằng `gpt-5-mini`, rồi upsert lại cache.
+
 Cache: kết quả được lưu vào `question_ai_feedback` theo `(question_id, sha256(user_answer_text))`. Nếu cache hit → trả về ngay, không gọi GPT.
 Matching/ordering: `matching_feedback: [{ item, issue }]` chỉ có trong response khi `question_type` là matching/ordering.
 Function này vẫn được giữ cho lesson/practice flow; mock test review objective feedback giờ được preload sẵn bởi `analyze-exam`.
@@ -756,9 +758,9 @@ Function này vẫn được giữ cho lesson/practice flow; mock test review ob
 **POST** `{ lesson_id?, question_id, audio_b64?, exam_attempt_id? }`
 **Response** `{ attempt_id: string }`
 
-Creates `ai_speaking_attempts` row, transcribes via Whisper, scores via GPT-4.1-mini. Czech enforcement: if Whisper language ≠ Czech OR GPT `is_czech=false` → all scores zero.
+Creates `ai_speaking_attempts` row with `status='processing'`, then runs background transcription via `gpt-4o-transcribe` and speaking grading via `gpt-5-mini`. The HTTP response returns as soon as the attempt row is created; clients should poll `speaking-result` for final status.
+Czech enforcement: the grading model explicitly classifies whether the transcript is Czech; if `is_czech=false` → all scores zero.
 `exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
-Poll `speaking-result` for final result.
 Nếu request anonymous thì row `ai_speaking_attempts` được gắn `guest_token` và `speaking-result` chỉ trả cho đúng token đó.
 
 **FK-safety rule (edge function):** Client chỉ nên gửi `question_id` (UUID từ bảng `questions`). KHÔNG gửi `exercise_id` khi đã có `question_id`. Edge function sẽ lookup `question_id` trong bảng `questions`; nếu tìm thấy thì `exercise_id` bị clear về `null` trước khi insert — tránh lỗi FK violation `23503` do UUID của question không tồn tại trong bảng `exercises`. Nếu `question_id` không tìm thấy trong `questions`, edge function coi đó là exercise ID (fallback cho practice flow) và chuyển sang `exercise_id`.
@@ -798,7 +800,7 @@ Nếu request anonymous thì row `ai_speaking_attempts` được gắn `guest_to
 
 Detects rubric_type: 'letter' (dopis/email/napište), 'form' (formulář/form), else 'essay'.
 `exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
-Poll `writing-result` for final result.
+Creates `ai_writing_attempts(status='processing')`, returns `attempt_id` immediately, then scores the essay in a background task with `gpt-5-mini` and updates the same row to `ready/error`. Poll `writing-result` for final result.
 Nếu request anonymous thì row `ai_writing_attempts` được gắn `guest_token` và `writing-result` chỉ trả cho đúng token đó.
 
 **Reference resolution rule (edge function):**

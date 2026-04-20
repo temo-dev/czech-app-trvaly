@@ -1,7 +1,17 @@
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { chatComplete, getOpenAIKey } from './openai.ts';
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  chatComplete,
+  getOpenAIKey,
+  getQuestionFeedbackModel,
+} from "./openai.ts";
+import { VIETNAMESE_FEEDBACK_REQUIREMENT } from "./vietnamese.ts";
+import { ensureVietnameseUserFacingJson } from "./vietnamese_guard.ts";
 
-export type QuestionFeedbackType = 'mcq' | 'fill_blank' | 'matching' | 'ordering';
+export type QuestionFeedbackType =
+  | "mcq"
+  | "fill_blank"
+  | "matching"
+  | "ordering";
 
 export type QuestionFeedbackOption = {
   id: string;
@@ -55,6 +65,8 @@ Trả về JSON:
   "short_tip": "...",
   "key_concept": "..."
 }
+
+${VIETNAMESE_FEEDBACK_REQUIREMENT}
 `.trim();
 
 export const MATCHING_FEEDBACK_PROMPT = `
@@ -79,31 +91,37 @@ Trả về JSON:
   "key_concept": "...",
   "matching_feedback": [{ "item": "<từ/cụm từ>", "issue": "<lý do sai ngắn gọn>" }]
 }
+
+${VIETNAMESE_FEEDBACK_REQUIREMENT}
 `.trim();
 
-export function normalizeQuestionFeedbackType(questionType?: string): QuestionFeedbackType {
+export function normalizeQuestionFeedbackType(
+  questionType?: string,
+): QuestionFeedbackType {
   switch (questionType) {
-    case 'fill_blank':
-    case 'fillBlank':
-      return 'fill_blank';
-    case 'matching':
-      return 'matching';
-    case 'ordering':
-      return 'ordering';
+    case "fill_blank":
+    case "fillBlank":
+      return "fill_blank";
+    case "matching":
+      return "matching";
+    case "ordering":
+      return "ordering";
     default:
-      return 'mcq';
+      return "mcq";
   }
 }
 
-export async function computeQuestionFeedbackHash(text: string): Promise<string> {
+export async function computeQuestionFeedbackHash(
+  text: string,
+): Promise<string> {
   const normalized = text.trim().toLowerCase();
   const buffer = await crypto.subtle.digest(
-    'SHA-256',
+    "SHA-256",
     new TextEncoder().encode(normalized),
   );
   return Array.from(new Uint8Array(buffer))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export async function fetchOrGenerateQuestionFeedback(args: {
@@ -113,30 +131,54 @@ export async function fetchOrGenerateQuestionFeedback(args: {
 }): Promise<QuestionFeedback & { from_cache: boolean }> {
   const { supabase, params, timeoutMs = 30_000 } = args;
   const questionType = normalizeQuestionFeedbackType(params.question_type);
-  const userAnswerHash = await computeQuestionFeedbackHash(params.user_answer_text);
+  const userAnswerHash = await computeQuestionFeedbackHash(
+    params.user_answer_text,
+  );
 
   if (params.question_id) {
     const { data: cached } = await supabase
-      .from('question_ai_feedback')
-      .select('*')
-      .eq('question_id', params.question_id)
-      .eq('user_answer_hash', userAnswerHash)
+      .from("question_ai_feedback")
+      .select("*")
+      .eq("question_id", params.question_id)
+      .eq("user_answer_hash", userAnswerHash)
       .maybeSingle();
 
     if (cached) {
+      const cachedFeedback = {
+        error_analysis: String(cached.error_analysis ?? ""),
+        correct_explanation: String(cached.correct_explanation ?? ""),
+        short_tip: String(cached.short_tip ?? ""),
+        key_concept: String(cached.key_concept ?? ""),
+        matching_feedback:
+          (cached.matching_feedback as Array<Record<string, unknown>> | null) ??
+            null,
+      };
+      const normalized = await ensureVietnameseUserFacingJson(
+        getOpenAIKey(),
+        cachedFeedback,
+        "question_feedback.cache",
+      );
+
+      if (JSON.stringify(normalized) !== JSON.stringify(cachedFeedback)) {
+        await supabase
+          .from("question_ai_feedback")
+          .upsert({
+            question_id: params.question_id,
+            user_answer_hash: userAnswerHash,
+            question_type: questionType,
+            ...normalized,
+          }, { onConflict: "question_id,user_answer_hash" });
+      }
+
       return {
-        error_analysis: String(cached.error_analysis ?? ''),
-        correct_explanation: String(cached.correct_explanation ?? ''),
-        short_tip: String(cached.short_tip ?? ''),
-        key_concept: String(cached.key_concept ?? ''),
-        matching_feedback: (cached.matching_feedback as Array<Record<string, unknown>> | null) ?? null,
+        ...normalized,
         from_cache: true,
       };
     }
   }
 
   const apiKey = getOpenAIKey();
-  const result = await generateQuestionFeedback({
+  const generated = await generateQuestionFeedback({
     apiKey,
     params: {
       ...params,
@@ -144,16 +186,21 @@ export async function fetchOrGenerateQuestionFeedback(args: {
     },
     timeoutMs,
   });
+  const result = await ensureVietnameseUserFacingJson(
+    apiKey,
+    generated,
+    "question_feedback.result",
+  );
 
   if (params.question_id) {
     await supabase
-      .from('question_ai_feedback')
+      .from("question_ai_feedback")
       .upsert({
         question_id: params.question_id,
         user_answer_hash: userAnswerHash,
         question_type: questionType,
         ...result,
-      }, { onConflict: 'question_id,user_answer_hash' });
+      }, { onConflict: "question_id,user_answer_hash" });
   }
 
   return {
@@ -169,49 +216,70 @@ async function generateQuestionFeedback(args: {
 }): Promise<QuestionFeedback> {
   const { apiKey, params, timeoutMs } = args;
   const questionType = normalizeQuestionFeedbackType(params.question_type);
-  const isMatchingOrdering = questionType === 'matching' || questionType === 'ordering';
+  const isMatchingOrdering = questionType === "matching" ||
+    questionType === "ordering";
 
   let result: Record<string, unknown>;
 
   if (isMatchingOrdering) {
     const pairsText = params.match_pairs && params.match_pairs.length > 0
-      ? `\nCác cặp đúng:\n${params.match_pairs.map((pair) => `"${pair.left_text}" ↔ "${pair.right_text}"`).join('\n')}`
-      : '';
+      ? `\nCác cặp đúng:\n${
+        params.match_pairs.map((pair) =>
+          `"${pair.left_text}" ↔ "${pair.right_text}"`
+        ).join("\n")
+      }`
+      : "";
     const orderText = params.correct_order && params.correct_order.length > 0
-      ? `\nThứ tự đúng: ${params.correct_order.join(' → ')}`
-      : '';
+      ? `\nThứ tự đúng: ${params.correct_order.join(" → ")}`
+      : "";
 
     const userMessage = [
-      `Kỹ năng: ${params.section_skill ?? 'không rõ'}`,
+      `Kỹ năng: ${params.section_skill ?? "không rõ"}`,
       `Câu hỏi (${questionType}): "${params.question_text}"`,
       pairsText,
       orderText,
       `Câu trả lời học sinh (JSON): ${params.user_answer_text}`,
       `Đáp án đúng: ${params.correct_answer_text}`,
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean).join("\n");
 
-    result = await chatComplete(apiKey, MATCHING_FEEDBACK_PROMPT, userMessage, timeoutMs);
+    result = await chatComplete(
+      apiKey,
+      MATCHING_FEEDBACK_PROMPT,
+      userMessage,
+      { model: getQuestionFeedbackModel(), timeoutMs },
+    );
   } else {
     const optionsText = params.options && params.options.length > 0
-      ? `\nCác đáp án:\n${params.options.map((option, index) => `${String.fromCharCode(65 + index)}. ${option.text}`).join('\n')}`
-      : '';
+      ? `\nCác đáp án:\n${
+        params.options.map((option, index) =>
+          `${String.fromCharCode(65 + index)}. ${option.text}`
+        ).join("\n")
+      }`
+      : "";
 
     const userMessage = [
-      `Kỹ năng: ${params.section_skill ?? 'không rõ'}`,
+      `Kỹ năng: ${params.section_skill ?? "không rõ"}`,
       `Câu hỏi: "${params.question_text}"`,
       optionsText,
       `Đáp án ĐÚNG: "${params.correct_answer_text}"`,
       `Đáp án học sinh chọn: "${params.user_answer_text}"`,
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean).join("\n");
 
-    result = await chatComplete(apiKey, QUESTION_FEEDBACK_PROMPT, userMessage, timeoutMs);
+    result = await chatComplete(
+      apiKey,
+      QUESTION_FEEDBACK_PROMPT,
+      userMessage,
+      { model: getQuestionFeedbackModel(), timeoutMs },
+    );
   }
 
   return {
-    error_analysis: String(result['error_analysis'] ?? ''),
-    correct_explanation: String(result['correct_explanation'] ?? ''),
-    short_tip: String(result['short_tip'] ?? ''),
-    key_concept: String(result['key_concept'] ?? ''),
-    matching_feedback: (result['matching_feedback'] as Array<Record<string, unknown>> | undefined) ?? null,
+    error_analysis: String(result["error_analysis"] ?? ""),
+    correct_explanation: String(result["correct_explanation"] ?? ""),
+    short_tip: String(result["short_tip"] ?? ""),
+    key_concept: String(result["key_concept"] ?? ""),
+    matching_feedback: (result["matching_feedback"] as
+      | Array<Record<string, unknown>>
+      | undefined) ?? null,
   };
 }
