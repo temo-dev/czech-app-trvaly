@@ -588,7 +588,9 @@ async function buildSpeakingQuestionFeedback(args: {
   if (row.status === "error") {
     return {
       verdict: "incorrect",
-      summary: String(row.error_message ?? "Không thể phân tích bài nói này."),
+      summary: normalizeSpeakingAnalysisError(
+        row.error_message ?? "Không thể phân tích bài nói này.",
+      ),
       criteria: [],
       short_tips: [],
       skipped: true,
@@ -618,6 +620,17 @@ async function buildSpeakingQuestionFeedback(args: {
     short_tips: payload.artifacts.short_tips ?? [],
     skipped: false,
   };
+}
+
+function normalizeSpeakingAnalysisError(message: string): string {
+  if (
+    message.includes("response_format") ||
+    message.includes("OpenAI audio chat error 400")
+  ) {
+    return "Bài nói này đã nộp nhưng bước chấm audio bị lỗi kỹ thuật, nên chưa tạo được đánh giá.";
+  }
+
+  return message;
 }
 
 async function buildWritingQuestionFeedback(args: {

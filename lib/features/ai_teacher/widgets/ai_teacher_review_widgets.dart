@@ -636,15 +636,20 @@ class _TranscriptCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: 'Transcript',
+      title: 'Bản ghi lời nói',
       icon: Icons.mic_none_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (artifacts.transcript.isNotEmpty)
-            Text(
-              artifacts.transcript,
-              style: AppTypography.bodyMedium.copyWith(height: 1.6),
+            RichText(
+              text: TextSpan(
+                children: _buildTranscriptSpans(),
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.onSurface,
+                  height: 1.6,
+                ),
+              ),
             ),
           if (artifacts.transcriptIssues.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.x3),
@@ -652,8 +657,8 @@ class _TranscriptCard extends StatelessWidget {
               (issue) => Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.x2),
                 child: _InfoPill(
-                  color: AppColors.error,
-                  icon: Icons.error_outline,
+                  color: _issueColor(issue.issue),
+                  icon: _issueIcon(issue.issue),
                   text:
                       '${issue.token}${issue.suggestion != null ? ' -> ${issue.suggestion}' : ''}',
                 ),
@@ -663,6 +668,73 @@ class _TranscriptCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<InlineSpan> _buildTranscriptSpans() {
+    final issueMap = <String, AiTeacherTranscriptIssue>{};
+    for (final issue in artifacts.transcriptIssues) {
+      final token = _normalizeTranscriptToken(issue.token);
+      if (token.isNotEmpty) {
+        issueMap[token] = issue;
+      }
+    }
+
+    return RegExp(r'\S+|\s+')
+        .allMatches(artifacts.transcript)
+        .map((match) => match.group(0) ?? '')
+        .map((segment) {
+          if (segment.trim().isEmpty) {
+            return TextSpan(text: segment);
+          }
+
+          final normalized = _normalizeTranscriptToken(segment);
+          final issue = issueMap[normalized];
+          if (issue == null) {
+            return TextSpan(text: segment);
+          }
+
+          return TextSpan(
+            text: segment,
+            style: AppTypography.bodyMedium.copyWith(
+              color: _issueColor(issue.issue),
+              fontWeight: FontWeight.w700,
+              backgroundColor:
+                  _issueColor(issue.issue).withValues(alpha: 0.12),
+              height: 1.6,
+            ),
+          );
+        })
+        .toList();
+  }
+
+  String _normalizeTranscriptToken(String value) {
+    return value
+        .replaceAll(RegExp(r'^[\.,!?;:"()\[\]{}]+'), '')
+        .replaceAll(RegExp(r'[\.,!?;:"()\[\]{}]+$'), '')
+        .trim()
+        .toLowerCase();
+  }
+
+  Color _issueColor(String? issue) {
+    switch (issue) {
+      case 'grammar':
+        return AppColors.warning;
+      case 'vocabulary':
+        return AppColors.secondary;
+      default:
+        return AppColors.error;
+    }
+  }
+
+  IconData _issueIcon(String? issue) {
+    switch (issue) {
+      case 'grammar':
+        return Icons.rule_folder_outlined;
+      case 'vocabulary':
+        return Icons.translate_outlined;
+      default:
+        return Icons.hearing_outlined;
+    }
   }
 }
 

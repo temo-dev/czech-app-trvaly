@@ -76,7 +76,9 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           status: "error",
-          message: r["error_message"] as string ?? "Lỗi chấm điểm bài nói.",
+          message: normalizeSpeakingErrorMessage(
+            r["error_message"] as string | undefined,
+          ),
         }),
         {
           status: 200,
@@ -88,7 +90,12 @@ Deno.serve(async (req) => {
     // Map DB columns → Flutter _parseEdgeResponse shape
     const metricsDb = (r["metrics"] as Record<string, unknown>) ?? {};
     const issues = (r["issues"] as Array<
-      { word: string; type?: string; suggestion: string }
+      {
+        word: string;
+        type?: string;
+        suggestion?: string;
+        explanation?: string;
+      }
     >) ?? [];
     const transcript = (r["transcript"] as string) ?? "";
 
@@ -127,11 +134,15 @@ Deno.serve(async (req) => {
     ];
 
     // Build transcript_words: mark words using their actual issue type
-    const issueMap = new Map<string, { type: string; suggestion: string }>();
+    const issueMap = new Map<
+      string,
+      { type: string; suggestion: string; explanation: string }
+    >();
     for (const issue of issues) {
       issueMap.set(issue.word.toLowerCase(), {
         type: issue.type ?? "pronunciation",
-        suggestion: issue.suggestion,
+        suggestion: issue.suggestion ?? "",
+        explanation: issue.explanation ?? "",
       });
     }
     const transcriptWords = transcript.split(/\s+/).filter(Boolean).map(
@@ -158,9 +169,14 @@ Deno.serve(async (req) => {
         metrics: metricsList,
         transcript,
         transcript_words: transcriptWords,
-        corrections: [],
+        corrections: String(r["corrected_answer"] ?? "")
+          ? [String(r["corrected_answer"])]
+          : [],
+        corrected_answer: r["corrected_answer"] ?? "",
         short_tips: shortTips,
         overall_feedback: overallFeedback,
+        review_mode: metricsDb["review_mode"] ?? "exercise",
+        scoring_mode: metricsDb["scoring_mode"] ?? "transcript_fallback",
       }),
       {
         status: 200,
@@ -178,3 +194,18 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+function normalizeSpeakingErrorMessage(message: string | undefined): string {
+  const fallback = "Không thể chấm điểm bài nói. Vui lòng thử ghi âm và nộp lại.";
+  const normalized = String(message ?? "").trim();
+  if (!normalized) return fallback;
+
+  if (
+    normalized.includes("response_format") ||
+    normalized.includes("OpenAI audio chat error 400")
+  ) {
+    return "Hệ thống chấm bài nói vừa gặp lỗi xử lý audio. Vui lòng nộp lại bài nói để chấm lại.";
+  }
+
+  return normalized;
+}

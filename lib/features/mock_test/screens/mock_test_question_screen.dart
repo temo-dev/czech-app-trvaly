@@ -33,13 +33,17 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
   bool _navPanelOpen = false;
   bool _timerStarted = false;
   int? _lastVisibleTimer;
+  int? _lastKnownRemainingSeconds;
   int? _lastSyncedTimer;
+  late final ExamSessionNotifier _sessionNotifier;
   ProviderSubscription<AsyncValue<ExamSessionState>>? _sessionSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _sessionNotifier =
+        ref.read(examSessionNotifierProvider(widget.attemptId).notifier);
     _sessionSubscription = ref.listenManual<AsyncValue<ExamSessionState>>(
       examSessionNotifierProvider(widget.attemptId),
       (prev, next) {
@@ -48,12 +52,13 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
         if (s == null) return;
         _timerStarted = true;
         final remaining = s.attempt.remainingSeconds ?? 0;
+        _lastKnownRemainingSeconds = s.attempt.remainingSeconds;
         final seconds = remaining > 0 ? remaining : s.meta.durationMinutes * 60;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          ref
-              .read(examTimerNotifierProvider(seconds).notifier)
-              .start(_onTimerExpired);
+          ref.read(examTimerNotifierProvider(seconds).notifier).start(
+                _onTimerExpired,
+              );
         });
       },
     );
@@ -78,23 +83,17 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
   }
 
   void _persistTimerCheckpoint() {
-    final remaining = _lastVisibleTimer ??
-        ref
-            .read(examSessionNotifierProvider(widget.attemptId))
-            .valueOrNull
-            ?.attempt
-            .remainingSeconds;
+    final remaining = _lastVisibleTimer ?? _lastKnownRemainingSeconds;
     if (remaining == null) return;
     _lastSyncedTimer = remaining;
-    ref
-        .read(examSessionNotifierProvider(widget.attemptId).notifier)
-        .persistCheckpoint(remaining);
+    _sessionNotifier.persistCheckpoint(remaining);
   }
 
   void _trackTimer(ExamSessionState session, int timerSeconds) {
     if (_lastVisibleTimer == timerSeconds) return;
 
     _lastVisibleTimer = timerSeconds;
+    _lastKnownRemainingSeconds = timerSeconds;
     final shouldSync = _lastSyncedTimer == null ||
         (_lastSyncedTimer! - timerSeconds).abs() >= 15 ||
         timerSeconds <= 5;

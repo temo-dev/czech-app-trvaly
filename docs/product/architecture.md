@@ -22,7 +22,8 @@ Operational runbook cho AI flows nằm ở [ai-ops.md](/Users/daniel.dev/Desktop
 
 Model selection is env-overridable at the Edge Function layer. Current defaults:
 - `OPENAI_SPEAKING_TRANSCRIBE_MODEL` → `gpt-4o-transcribe`
-- `OPENAI_SPEAKING_SCORING_MODEL` → `gpt-5-mini`
+- `OPENAI_SPEAKING_AUDIO_MODEL` → `gpt-audio-mini`
+- `OPENAI_SPEAKING_SCORING_MODEL` → `gpt-5-mini` (fallback transcript-only scoring)
 - `OPENAI_WRITING_SCORING_MODEL` → `gpt-5-mini`
 - `OPENAI_QUESTION_FEEDBACK_MODEL` → `gpt-5-mini`
 - `OPENAI_OBJECTIVE_REVIEW_MODEL` → `gpt-5-mini`
@@ -96,7 +97,8 @@ Client                          Edge Function              OpenAI
   │── POST speaking-upload ──►  INSERT ai_speaking_attempts (status: processing)
   │                             background task:
   │                               transcribeAudio() ─────► GPT-4o Transcribe
-  │                               chatComplete() ────────► GPT-5 mini
+  │                               chatCompleteWithAudio() ► GPT Audio (preferred, wav/mp3)
+  │                               fallback chatComplete() ► GPT-5 mini
   │                               UPDATE ai_speaking_attempts (ready/error)
   │◄── { attempt_id } ─────────
   │
@@ -125,7 +127,9 @@ Client                          Edge Function              OpenAI
   │◄── preload per-question feedback + skill insights + recommendations
 ```
 
-Czech language enforcement: speaking grading prompt explicitly classifies whether the transcript is Czech. If the model returns `is_czech: false` → all metric scores are zeroed and the learner gets a Vietnamese explanation.
+Czech language enforcement: speaking grading prompt explicitly classifies whether the spoken answer is Czech. If the model returns `is_czech: false` → all metric scores are zeroed and the learner gets a Vietnamese explanation.
+
+Speaking scoring contract: transcript is still generated and stored for review UX, but the authoritative speaking score now prefers audio-native grading when the uploaded format is supported (`wav`/`mp3`). This unified scoring core is used for both speaking exam and speaking exercise flows. If audio-native grading is unavailable, the edge function falls back to transcript-based scoring while preserving the same response shape.
 
 Language contract for AI feedback: all user-facing AI explanations, summaries, tips, suggestions, and review labels must be returned in Vietnamese. Czech may appear only inside quoted examples, transcripts, or corrected answers where the exam domain requires it.
 

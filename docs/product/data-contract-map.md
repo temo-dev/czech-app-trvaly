@@ -322,9 +322,9 @@ Note:
 | audio_key | text | | Storage path |
 | status | text NOT NULL | `'processing'` | CHECK IN ('processing','ready','error') |
 | overall_score | int | | 0–100 |
-| metrics | jsonb | | `{pronunciation,fluency,vocabulary,task_achievement, pronunciation_feedback,pronunciation_tip, fluency_feedback,fluency_tip, vocabulary_feedback,vocabulary_tip, grammar_feedback,grammar_tip, overall_feedback, short_tips}` |
+| metrics | jsonb | | `{pronunciation,fluency,vocabulary,task_achievement, pronunciation_feedback,pronunciation_tip, fluency_feedback,fluency_tip, vocabulary_feedback,vocabulary_tip, grammar_feedback,grammar_tip, overall_feedback, short_tips, detected_language, review_mode, scoring_mode}` |
 | transcript | text | | |
-| issues | jsonb | | `[{word, type?, suggestion}]` |
+| issues | jsonb | | `[{word, type?, suggestion?, explanation?}]` |
 | strengths | text[] | | |
 | improvements | text[] | | |
 | corrected_answer | text | | |
@@ -755,13 +755,14 @@ Function này vẫn được giữ cho lesson/practice flow; mock test review ob
 ---
 
 ### `speaking-upload`
-**POST** `{ lesson_id?, question_id, audio_b64?, exam_attempt_id? }`
+**POST** `{ lesson_id?, question_id, audio_b64?, audio_format?, exam_attempt_id? }`
 **Response** `{ attempt_id: string }`
 
-Creates `ai_speaking_attempts` row with `status='processing'`, then runs background transcription via `gpt-4o-transcribe` and speaking grading via `gpt-5-mini`. The HTTP response returns as soon as the attempt row is created; clients should poll `speaking-result` for final status.
-Czech enforcement: the grading model explicitly classifies whether the transcript is Czech; if `is_czech=false` → all scores zero.
+Creates `ai_speaking_attempts` row with `status='processing'`, then runs background transcription via `gpt-4o-transcribe` and speaking grading. Preferred path is audio-native grading (`OPENAI_SPEAKING_AUDIO_MODEL`) when the uploaded format is supported (`wav`/`mp3`); otherwise the edge function falls back to transcript-based grading via `OPENAI_SPEAKING_SCORING_MODEL`. The HTTP response returns as soon as the attempt row is created; clients should poll `speaking-result` for final status.
+Czech enforcement: the grading model explicitly classifies whether the spoken answer is Czech; if `is_czech=false` → all scores zero.
 `exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
 Nếu request anonymous thì row `ai_speaking_attempts` được gắn `guest_token` và `speaking-result` chỉ trả cho đúng token đó.
+Transcript vẫn được lưu để show lại cho học viên ở review, nhưng transcript không còn là source of truth duy nhất cho pronunciation/fluency.
 
 **FK-safety rule (edge function):** Client chỉ nên gửi `question_id` (UUID từ bảng `questions`). KHÔNG gửi `exercise_id` khi đã có `question_id`. Edge function sẽ lookup `question_id` trong bảng `questions`; nếu tìm thấy thì `exercise_id` bị clear về `null` trước khi insert — tránh lỗi FK violation `23503` do UUID của question không tồn tại trong bảng `exercises`. Nếu `question_id` không tìm thấy trong `questions`, edge function coi đó là exercise ID (fallback cho practice flow) và chuyển sang `exercise_id`.
 
@@ -786,9 +787,12 @@ Nếu request anonymous thì row `ai_speaking_attempts` được gắn `guest_to
   ],
   "transcript": "...",
   "transcript_words": [{ "word": "...", "issue": "...", "suggestion": "..." }],
-  "corrections": "...",
+  "corrections": ["..."],
+  "corrected_answer": "...",
   "short_tips": ["..."],
-  "overall_feedback": "..."
+  "overall_feedback": "...",
+  "review_mode": "exam | exercise",
+  "scoring_mode": "audio_native | transcript_fallback"
 }
 ```
 

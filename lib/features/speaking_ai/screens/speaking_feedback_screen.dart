@@ -28,6 +28,7 @@ class SpeakingFeedbackScreen extends ConsumerWidget {
     final moduleId = extra?['moduleId'] as String? ?? '';
     final source = extra?['source'] as String? ??
         (lessonId.isNotEmpty ? 'lesson' : 'practice');
+    final isExamReview = source == 'mock_test' || source == 'simulator';
 
     if (attemptId.isEmpty) {
       return _buildShell(context, child: const _ScoringInProgress());
@@ -85,8 +86,9 @@ class SpeakingFeedbackScreen extends ConsumerWidget {
           return AiTeacherDetailView(
             review: response.review!,
             title: 'Kết quả Nói',
-            subtitle:
-                'AI Teacher nhận xét bài nói dựa trên transcript và tiêu chí chấm hiện có.',
+            subtitle: isExamReview
+                ? 'AI Teacher chấm bài nói từ audio gốc và transcript review để phản ánh sát bài thi hơn.'
+                : 'AI Teacher chấm bài nói từ audio gốc, highlight transcript, và gợi ý cách nói tốt hơn.',
           );
         },
       ),

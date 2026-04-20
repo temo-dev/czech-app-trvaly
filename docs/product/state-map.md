@@ -218,9 +218,9 @@ class SpeakingState {
 Provider: `speakingSessionProvider` — `StateNotifierProvider<SpeakingSessionNotifier, SpeakingState>`.
 
 Key methods on `SpeakingSessionNotifier`:
-- `startRecording()` — requests mic permission, starts `AudioRecorder`, begins amplitude polling (80ms interval, last 30 samples kept)
+- `startRecording()` — requests mic permission, starts `AudioRecorder`, prefers `wav` when supported (falls back to `m4a`), begins amplitude polling (80ms interval, last 30 samples kept)
 - `stopRecording()` → status `recorded`
-- `submitRecording({ lessonId, questionId, exerciseId?, examAttemptId? })` — encodes audio as base64, calls `speaking-upload` edge function; ONLY pass `questionId` for mock test / lesson questions (do NOT pass `exerciseId` when `questionId` is a real questions-table UUID — causes FK violation)
+- `submitRecording({ lessonId, questionId, exerciseId?, examAttemptId? })` — encodes audio as base64, passes `audio_format`, calls `speaking-upload` edge function; ONLY pass `questionId` for mock test / lesson questions (do NOT pass `exerciseId` when `questionId` is a real questions-table UUID — causes FK violation)
 - `discardRecording()` — deletes temp file, resets to idle
 - `restoreRecording(value)` — restores `recorded` (file path) or `uploaded` (UUID) state when navigating back
 - `resetToIdle()` — clears state
@@ -317,7 +317,7 @@ timeout (10 retries exhausted) → *.error('scoring_timeout')
 
 **Mock test context:** Khi submit speaking/writing trong mock test, `exam_attempt_id` phải được truyền vào `speaking-upload` / `writing-submit`. `grade-exam` JOIN các bảng AI attempt theo `exam_attempt_id + question_id`; nếu AI chưa xong thì câu đó tạm thời chưa có điểm và `exam_results.ai_grading_pending = true` để result screen hiển thị banner chờ. Sau khi ghi `exam_results`, edge function còn trigger `analyze-exam` để batch toàn bộ feedback vào `exam_analysis`.
 
-**Operational note:** `speaking-upload` no longer blocks on OpenAI scoring. It inserts the attempt row first, returns `attempt_id` immediately, then uses an Edge Runtime background task to run transcription + grading and update the same row to `ready/error`.
+**Operational note:** `speaking-upload` no longer blocks on OpenAI scoring. It inserts the attempt row first, returns `attempt_id` immediately, then uses an Edge Runtime background task to run transcription + grading and update the same row to `ready/error`. Speaking grading now prefers audio-native scoring for both exercise and exam flows, while transcript remains available for review UI and fallback grading.
 
 `writing-submit` now follows the same async pattern: it resolves `question_id`/`exercise_id`, inserts `ai_writing_attempts(status='processing')`, returns `attempt_id` immediately, then uses an Edge Runtime background task to score the essay with `gpt-5-mini` and update the same row to `ready/error`.
 

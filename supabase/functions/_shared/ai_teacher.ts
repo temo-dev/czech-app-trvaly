@@ -169,6 +169,7 @@ export function buildSpeakingReviewPayload(args: {
   row: Record<string, unknown>;
 }): ReviewPayload {
   const { reviewId, source, row } = args;
+  const isExamLike = source === "mock_test" || source === "simulator";
   const metrics = (row["metrics"] as Record<string, unknown> | null) ?? {};
   const issues = ((row["issues"] as unknown[]) ?? [])
     .map((item) => item as Record<string, unknown>);
@@ -210,7 +211,9 @@ export function buildSpeakingReviewPayload(args: {
 
   let mistakes = issues.map((issue) => ({
     title: speakingIssueTitle(issue["type"] as string | null),
-    explanation: String(issue["word"] ?? issue["token"] ?? ""),
+    explanation: String(
+      issue["explanation"] ?? issue["word"] ?? issue["token"] ?? "",
+    ),
     correction: String(issue["suggestion"] ?? ""),
     tip: "",
   })).filter((item) => item.explanation.length > 0);
@@ -227,7 +230,7 @@ export function buildSpeakingReviewPayload(args: {
   }
 
   const suggestions = shortTips.map((tip, index) => ({
-    title: `Gợi ý ${index + 1}`,
+    title: `${isExamLike ? "Lưu ý" : "Gợi ý luyện"} ${index + 1}`,
     detail: tip,
   }));
 

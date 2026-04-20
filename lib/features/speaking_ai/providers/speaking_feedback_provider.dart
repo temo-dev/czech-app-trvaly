@@ -45,7 +45,10 @@ class SpeakingFeedbackResult {
     required this.transcriptWords,
     required this.overallFeedback,
     required this.corrections,
+    this.correctedAnswer = '',
     this.shortTips = const [],
+    this.reviewMode = 'exercise',
+    this.scoringMode = 'transcript_fallback',
   });
 
   final String attemptId;
@@ -56,7 +59,10 @@ class SpeakingFeedbackResult {
   final List<TranscriptWord> transcriptWords;
   final String overallFeedback;
   final List<String> corrections;
+  final String correctedAnswer;
   final List<String> shortTips;
+  final String reviewMode;
+  final String scoringMode;
 
   double get fraction =>
       maxScore > 0 ? (totalScore / maxScore).clamp(0.0, 1.0) : 0;
@@ -228,7 +234,10 @@ class SpeakingFeedbackNotifier
       transcriptWords: words,
       overallFeedback: data['overall_feedback'] as String? ?? '',
       corrections: corrections,
+      correctedAnswer: data['corrected_answer'] as String? ?? '',
       shortTips: shortTips,
+      reviewMode: data['review_mode'] as String? ?? 'exercise',
+      scoringMode: data['scoring_mode'] as String? ?? 'transcript_fallback',
     );
   }
 
@@ -297,8 +306,14 @@ class SpeakingFeedbackNotifier
       transcript: transcript,
       transcriptWords: transcriptWords,
       overallFeedback: metricsDb['overall_feedback'] as String? ?? '',
-      corrections: [],
+      corrections: [
+        if ((row['corrected_answer'] as String?)?.isNotEmpty ?? false)
+          row['corrected_answer'] as String,
+      ],
+      correctedAnswer: row['corrected_answer'] as String? ?? '',
       shortTips: shortTips,
+      reviewMode: metricsDb['review_mode'] as String? ?? 'exercise',
+      scoringMode: metricsDb['scoring_mode'] as String? ?? 'transcript_fallback',
     );
   }
 

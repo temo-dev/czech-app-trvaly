@@ -65,8 +65,8 @@ Deno.serve(async (req) => {
         {
           status: "error",
           review_id: hydrated["id"],
-          message: String(
-            hydrated["error_message"] ?? "Không thể tải AI Teacher review.",
+          message: normalizeReviewErrorMessage(
+            hydrated["error_message"] as string | undefined,
           ),
         },
         200,
@@ -111,8 +111,8 @@ async function hydrateReviewIfNeeded(
         .from("ai_teacher_reviews")
         .update({
           status: "error",
-          error_message: String(
-            attempt["error_message"] ?? "Không thể tạo AI Teacher review.",
+          error_message: normalizeReviewErrorMessage(
+            attempt["error_message"] as string | undefined,
           ),
           updated_at: new Date().toISOString(),
         })
@@ -166,13 +166,13 @@ async function hydrateReviewIfNeeded(
   if (attempt["status"] === "error") {
     await supabase
       .from("ai_teacher_reviews")
-      .update({
-        status: "error",
-        error_message: String(
-          attempt["error_message"] ?? "Không thể tạo AI Teacher review.",
-        ),
-        updated_at: new Date().toISOString(),
-      })
+        .update({
+          status: "error",
+          error_message: normalizeReviewErrorMessage(
+            attempt["error_message"] as string | undefined,
+          ),
+          updated_at: new Date().toISOString(),
+        })
       .eq("id", rowId);
     return {
       ...row,
@@ -213,6 +213,21 @@ function jsonResponse(body: Record<string, unknown>, status: number) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function normalizeReviewErrorMessage(message: string | undefined): string {
+  const fallback = "Không thể tải AI Teacher review.";
+  const normalized = String(message ?? "").trim();
+  if (!normalized) return fallback;
+
+  if (
+    normalized.includes("response_format") ||
+    normalized.includes("OpenAI audio chat error 400")
+  ) {
+    return "AI review chưa thể tạo vì bước chấm audio trước đó bị lỗi. Vui lòng nộp lại bài nói rồi thử lại.";
+  }
+
+  return normalized;
 }
 
 function buildPendingPayload(row: Record<string, unknown>) {

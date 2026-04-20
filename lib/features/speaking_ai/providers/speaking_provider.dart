@@ -24,6 +24,7 @@ class SpeakingState {
   const SpeakingState({
     this.status = SpeakingStatus.idle,
     this.audioPath,
+    this.audioFormat,
     this.attemptId,
     this.errorMessage,
     this.amplitudes = const [],
@@ -31,6 +32,7 @@ class SpeakingState {
 
   final SpeakingStatus status;
   final String? audioPath;
+  final String? audioFormat;
   final String? attemptId;
   final String? errorMessage;
   final List<double> amplitudes; // 0.0–1.0, recent N samples
@@ -38,6 +40,7 @@ class SpeakingState {
   SpeakingState copyWith({
     SpeakingStatus? status,
     String? audioPath,
+    String? audioFormat,
     String? attemptId,
     String? errorMessage,
     List<double>? amplitudes,
@@ -45,6 +48,7 @@ class SpeakingState {
     return SpeakingState(
       status: status ?? this.status,
       audioPath: audioPath ?? this.audioPath,
+      audioFormat: audioFormat ?? this.audioFormat,
       attemptId: attemptId ?? this.attemptId,
       errorMessage: errorMessage ?? this.errorMessage,
       amplitudes: amplitudes ?? this.amplitudes,
@@ -84,18 +88,22 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
       return;
     }
 
+    final profile = await _selectRecordingProfile();
+    if (!mounted || _disposed) return;
+
     String path;
     if (kIsWeb) {
-      path = 'speaking_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      path =
+          'speaking_${DateTime.now().millisecondsSinceEpoch}.${profile.extension}';
     } else {
       final dir = await getTemporaryDirectory();
       path =
-          '${dir.path}/speaking_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          '${dir.path}/speaking_${DateTime.now().millisecondsSinceEpoch}.${profile.extension}';
     }
 
     await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
+      RecordConfig(
+        encoder: profile.encoder,
         bitRate: 128000,
         sampleRate: 44100,
       ),
@@ -106,6 +114,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     _setStateSafely(state.copyWith(
       status: SpeakingStatus.recording,
       audioPath: path,
+      audioFormat: profile.format,
       amplitudes: [],
     ));
 
@@ -116,9 +125,14 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
   Future<void> stopRecording() async {
     if (state.status != SpeakingStatus.recording) return;
     _pollingGeneration++;
-    await _recorder.stop();
+    final stoppedPath = await _recorder.stop();
     if (!mounted || _disposed) return;
-    _setStateSafely(state.copyWith(status: SpeakingStatus.recorded));
+    _setStateSafely(state.copyWith(
+      status: SpeakingStatus.recorded,
+      audioPath: (stoppedPath != null && stoppedPath.isNotEmpty)
+          ? stoppedPath
+          : state.audioPath,
+    ));
   }
 
   /// User pressed "Ghi lại" — deletes the temp file and resets to idle.
@@ -154,6 +168,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
       _setStateSafely(SpeakingState(
         status: SpeakingStatus.recorded,
         audioPath: value,
+        audioFormat: _inferAudioFormatFromPath(value),
       ));
     }
   }
@@ -179,12 +194,14 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     _setStateSafely(state.copyWith(status: SpeakingStatus.uploading));
 
     final audioPath = state.audioPath!;
+    final audioFormat = state.audioFormat ?? _inferAudioFormatFromPath(audioPath);
     try {
       String? resultAttemptId;
 
       if (kIsWeb) {
         resultAttemptId = await _uploadWeb(
           audioPath: audioPath,
+          audioFormat: audioFormat,
           lessonId: lessonId,
           questionId: questionId,
           exerciseId: exerciseId,
@@ -193,6 +210,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
       } else {
         resultAttemptId = await _uploadNative(
           audioPath: audioPath,
+          audioFormat: audioFormat,
           lessonId: lessonId,
           questionId: questionId,
           exerciseId: exerciseId,
@@ -216,6 +234,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
 
   Future<String> _uploadNative({
     required String audioPath,
+    required String? audioFormat,
     required String lessonId,
     required String questionId,
     String? exerciseId,
@@ -225,6 +244,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     final bytes = await file.readAsBytes();
     return _callUploadFunction(
       bytes: bytes,
+      audioFormat: audioFormat,
       lessonId: lessonId,
       questionId: questionId,
       exerciseId: exerciseId,
@@ -234,6 +254,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
 
   Future<String> _uploadWeb({
     required String audioPath,
+    required String? audioFormat,
     required String lessonId,
     required String questionId,
     String? exerciseId,
@@ -248,6 +269,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     }
     return _callUploadFunction(
       bytes: bytes,
+      audioFormat: audioFormat,
       lessonId: lessonId,
       questionId: questionId,
       exerciseId: exerciseId,
@@ -257,6 +279,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
 
   Future<String> _callUploadFunction({
     required Uint8List bytes,
+    required String? audioFormat,
     required String lessonId,
     required String questionId,
     String? exerciseId,
@@ -272,6 +295,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     try {
       final response = await _invokeUploadFunction(
         bytes: bytes,
+        audioFormat: audioFormat,
         lessonId: lessonId,
         questionId: questionId,
         exerciseId: exerciseId,
@@ -291,6 +315,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
         try {
           final retryResponse = await _invokeUploadFunction(
             bytes: bytes,
+            audioFormat: audioFormat,
             lessonId: lessonId,
             questionId: questionId,
             exerciseId: exerciseId,
@@ -326,6 +351,7 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
 
   Future<dynamic> _invokeUploadFunction({
     required Uint8List bytes,
+    required String? audioFormat,
     required String lessonId,
     required String questionId,
     String? exerciseId,
@@ -338,6 +364,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
         'question_id': questionId,
         if (exerciseId?.isNotEmpty ?? false) 'exercise_id': exerciseId,
         'audio_b64': bytes.isNotEmpty ? base64Encode(bytes) : '',
+        if (audioFormat != null && audioFormat.isNotEmpty)
+          'audio_format': audioFormat,
         if (examAttemptId != null) 'exam_attempt_id': examAttemptId,
       },
     );
@@ -380,6 +408,32 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     _pollingGeneration++;
     discardRecording();
     _setStateSafely(const SpeakingState());
+  }
+
+  Future<_RecordingProfile> _selectRecordingProfile() async {
+    final supportsWav = await _recorder.isEncoderSupported(AudioEncoder.wav);
+    if (supportsWav) {
+      return const _RecordingProfile(
+        encoder: AudioEncoder.wav,
+        extension: 'wav',
+        format: 'wav',
+      );
+    }
+
+    return const _RecordingProfile(
+      encoder: AudioEncoder.aacLc,
+      extension: 'm4a',
+      format: 'm4a',
+    );
+  }
+
+  String? _inferAudioFormatFromPath(String? path) {
+    if (path == null || path.isEmpty) return null;
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.wav')) return 'wav';
+    if (lower.endsWith('.mp3')) return 'mp3';
+    if (lower.endsWith('.m4a')) return 'm4a';
+    return null;
   }
 
   // ── Amplitude polling ────────────────────────────────────────────────────────
@@ -441,6 +495,18 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     _recorder.dispose();
     super.dispose();
   }
+}
+
+class _RecordingProfile {
+  const _RecordingProfile({
+    required this.encoder,
+    required this.extension,
+    required this.format,
+  });
+
+  final AudioEncoder encoder;
+  final String extension;
+  final String format;
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

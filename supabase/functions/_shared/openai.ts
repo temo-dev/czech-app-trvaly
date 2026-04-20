@@ -28,6 +28,10 @@ export function getSpeakingScoringModel(): string {
   return getConfiguredModel("OPENAI_SPEAKING_SCORING_MODEL", "gpt-5-mini");
 }
 
+export function getSpeakingAudioModel(): string {
+  return getConfiguredModel("OPENAI_SPEAKING_AUDIO_MODEL", "gpt-audio-mini");
+}
+
 export function getWritingScoringModel(): string {
   return getConfiguredModel("OPENAI_WRITING_SCORING_MODEL", "gpt-5-mini");
 }
@@ -54,11 +58,66 @@ export interface ChatCompleteOptions {
   temperature?: number;
 }
 
+interface ChatCompletionMessage {
+  role: "system" | "user" | "assistant";
+  content: string | Record<string, unknown>[];
+}
+
 export async function chatComplete(
   apiKey: string,
   systemPrompt: string,
   userMessage: string,
   options: number | ChatCompleteOptions = 30_000,
+): Promise<Record<string, unknown>> {
+  return chatCompleteMessages(
+    apiKey,
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    options,
+    { responseFormat: "json_object" },
+  );
+}
+
+export async function chatCompleteWithAudio(
+  apiKey: string,
+  systemPrompt: string,
+  userMessage: string,
+  audioBytes: Uint8Array,
+  audioFormat: "wav" | "mp3",
+  options: number | ChatCompleteOptions = 30_000,
+): Promise<Record<string, unknown>> {
+  return chatCompleteMessages(
+    apiKey,
+    [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userMessage },
+          {
+            type: "input_audio",
+            input_audio: {
+              data: bytesToBase64(audioBytes),
+              format: audioFormat,
+            },
+          },
+        ],
+      },
+    ],
+    options,
+    { responseFormat: "none" },
+  );
+}
+
+async function chatCompleteMessages(
+  apiKey: string,
+  messages: ChatCompletionMessage[],
+  options: number | ChatCompleteOptions = 30_000,
+  config: { responseFormat: "json_object" | "none" } = {
+    responseFormat: "json_object",
+  },
 ): Promise<Record<string, unknown>> {
   const normalizedOptions = typeof options === "number"
     ? { timeoutMs: options }
@@ -71,12 +130,11 @@ export async function chatComplete(
   try {
     const body: Record<string, unknown> = {
       model,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
+      messages,
     };
+    if (config.responseFormat === "json_object") {
+      body.response_format = { type: "json_object" };
+    }
 
     const temperature = normalizedOptions.temperature ?? 0.3;
     if (!model.startsWith("gpt-5")) {
@@ -99,9 +157,9 @@ export async function chatComplete(
     }
 
     const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Empty OpenAI response");
-    return JSON.parse(content);
+    return parseJsonResponseText(
+      extractChatCompletionText(data.choices?.[0]?.message?.content),
+    );
   } finally {
     clearTimeout(timer);
   }
@@ -133,7 +191,7 @@ export async function transcribeAudio(
   try {
     const form = new FormData();
     const audioChunk = audioBytes.slice();
-    const blob = new Blob([audioChunk], { type: "audio/m4a" });
+    const blob = new Blob([audioChunk], { type: resolveAudioMimeType(filename) });
     form.append("file", blob, filename);
     form.append("model", model);
     if (options.language) {
@@ -169,4 +227,72 @@ export async function transcribeAudio(
   } finally {
     clearTimeout(timer);
   }
+}
+
+function extractChatCompletionText(content: unknown): string {
+  if (typeof content === "string" && content.trim().length > 0) {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    const text = content
+      .map((part) => {
+        if (!part || typeof part !== "object") return "";
+        const record = part as Record<string, unknown>;
+        if (typeof record["text"] === "string") return record["text"];
+        if (typeof record["content"] === "string") return record["content"];
+        return "";
+      })
+      .join("")
+      .trim();
+
+    if (text.length > 0) {
+      return text;
+    }
+  }
+
+  throw new Error("Empty OpenAI response");
+}
+
+function parseJsonResponseText(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+  const candidates = [
+    trimmed,
+    trimmed.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/, ""),
+    extractFirstJsonObject(trimmed),
+  ].filter((candidate): candidate is string => !!candidate && candidate.trim().length > 0);
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as Record<string, unknown>;
+    } catch (_) {
+      // try next candidate
+    }
+  }
+
+  throw new Error(`Invalid JSON response: ${trimmed}`);
+}
+
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
+  return text.slice(start, end + 1);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function resolveAudioMimeType(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".wav")) return "audio/wav";
+  if (lower.endsWith(".mp3")) return "audio/mpeg";
+  return "audio/m4a";
 }

@@ -32,7 +32,8 @@ Model selection được override bằng env ở Edge Function layer. Default hi
 | Env var | Default | Dùng cho |
 |---|---|---|
 | `OPENAI_SPEAKING_TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | transcript bài nói |
-| `OPENAI_SPEAKING_SCORING_MODEL` | `gpt-5-mini` | chấm speaking |
+| `OPENAI_SPEAKING_AUDIO_MODEL` | `gpt-audio-mini` | chấm speaking audio-native |
+| `OPENAI_SPEAKING_SCORING_MODEL` | `gpt-5-mini` | fallback transcript-only cho speaking |
 | `OPENAI_WRITING_SCORING_MODEL` | `gpt-5-mini` | chấm writing |
 | `OPENAI_QUESTION_FEEDBACK_MODEL` | `gpt-5-mini` | feedback objective/cache miss |
 | `OPENAI_OBJECTIVE_REVIEW_MODEL` | `gpt-5-mini` | AI Teacher objective review |
@@ -42,6 +43,7 @@ Model selection được override bằng env ở Edge Function layer. Default hi
 
 Nguyên tắc:
 - speaking/writing là interactive flow, ưu tiên tốc độ + chất lượng ổn định
+- speaking ưu tiên audio-native scoring khi format upload hỗ trợ (`wav`/`mp3`); transcript chỉ là review artifact và fallback signal
 - `exam_analysis` là batch/background flow, ưu tiên chất lượng synthesis hơn latency
 - `OPENAI_DEFAULT_CHAT_MODEL` chỉ là fallback, không nên là nơi quyết định model thật cho flow nghiệp vụ
 
