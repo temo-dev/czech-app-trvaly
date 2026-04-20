@@ -45,9 +45,8 @@ final examQuestionsProvider =
 Question _questionFromSupabase(Map<String, dynamic> q) {
   final optionsRaw = List<Map<String, dynamic>>.from(
     (q['question_options'] as List? ?? []).cast<Map<String, dynamic>>(),
-  )..sort((a, b) =>
-      ((a['order_index'] as num?)?.toInt() ?? 0)
-          .compareTo((b['order_index'] as num?)?.toInt() ?? 0));
+  )..sort((a, b) => ((a['order_index'] as num?)?.toInt() ?? 0)
+      .compareTo((b['order_index'] as num?)?.toInt() ?? 0));
 
   final options = optionsRaw
       .map((o) => QuestionOption(
@@ -63,11 +62,17 @@ Question _questionFromSupabase(Map<String, dynamic> q) {
     type: _parseQuestionType(q['type'] as String? ?? 'mcq'),
     skill: _parseSkillArea(q['skill'] as String? ?? 'reading'),
     difficulty: Difficulty.intermediate,
+    introText: q['intro_text'] as String?,
+    introImageUrl: q['intro_image_url'] as String?,
     prompt: q['prompt'] as String? ?? '',
     audioUrl: q['audio_url'] as String?,
     imageUrl: q['image_url'] as String?,
+    passageText: q['passage_text'] as String?,
     options: options,
     correctAnswer: q['correct_answer'] as String?,
+    acceptedAnswers: ((q['accepted_answers'] as List?) ?? const [])
+        .map((value) => value.toString())
+        .toList(),
     explanation: q['explanation'] as String? ?? '',
     points: (q['points'] as num?)?.toInt() ?? 1,
   );

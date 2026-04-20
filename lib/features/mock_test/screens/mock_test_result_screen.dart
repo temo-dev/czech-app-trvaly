@@ -7,18 +7,18 @@ import 'package:app_czech/core/storage/prefs_storage.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/features/mock_test/models/mock_test_result.dart';
+import 'package:app_czech/features/mock_test/providers/exam_analysis_provider.dart';
+import 'package:app_czech/features/mock_test/providers/exam_result_provider.dart';
+import 'package:app_czech/features/mock_test/widgets/overall_insights_card.dart';
+import 'package:app_czech/features/mock_test/widgets/question_review_list.dart';
+import 'package:app_czech/features/mock_test/widgets/result_cta_section.dart';
+import 'package:app_czech/features/mock_test/widgets/skill_breakdown_chart.dart';
+import 'package:app_czech/features/mock_test/widgets/total_score_hero.dart';
 import 'package:app_czech/shared/utils/skill_labels.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
-import '../models/mock_test_result.dart';
-import '../providers/exam_analysis_provider.dart';
-import '../providers/exam_result_provider.dart';
-import '../widgets/overall_insights_card.dart';
-import '../widgets/question_review_list.dart';
-import '../widgets/result_cta_section.dart';
-import '../widgets/skill_breakdown_chart.dart';
-import '../widgets/total_score_hero.dart';
 
 class MockTestResultScreen extends ConsumerStatefulWidget {
   const MockTestResultScreen({super.key, required this.attemptId});
@@ -163,9 +163,17 @@ class _ResultBody extends ConsumerWidget {
             Center(child: TotalScoreHero(result: result)),
             const SizedBox(height: AppSpacing.x6),
 
+            if (result.writtenTotal > 0 && result.speakingTotal > 0) ...[
+              _OfficialPassRuleCard(result: result),
+              const SizedBox(height: AppSpacing.x5),
+            ],
+
             // Skill breakdown
             if (result.sectionScores.isNotEmpty) ...[
-              Text('Kết quả từng kỹ năng', style: AppTypography.titleSmall),
+              const Text(
+                'Kết quả từng kỹ năng',
+                style: AppTypography.titleSmall,
+              ),
               const SizedBox(height: AppSpacing.x4),
               SkillBreakdownChart(sectionScores: result.sectionScores),
               const SizedBox(height: AppSpacing.x5),
@@ -214,7 +222,10 @@ class _WeakSkillsRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Kỹ năng cần cải thiện', style: AppTypography.titleSmall),
+        const Text(
+          'Kỹ năng cần cải thiện',
+          style: AppTypography.titleSmall,
+        ),
         const SizedBox(height: AppSpacing.x3),
         Wrap(
           spacing: AppSpacing.x2,
@@ -240,6 +251,112 @@ class _WeakSkillsRow extends StatelessWidget {
           }).toList(),
         ),
       ],
+    );
+  }
+}
+
+class _OfficialPassRuleCard extends StatelessWidget {
+  const _OfficialPassRuleCard({required this.result});
+
+  final MockTestResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final writtenPassed = result.writtenScore >= result.writtenPassThreshold;
+    final speakingPassed = result.speakingScore >= result.speakingPassThreshold;
+
+    Widget scoreRow({
+      required String label,
+      required int score,
+      required int total,
+      required int threshold,
+      required bool passed,
+    }) {
+      final fg = passed ? AppColors.success : AppColors.error;
+      return Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.x4,
+          vertical: AppSpacing.x3,
+        ),
+        decoration: BoxDecoration(
+          color: passed
+              ? AppColors.successContainer.withValues(alpha: 0.55)
+              : AppColors.errorContainer.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: fg.withValues(alpha: 0.28),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppTypography.labelMedium),
+                  const SizedBox(height: AppSpacing.x1),
+                  Text(
+                    '$score / $total',
+                    style: AppTypography.titleSmall.copyWith(
+                      color: fg,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              'Chuẩn $threshold',
+              style: AppTypography.labelSmall.copyWith(
+                color: fg,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Điều kiện đậu chính thức',
+            style: AppTypography.titleSmall,
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            'Bạn cần đạt đồng thời phần viết và phần nói theo chuẩn đề A2 chính thức.',
+            style: AppTypography.bodySmall.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x4),
+          scoreRow(
+            label: 'Phần viết (Đọc + Nghe + Viết)',
+            score: result.writtenScore,
+            total: result.writtenTotal,
+            threshold: result.writtenPassThreshold,
+            passed: writtenPassed,
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          scoreRow(
+            label: 'Phần nói',
+            score: result.speakingScore,
+            total: result.speakingTotal,
+            threshold: result.speakingPassThreshold,
+            passed: speakingPassed,
+          ),
+        ],
+      ),
     );
   }
 }

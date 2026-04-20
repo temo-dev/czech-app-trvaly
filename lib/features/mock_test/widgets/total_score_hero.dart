@@ -20,6 +20,8 @@ class TotalScoreHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasOfficialBuckets =
+        result.writtenTotal > 0 && result.speakingTotal > 0;
     return Column(
       children: [
         // Animated ring
@@ -62,10 +64,13 @@ class TotalScoreHero extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Điểm chuẩn: ${result.passThreshold}/100',
+          hasOfficialBuckets
+              ? 'Luật đậu chính thức: Viết ${result.writtenPassThreshold}/${result.writtenTotal} và Nói ${result.speakingPassThreshold}/${result.speakingTotal}'
+              : 'Điểm chuẩn tổng: ${result.passThreshold}/100',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.onSurfaceVariant,
           ),
+          textAlign: TextAlign.center,
         ),
       ],
     );

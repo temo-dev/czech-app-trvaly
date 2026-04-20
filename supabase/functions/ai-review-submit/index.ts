@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
     const { data: question } = await supabase
       .from("questions")
       .select(
-        "id, type, skill, prompt, explanation, correct_answer, question_options(id, text, is_correct, order_index)",
+        "id, type, skill, prompt, explanation, correct_answer, accepted_answers, question_options(id, text, is_correct, order_index)",
       )
       .eq("id", validQuestionId ?? questionId)
       .single();
@@ -582,11 +582,15 @@ function computeObjectiveCorrectness(args: {
   }
 
   if (type === "fill_blank" || type === "fillBlank") {
-    const correct = String(question["correct_answer"] ?? "").trim()
-      .toLowerCase();
     const submitted = String(writtenAnswer ?? "").trim().toLowerCase();
-    const isCorrect = correct.length > 0 && submitted.length > 0 &&
-      correct === submitted;
+    const acceptedAnswers = [
+      question["correct_answer"],
+      ...(((question["accepted_answers"] as unknown[]) ?? [])),
+    ]
+      .map((value) => String(value ?? "").trim().toLowerCase())
+      .filter((value) => value.length > 0);
+    const isCorrect = submitted.length > 0 &&
+      acceptedAnswers.includes(submitted);
     return {
       verdict: isCorrect ? "correct" : "incorrect",
       ratio: isCorrect ? 1 : 0,

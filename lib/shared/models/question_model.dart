@@ -16,16 +16,18 @@ class Question with _$Question {
     required QuestionType type,
     required SkillArea skill,
     required Difficulty difficulty,
-    String? introText,                     // context shown above the prompt
-    String? introImageUrl,                 // image shown above the prompt
-    required String prompt,               // question text (may contain {blank})
-    String? audioUrl,                     // for listening questions
-    String? imageUrl,                     // for question-level image (inline)
-    @Default([]) List<QuestionOption> options,   // MCQ options
-    @Default([]) List<MatchPair> matchPairs,     // matching pairs
-    @Default([]) List<String> orderItems,        // ordering items
-    String? correctAnswer,                // fill-blank / speaking rubric
-    required String explanation,          // shown post-answer
+    String? introText, // context shown above the prompt
+    String? introImageUrl, // image shown above the prompt
+    required String prompt, // question text (may contain {blank})
+    String? audioUrl, // for listening questions
+    String? imageUrl, // for question-level image (inline)
+    String? passageText, // long-form reading passage
+    @Default([]) List<QuestionOption> options, // MCQ options
+    @Default([]) List<MatchPair> matchPairs, // matching pairs
+    @Default([]) List<String> orderItems, // ordering items
+    String? correctAnswer, // fill-blank / speaking rubric
+    @Default([]) List<String> acceptedAnswers, // normalized alternative answers
+    required String explanation, // shown post-answer
     @Default(0) int points,
   }) = _Question;
 
@@ -66,7 +68,7 @@ class QuestionAnswer with _$QuestionAnswer {
     required String questionId,
     String? selectedOptionId,
     String? writtenAnswer,
-    String? audioKey,                              // S3 key for speaking upload
+    String? audioKey, // S3 key for speaking upload
     @Default([]) List<String> selectedOptionIds,
     @Default([]) List<String> orderedIds,
     @Default({}) Map<String, String> matchedPairs, // leftId → rightId

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/features/exercise/widgets/mcq_exercise.dart';
 import 'package:app_czech/shared/models/question_model.dart';
-import 'mcq_exercise.dart';
 
 /// Reading comprehension exercise.
 /// - Web (≥900px): passage on left, MCQ on right (side-by-side)
@@ -23,12 +23,10 @@ class ReadingPassageExercise extends StatefulWidget {
   final ValueChanged<String>? onSelect;
 
   @override
-  State<ReadingPassageExercise> createState() =>
-      _ReadingPassageExerciseState();
+  State<ReadingPassageExercise> createState() => _ReadingPassageExerciseState();
 }
 
-class _ReadingPassageExerciseState
-    extends State<ReadingPassageExercise> {
+class _ReadingPassageExerciseState extends State<ReadingPassageExercise> {
   bool _passageExpanded = false;
 
   @override
@@ -36,7 +34,8 @@ class _ReadingPassageExerciseState
     final isWide = MediaQuery.sizeOf(context).width >= 900;
 
     if (isWide) {
-      return _WideLayout(question: widget.question,
+      return _WideLayout(
+          question: widget.question,
           selectedOptionId: widget.selectedOptionId,
           isSubmitted: widget.isSubmitted,
           onSelect: widget.onSelect);
@@ -79,8 +78,7 @@ class _WideLayout extends StatelessWidget {
           Expanded(
             flex: 3,
             child: _PassageCard(
-              passage: question.imageUrl ?? question.prompt,
-              isPassageOnly: question.imageUrl != null,
+              passage: question.passageText ?? question.introText ?? '',
             ),
           ),
           const SizedBox(width: AppSpacing.x5),
@@ -121,7 +119,7 @@ class _NarrowLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final passage = question.imageUrl ?? question.prompt;
+    final passage = question.passageText ?? question.introText ?? '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -139,7 +137,6 @@ class _NarrowLayout extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: AppSpacing.x4),
             child: _PassageCard(
               passage: passage,
-              isPassageOnly: question.imageUrl != null,
             ),
           ),
           secondChild: const SizedBox.shrink(),
@@ -172,19 +169,21 @@ class _PassageToggleHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.primaryFixed,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.menu_book_outlined,
-              size: 16, color: AppColors.primary),
+          const Icon(
+            Icons.menu_book_outlined,
+            size: 16,
+            color: AppColors.primary,
+          ),
           const SizedBox(width: AppSpacing.x2),
           Expanded(
             child: Text(
               'Đoạn văn',
-              style: AppTypography.labelMedium
-                  .copyWith(color: AppColors.primary),
+              style:
+                  AppTypography.labelMedium.copyWith(color: AppColors.primary),
             ),
           ),
           Icon(
@@ -203,11 +202,9 @@ class _PassageToggleHeader extends StatelessWidget {
 class _PassageCard extends StatelessWidget {
   const _PassageCard({
     required this.passage,
-    required this.isPassageOnly,
   });
 
   final String passage;
-  final bool isPassageOnly; // true = imageUrl field used as passage text
 
   @override
   Widget build(BuildContext context) {

@@ -78,6 +78,15 @@ Future<MockTestResult?> _fetchLatestResult(String userId) async {
       passThreshold: raw['pass_threshold'] as int? ?? 60,
       sectionScores: sectionScores,
       weakSkills: weakSkills,
+      passed: raw['passed'] as bool? ??
+          ((raw['total_score'] as int? ?? 0) >=
+              (raw['pass_threshold'] as int? ?? 60)),
+      writtenScore: raw['written_score'] as int? ?? 0,
+      writtenTotal: raw['written_total'] as int? ?? 70,
+      writtenPassThreshold: raw['written_pass_threshold'] as int? ?? 42,
+      speakingScore: raw['speaking_score'] as int? ?? 0,
+      speakingTotal: raw['speaking_total'] as int? ?? 40,
+      speakingPassThreshold: raw['speaking_pass_threshold'] as int? ?? 24,
       createdAt: DateTime.parse(raw['created_at'] as String),
     );
   } catch (_) {
@@ -207,12 +216,14 @@ Future<_CourseData> _fetchCourseData(String userId) async {
           totalLessons++;
           final lessonId = lesson['id'] as String;
           final blockIds = _blockIds(lesson);
-          if (blockIds.isNotEmpty && blockIds.every(completedBlockIds.contains)) {
+          if (blockIds.isNotEmpty &&
+              blockIds.every(completedBlockIds.contains)) {
             completedLessons++;
           }
           final lastActive = lessonLastActive[lessonId];
           if (lastActive != null &&
-              (courseLastActive == null || lastActive.isAfter(courseLastActive))) {
+              (courseLastActive == null ||
+                  lastActive.isAfter(courseLastActive))) {
             courseLastActive = lastActive;
           }
         }
@@ -291,8 +302,8 @@ List<Map<String, dynamic>> _sortedModules(Map<String, dynamic> course) {
   final list = ((course['modules'] as List?) ?? [])
       .map((m) => Map<String, dynamic>.from(m as Map))
       .toList();
-  list.sort((a, b) =>
-      (a['order_index'] as int).compareTo(b['order_index'] as int));
+  list.sort(
+      (a, b) => (a['order_index'] as int).compareTo(b['order_index'] as int));
   return list;
 }
 
@@ -300,8 +311,8 @@ List<Map<String, dynamic>> _sortedLessons(Map<String, dynamic> module) {
   final list = ((module['lessons'] as List?) ?? [])
       .map((l) => Map<String, dynamic>.from(l as Map))
       .toList();
-  list.sort((a, b) =>
-      (a['order_index'] as int).compareTo(b['order_index'] as int));
+  list.sort(
+      (a, b) => (a['order_index'] as int).compareTo(b['order_index'] as int));
   return list;
 }
 

@@ -30,8 +30,8 @@ Tất cả nội dung được seed qua **Supabase migration files** trong `supa
 | Bảng | Vai trò |
 |------|---------|
 | `exams` | Metadata: tiêu đề, thời gian, `is_active` |
-| `exam_sections` | 4 phần thi per exam (reading/listening/writing/speaking) |
-| `questions` | Câu hỏi, liên kết với section |
+| `exam_sections` | 4 phần thi per exam (reading/listening/writing/speaking) + optional `section_duration_minutes` |
+| `questions` | Câu hỏi, liên kết với section; runtime đọc trực tiếp `intro_text`, `intro_image_url`, `passage_text`, `audio_url`, `accepted_answers` |
 | `question_options` | Các đáp án MCQ (4 option mỗi câu) |
 
 ### Quy tắc `is_active`
@@ -55,16 +55,33 @@ Questions Writing:  00000003-0000-0000-0000-00000000000N
 Questions Speaking: 00000004-0000-0000-0000-00000000000N
 ```
 
+### Official-style exam checklist
+
+Khi author một đề bám sát đề giấy chính thức:
+- Objective reading/listening luôn dùng `type='mcq'` hoặc `type='fill_blank'`; phân biệt bằng `skill='reading'|'listening'`, không tạo type riêng kiểu `reading` / `listening`.
+- Passage dài cho reading để ở `passage_text`; ngữ cảnh ngắn để ở `intro_text`.
+- Ảnh mở đầu cho speaking / visual cue để ở `intro_image_url`.
+- Audio để ở `audio_url`.
+- Fill-blank nhiều cách viết đúng phải điền `correct_answer` + `accepted_answers[]`.
+- Nếu thi theo từng phần có đồng hồ riêng, set `exam_sections.section_duration_minutes` cho tất cả section; app sẽ tự dùng section timer thay cho global timer.
+- Pass rule chính thức của đề A2 hiện tại: written `>= 42/70` và speaking `>= 24/40`.
+
 ### Schema câu hỏi
 
 ```sql
 INSERT INTO questions (
   id,            -- UUID cố định (dễ tham chiếu)
   section_id,    -- UUID của exam_section
-  type,          -- 'mcq' | 'writing' | 'speaking'
+  type,          -- 'mcq' | 'fill_blank' | 'writing' | 'speaking'
   skill,         -- 'reading' | 'listening' | 'writing' | 'speaking'
-  prompt,        -- Nội dung câu hỏi (tiếng Czech + context)
-  correct_answer,-- 'a'/'b'/'c'/'d' cho MCQ, null cho writing/speaking
+  intro_text,    -- Ngữ cảnh hiển thị phía trên câu hỏi
+  intro_image_url, -- Ảnh hiển thị phía trên câu hỏi
+  prompt,        -- Nội dung câu hỏi chính
+  audio_url,     -- file audio cho listening (nếu có)
+  image_url,     -- ảnh trực tiếp của question (nếu có)
+  passage_text,  -- đoạn văn reading dài
+  correct_answer,-- đáp án chính / rubric AI
+  accepted_answers, -- mảng đáp án phụ hợp lệ cho fill_blank
   explanation,   -- Giải thích đáp án bằng tiếng Việt
   points,        -- 1 (MCQ) hoặc 2 (writing/speaking)
   order_index    -- Thứ tự hiển thị (1–10 cho reading/listening, 1–5 cho writing/speaking)
@@ -82,33 +99,32 @@ INSERT INTO question_options (
 )
 ```
 
-> **Lưu ý:** `correct_answer` trong `questions` ('a'/'b'/'c'/'d') phải khớp với `order_index` của option có `is_correct = true`. App dùng cả hai để grade.
+> **Lưu ý:** runtime Flutter dùng `question_options.is_correct` cho MCQ và `questions.correct_answer` + `questions.accepted_answers` cho fill-blank. Không overloading `prompt` để chứa đoạn văn dài nữa.
 
 ### Cấu trúc prompt câu hỏi
 
-**Reading/Listening MCQ** — Nhúng văn bản đọc/nghe trực tiếp vào `prompt`:
+**Reading MCQ với passage**:
 ```
-Đọc biển tại cửa hàng:
-
-ALBERT SUPERMARKET
-Otevírací doba: ...
-
-Bạn muốn đi mua sắm vào Chủ nhật lúc 19:00. Cửa hàng có còn mở không?
+passage_text: "Đoạn đọc dài..."
+prompt: "6. Kdy skončila stavba sportoviště?"
 ```
 
-**Listening** — Dùng prefix `[Poslech]` và viết lời thoại dạng script:
+**Listening**:
 ```
-[Poslech] Nghe đoạn hội thoại qua điện thoại:
-
-Lễ tân: "..."
-Bệnh nhân: "..."
-
-Câu hỏi?
+audio_url: "https://.../questions/audio/..."
+prompt: "7. Který kurz teď můžete navštěvovat v úterý?"
 ```
 
 **Writing** — Prompt có cấu trúc rõ ràng: thể loại văn bản, số từ, các điểm cần bao gồm.
 
 **Speaking** — Prompt có tình huống + bullet points các điểm cần nói + thời lượng.
+
+### Asset pipeline cho đề thi chính thức
+
+- Visual crop và audio generation spec hiện nằm tại [editorial-spec.md](/Users/daniel.dev/Desktop/app-czech/docs/product/exams/official-a2-2025/editorial-spec.md:1).
+- Upload contract nằm tại [asset-manifest.json](/Users/daniel.dev/Desktop/app-czech/docs/product/exams/official-a2-2025/asset-manifest.json:1).
+- Audio Czech TTS được tạo bằng [generate_official_a2_audio.py](/Users/daniel.dev/Desktop/app-czech/cms/scripts/generate_official_a2_audio.py:1).
+- Upload assets lên bucket `cms-assets` bằng `cd cms && npm run assets:upload:official-a2`.
 
 ---
 

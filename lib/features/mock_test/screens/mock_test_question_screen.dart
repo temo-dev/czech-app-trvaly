@@ -5,18 +5,18 @@ import 'package:app_czech/core/router/app_routes.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/features/exercise/widgets/question_shell.dart';
+import 'package:app_czech/features/mock_test/providers/exam_questions_provider.dart';
+import 'package:app_czech/features/mock_test/providers/exam_session_notifier.dart';
+import 'package:app_czech/features/mock_test/widgets/confirm_submit_dialog.dart';
+import 'package:app_czech/features/mock_test/widgets/exam_top_bar.dart';
+import 'package:app_czech/features/mock_test/widgets/question_nav_panel.dart';
+import 'package:app_czech/features/mock_test/widgets/section_transition_card.dart';
+import 'package:app_czech/features/speaking_ai/providers/speaking_provider.dart';
 import 'package:app_czech/shared/models/question_model.dart';
 import 'package:app_czech/shared/widgets/app_button.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
-import '../../exercise/widgets/question_shell.dart';
-import '../../speaking_ai/providers/speaking_provider.dart';
-import '../providers/exam_questions_provider.dart';
-import '../providers/exam_session_notifier.dart';
-import '../widgets/confirm_submit_dialog.dart';
-import '../widgets/exam_top_bar.dart';
-import '../widgets/question_nav_panel.dart';
-import '../widgets/section_transition_card.dart';
 
 class MockTestQuestionScreen extends ConsumerStatefulWidget {
   const MockTestQuestionScreen({super.key, required this.attemptId});
@@ -53,7 +53,7 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
         _timerStarted = true;
         final remaining = s.attempt.remainingSeconds ?? 0;
         _lastKnownRemainingSeconds = s.attempt.remainingSeconds;
-        final seconds = remaining > 0 ? remaining : s.meta.durationMinutes * 60;
+        final seconds = remaining > 0 ? remaining : s.totalExamSeconds;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           ref.read(examTimerNotifierProvider(seconds).notifier).start(
@@ -102,6 +102,7 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
       final notifier =
           ref.read(examSessionNotifierProvider(widget.attemptId).notifier);
       notifier.updateRemainingSeconds(timerSeconds);
+      notifier.syncSectionFromRemainingSeconds(timerSeconds);
       if (!shouldSync) return;
       _lastSyncedTimer = timerSeconds;
       notifier.syncProgress(remainingSeconds: timerSeconds);
@@ -173,6 +174,10 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
       currentGlobalIndex: sessionState.globalQuestionIndex,
       onClose: () => Navigator.of(ctx).pop(),
       onTap: (si, qi) {
+        if (sessionState.usesSectionTimers &&
+            si != sessionState.currentSectionIndex) {
+          return;
+        }
         Navigator.of(ctx).pop();
         ref
             .read(examSessionNotifierProvider(widget.attemptId).notifier)
@@ -207,10 +212,10 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
           // Always watch the timer first — even during section transitions.
           // If ref.watch is skipped (early return), autoDispose kills the
           // provider and cancels Timer.periodic, causing a reset.
-          final _remaining = session.attempt.remainingSeconds ?? 0;
+          final remaining = session.attempt.remainingSeconds ?? 0;
           final timerSeconds = ref.watch(
             examTimerNotifierProvider(
-              _remaining > 0 ? _remaining : session.meta.durationMinutes * 60,
+              remaining > 0 ? remaining : session.totalExamSeconds,
             ),
           );
           _trackTimer(session, timerSeconds);
@@ -237,7 +242,7 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
               sectionLabel: session.currentSection.label,
               questionLabel:
                   'CÂU HỎI ${session.globalQuestionIndex + 1} / ${session.totalQuestions}',
-              remainingSeconds: timerSeconds,
+              remainingSeconds: session.sectionRemainingSeconds(timerSeconds),
               autosaveStatus: session.autosaveStatus,
               onNavTap: () => _showNavPanel(context),
               onExit: () => ConfirmExitDialog.show(
@@ -278,7 +283,7 @@ class _MockTestQuestionScreenState extends ConsumerState<MockTestQuestionScreen>
                                         widget.attemptId)
                                     .notifier)
                                 .goToQuestion(si, qi - 1);
-                          } else if (si > 0) {
+                          } else if (!session.usesSectionTimers && si > 0) {
                             final prevSection = session.meta.sections[si - 1];
                             ref
                                 .read(examSessionNotifierProvider(
@@ -403,7 +408,7 @@ class _BottomBar extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 12,
                     height: 12,
                     child: CircularProgressIndicator(
@@ -487,7 +492,7 @@ class _QuestionBody extends ConsumerWidget {
       data: (questions) {
         final globalIdx = session.globalQuestionIndex;
         if (questions.isEmpty || globalIdx >= questions.length) {
-          return Center(
+          return const Center(
             child: Text(
               'Không tìm thấy câu hỏi.',
               style: AppTypography.bodyMedium,

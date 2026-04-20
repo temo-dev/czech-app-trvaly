@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/shared/models/question_model.dart';
+import 'package:app_czech/features/exercise/widgets/audio_player_bar.dart';
 import 'package:app_czech/features/exercise/widgets/fill_blank_exercise.dart';
 import 'package:app_czech/features/exercise/widgets/listening_exercise.dart';
 import 'package:app_czech/features/exercise/widgets/mcq_exercise.dart';
@@ -81,6 +82,9 @@ class QuestionShell extends StatelessWidget {
   Widget _buildRenderer() {
     final selectedOptionId = currentAnswer?.selectedOptionId;
     final writtenAnswer = currentAnswer?.writtenAnswer;
+    final hasReadingPassage = question.skill == SkillArea.reading &&
+        ((question.passageText?.isNotEmpty ?? false) ||
+            (question.introText?.isNotEmpty ?? false));
 
     switch (question.type) {
       case QuestionType.mcq:
@@ -95,8 +99,7 @@ class QuestionShell extends StatelessWidget {
           );
         }
         // Reading questions show a passage panel
-        if (question.skill == SkillArea.reading &&
-            (question.imageUrl != null || question.prompt.length > 300)) {
+        if (hasReadingPassage) {
           return ReadingPassageExercise(
             question: question,
             selectedOptionId: selectedOptionId,
@@ -112,12 +115,28 @@ class QuestionShell extends StatelessWidget {
         );
 
       case QuestionType.fillBlank:
-        return FillBlankExercise(
+        final fillBlank = FillBlankExercise(
           question: question,
           initialAnswer: writtenAnswer,
           isSubmitted: isSubmitted,
           onChanged: _updateText,
         );
+        if (question.skill == SkillArea.listening &&
+            question.audioUrl != null &&
+            question.audioUrl!.isNotEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AudioPlayerBar(
+                audioUrl: question.audioUrl!,
+                maxPlays: isSubmitted ? null : 2,
+              ),
+              const SizedBox(height: AppSpacing.x5),
+              fillBlank,
+            ],
+          );
+        }
+        return fillBlank;
 
       case QuestionType.writing:
         return WritingInputExercise(

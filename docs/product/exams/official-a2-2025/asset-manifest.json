@@ -1,0 +1,175 @@
+{
+  "bucket": "cms-assets",
+  "assets": [
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/reading-task1-q1.png",
+      "storage_path": "questions/official-a2-2025/reading-task1-q1.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/reading-task1-q2.png",
+      "storage_path": "questions/official-a2-2025/reading-task1-q2.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/reading-task1-q3.png",
+      "storage_path": "questions/official-a2-2025/reading-task1-q3.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/reading-task1-q4.png",
+      "storage_path": "questions/official-a2-2025/reading-task1-q4.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/reading-task1-q5.png",
+      "storage_path": "questions/official-a2-2025/reading-task1-q5.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/listening-task4-option-a.png",
+      "storage_path": "questions/options/official-a2-2025/listening-task4-option-a.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/listening-task4-option-b.png",
+      "storage_path": "questions/options/official-a2-2025/listening-task4-option-b.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/listening-task4-option-c.png",
+      "storage_path": "questions/options/official-a2-2025/listening-task4-option-c.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/listening-task4-option-d.png",
+      "storage_path": "questions/options/official-a2-2025/listening-task4-option-d.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/listening-task4-option-e.png",
+      "storage_path": "questions/options/official-a2-2025/listening-task4-option-e.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/listening-task4-option-f.png",
+      "storage_path": "questions/options/official-a2-2025/listening-task4-option-f.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/speaking-task3-storyboard.png",
+      "storage_path": "questions/intro/official-a2-2025/speaking-task3-storyboard.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/images/speaking-task4-choices.png",
+      "storage_path": "questions/intro/official-a2-2025/speaking-task4-choices.png",
+      "content_type": "image/png"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task1-q1.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task1-q1.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task1-q2.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task1-q2.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task1-q3.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task1-q3.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task1-q4.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task1-q4.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task1-q5.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task1-q5.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task2-q6.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task2-q6.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task2-q7.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task2-q7.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task2-q8.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task2-q8.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task2-q9.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task2-q9.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task2-q10.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task2-q10.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task3-q11.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task3-q11.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task3-q12.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task3-q12.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task3-q13.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task3-q13.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task3-q14.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task3-q14.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task3-q15.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task3-q15.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task4-q16.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task4-q16.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task4-q17.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task4-q17.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task4-q18.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task4-q18.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task4-q19.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task4-q19.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task4-q20.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task4-q20.wav",
+      "content_type": "audio/wav"
+    },
+    {
+      "local_path": "docs/product/exams/official-a2-2025/assets/audio/listening-task5-message.wav",
+      "storage_path": "questions/audio/official-a2-2025/listening-task5-message.wav",
+      "content_type": "audio/wav"
+    }
+  ]
+}

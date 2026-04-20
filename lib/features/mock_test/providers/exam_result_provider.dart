@@ -59,6 +59,15 @@ Future<MockTestResult> examResult(ExamResultRef ref, String attemptId) async {
     passThreshold: raw['pass_threshold'] as int? ?? 60,
     sectionScores: sectionScores,
     weakSkills: weakSkills,
+    passed: raw['passed'] as bool? ??
+        ((raw['total_score'] as int? ?? 0) >=
+            (raw['pass_threshold'] as int? ?? 60)),
+    writtenScore: raw['written_score'] as int? ?? 0,
+    writtenTotal: raw['written_total'] as int? ?? 70,
+    writtenPassThreshold: raw['written_pass_threshold'] as int? ?? 42,
+    speakingScore: raw['speaking_score'] as int? ?? 0,
+    speakingTotal: raw['speaking_total'] as int? ?? 40,
+    speakingPassThreshold: raw['speaking_pass_threshold'] as int? ?? 24,
     aiGradingPending: raw['ai_grading_pending'] as bool? ?? false,
     createdAt: DateTime.parse(raw['created_at'] as String),
   );
@@ -239,9 +248,15 @@ Future<List<QuestionReviewItem>> examReview(
       }
       isCorrect = selectedOption?.isCorrect ?? false;
     } else if (question.type == QuestionType.fillBlank) {
-      isCorrect = userAnswer != null &&
-          userAnswer.toLowerCase().trim() ==
-              (question.correctAnswer ?? '').toLowerCase().trim();
+      final normalized = userAnswer?.toLowerCase().trim();
+      final accepted = {
+        if ((question.correctAnswer ?? '').trim().isNotEmpty)
+          question.correctAnswer!.toLowerCase().trim(),
+        ...question.acceptedAnswers
+            .map((answer) => answer.toLowerCase().trim())
+            .where((answer) => answer.isNotEmpty),
+      };
+      isCorrect = normalized != null && accepted.contains(normalized);
     }
 
     return QuestionReviewItem(

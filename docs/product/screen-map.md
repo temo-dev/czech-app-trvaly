@@ -57,7 +57,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **States**: `loading`, `active`, `sectionTransition`, `submitting`, `submitted`, `error`
 **UI**: top bar (timer, section label, progress), question area, navigation panel, autosave indicator
 **Actions**: answer → autosave to `exam_attempts.answers` theo `question_id`; "Nộp bài" → đảm bảo writing AI attempts được tạo, gọi `grade-exam`, chờ `exam_results` row rồi mới chuyển `/mock-test/result/:attemptId`
-**Special**: timer ticks via `Ticker`; timer sync xuống DB theo checkpoint + lifecycle; section transition card shown between skills
+**Special**: timer ticks via `Ticker`; timer sync xuống DB theo checkpoint + lifecycle; section transition card shown between skills; nếu mọi section đều có `section_duration_minutes`, timer và điều hướng được khóa theo từng section thay vì một countdown global
 
 ---
 
@@ -67,7 +67,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **States**: `loading` (shimmer), `success`, `error`, `analysis_loading`
 **UI**: total score hero, pass/fail badge, skill breakdown chart, weak skills list, `OverallInsightsCard`, preloaded `QuestionReviewList`, CTA (signup if guest, retry or review if auth)
 **Actions**: "Xem lại đáp án" → review mode on same screen; "Thi lại" → new attempt; auth CTA → `/auth/signup`
-**Special**: polling có kiểm soát cho tới khi `exam_results` row sẵn sàng; sau đó tiếp tục poll `exam_analysis` để lấy insight + feedback preload cho objective questions; speaking/writing review vẫn đọc AI attempts đã gắn với exam, không submit lại writing
+**Special**: polling có kiểm soát cho tới khi `exam_results` row sẵn sàng; sau đó tiếp tục poll `exam_analysis` để lấy insight + feedback preload cho objective questions; speaking/writing review vẫn đọc AI attempts đã gắn với exam, không submit lại writing; result hero và summary card hiển thị thêm official written-vs-speaking bucket status bên cạnh tổng phần trăm
 
 ---
 

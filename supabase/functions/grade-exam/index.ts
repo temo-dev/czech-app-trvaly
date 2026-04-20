@@ -8,6 +8,7 @@ interface QuestionRow {
   skill: string;
   points: number;
   correct_answer: string | null;
+  accepted_answers: string[] | null;
   section_id: string;
   order_index: number;
   question_options: Array<
@@ -113,7 +114,7 @@ Deno.serve(async (req) => {
     const { data: questionsRaw } = await supabase
       .from("questions")
       .select(
-        "id, type, skill, points, correct_answer, section_id, order_index, question_options(id, is_correct, order_index)",
+        "id, type, skill, points, correct_answer, accepted_answers, section_id, order_index, question_options(id, is_correct, order_index)",
       )
       .in("section_id", sectionIds)
       .order("order_index");
@@ -252,6 +253,10 @@ Deno.serve(async (req) => {
     const weakSkills: string[] = [];
     let totalEarned = 0;
     let totalPossible = 0;
+    let writtenEarned = 0;
+    let writtenPossible = 0;
+    let speakingEarned = 0;
+    let speakingPossible = 0;
     let aiGradingPending = false;
     let globalIdx = 0;
 
@@ -296,12 +301,7 @@ Deno.serve(async (req) => {
         } else if (
           question.type === "fill_blank" || question.type === "fillBlank"
         ) {
-          if (
-            writtenAnswer &&
-            question.correct_answer &&
-            writtenAnswer.trim().toLowerCase() ===
-              question.correct_answer.trim().toLowerCase()
-          ) {
+          if (matchesAcceptedAnswer(writtenAnswer, question)) {
             earned = points;
           }
         } else if (
@@ -368,20 +368,30 @@ Deno.serve(async (req) => {
         sectionEarned += earned;
         totalEarned += earned;
         totalPossible += points;
+        if (question.skill === "speaking") {
+          speakingEarned += earned;
+          speakingPossible += points;
+        } else {
+          writtenEarned += earned;
+          writtenPossible += points;
+        }
         globalIdx++;
       }
 
-      const sectionScore = sectionPossible > 0
+      sectionScores[section.skill] = { score: sectionEarned, total: sectionPossible };
+      const sectionPercent = sectionPossible > 0
         ? Math.round((sectionEarned / sectionPossible) * 100)
         : 0;
-
-      sectionScores[section.skill] = { score: sectionScore, total: 100 };
-      if (sectionScore < 60) weakSkills.push(section.skill);
+      if (sectionPercent < 60) weakSkills.push(section.skill);
     }
 
     const totalScore = totalPossible > 0
       ? Math.round((totalEarned / totalPossible) * 100)
       : 0;
+    const writtenPassThreshold = Math.ceil(writtenPossible * 0.6);
+    const speakingPassThreshold = Math.ceil(speakingPossible * 0.6);
+    const passed = writtenEarned >= writtenPassThreshold &&
+      speakingEarned >= speakingPassThreshold;
 
     await supabase.from("exam_results").delete().eq("attempt_id", attempt_id);
 
@@ -393,8 +403,15 @@ Deno.serve(async (req) => {
         guest_token: accessAttempt["guest_token"] ?? null,
         total_score: totalScore,
         pass_threshold: 60,
+        passed,
         section_scores: sectionScores,
         weak_skills: weakSkills,
+        written_score: writtenEarned,
+        written_total: writtenPossible,
+        written_pass_threshold: writtenPassThreshold,
+        speaking_score: speakingEarned,
+        speaking_total: speakingPossible,
+        speaking_pass_threshold: speakingPassThreshold,
         ai_grading_pending: aiGradingPending,
       });
 
@@ -413,8 +430,15 @@ Deno.serve(async (req) => {
         success: true,
         attempt_id,
         total_score: totalScore,
+        passed,
         section_scores: sectionScores,
         weak_skills: weakSkills,
+        written_score: writtenEarned,
+        written_total: writtenPossible,
+        written_pass_threshold: writtenPassThreshold,
+        speaking_score: speakingEarned,
+        speaking_total: speakingPossible,
+        speaking_pass_threshold: speakingPassThreshold,
         ai_grading_pending: aiGradingPending,
       }),
       {
@@ -484,4 +508,21 @@ function parseMatchingPairs(raw: string | null): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+function matchesAcceptedAnswer(
+  writtenAnswer: string | null,
+  question: QuestionRow,
+): boolean {
+  const submitted = normalizeString(writtenAnswer)?.toLowerCase();
+  if (!submitted) return false;
+  const accepted = new Set<string>(
+    [
+      normalizeString(question.correct_answer),
+      ...((question.accepted_answers ?? []).map((value) => normalizeString(value))),
+    ]
+      .filter((value): value is string => value !== null)
+      .map((value) => value.toLowerCase()),
+  );
+  return accepted.has(submitted);
 }

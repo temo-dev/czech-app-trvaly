@@ -5,7 +5,8 @@ import 'package:app_czech/core/supabase/supabase_config.dart';
 
 class SkillScore {
   const SkillScore({required this.skill, required this.score});
-  final String skill; // reading, listening, writing, speaking, vocabulary, grammar
+  final String
+      skill; // reading, listening, writing, speaking, vocabulary, grammar
   final double score; // 0.0–100.0
 }
 
@@ -14,13 +15,14 @@ class ExamHistoryItem {
     required this.attemptId,
     required this.totalScore,
     required this.passThreshold,
+    required this.passed,
     required this.createdAt,
   });
   final String attemptId;
   final int totalScore;
   final int passThreshold;
+  final bool passed;
   final DateTime createdAt;
-  bool get passed => totalScore >= passThreshold;
 }
 
 /// A set of dates (normalised to midnight) on which user had activity.
@@ -46,8 +48,7 @@ class ProgressData {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final progressProvider =
-    FutureProvider.autoDispose<ProgressData>((ref) async {
+final progressProvider = FutureProvider.autoDispose<ProgressData>((ref) async {
   final userId = supabase.auth.currentUser?.id;
   if (userId == null) throw Exception('Not authenticated');
 
@@ -68,7 +69,7 @@ final progressProvider =
   // Exam history (last 20 results)
   final resultsRaw = await supabase
       .from('exam_results')
-      .select('attempt_id, total_score, pass_threshold, created_at')
+      .select('attempt_id, total_score, pass_threshold, passed, created_at')
       .eq('user_id', userId)
       .order('created_at', ascending: false)
       .limit(20);
@@ -79,6 +80,9 @@ final progressProvider =
       attemptId: rm['attempt_id'] as String? ?? '',
       totalScore: rm['total_score'] as int? ?? 0,
       passThreshold: rm['pass_threshold'] as int? ?? 60,
+      passed: rm['passed'] as bool? ??
+          ((rm['total_score'] as int? ?? 0) >=
+              (rm['pass_threshold'] as int? ?? 60)),
       createdAt: DateTime.tryParse(rm['created_at'] as String? ?? '') ??
           DateTime.now(),
     );
@@ -94,8 +98,7 @@ final progressProvider =
           .eq('attempt_id', item.attemptId)
           .maybeSingle();
       if (full == null) continue;
-      final sections = (full as Map)['section_scores']
-          as Map<String, dynamic>?;
+      final sections = (full as Map)['section_scores'] as Map<String, dynamic>?;
       if (sections == null) continue;
       for (final entry in sections.entries) {
         final sm = Map<String, dynamic>.from(entry.value as Map);

@@ -8,12 +8,11 @@ import 'package:app_czech/core/supabase/supabase_config.dart';
 import 'package:app_czech/features/mock_test/models/exam_attempt.dart';
 import 'package:app_czech/features/mock_test/models/exam_meta.dart';
 import 'package:app_czech/features/mock_test/models/exam_question_answer.dart';
+import 'package:app_czech/features/mock_test/providers/exam_questions_provider.dart';
 import 'package:app_czech/features/writing_ai/providers/writing_provider.dart';
 import 'package:app_czech/shared/models/question_model.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-
-import 'exam_questions_provider.dart';
 
 part 'exam_session_notifier.freezed.dart';
 part 'exam_session_notifier.g.dart';
@@ -73,6 +72,49 @@ class ExamSessionState with _$ExamSessionState {
 
 extension ExamSessionStateX on ExamSessionState {
   SectionMeta get currentSection => meta.sections[currentSectionIndex];
+
+  bool get usesSectionTimers =>
+      meta.sections.isNotEmpty &&
+      meta.sections.every(
+        (section) => (section.sectionDurationMinutes ?? 0) > 0,
+      );
+
+  int get totalExamSeconds => usesSectionTimers
+      ? meta.sections.fold<int>(
+          0,
+          (sum, section) => sum + ((section.sectionDurationMinutes ?? 0) * 60),
+        )
+      : meta.durationMinutes * 60;
+
+  int totalRemainingSeconds([int? override]) =>
+      override ?? attempt.remainingSeconds ?? totalExamSeconds;
+
+  int sectionIndexForRemainingSeconds([int? override]) {
+    if (!usesSectionTimers) return currentSectionIndex;
+    final remaining = totalRemainingSeconds(override);
+    for (var index = 0; index < meta.sections.length; index++) {
+      final futureSeconds = meta.sections.skip(index + 1).fold<int>(
+            0,
+            (sum, section) =>
+                sum + ((section.sectionDurationMinutes ?? 0) * 60),
+          );
+      if (remaining > futureSeconds) {
+        return index;
+      }
+    }
+    return meta.sections.length - 1;
+  }
+
+  int sectionRemainingSeconds([int? override]) {
+    if (!usesSectionTimers) return totalRemainingSeconds(override);
+    final remaining = totalRemainingSeconds(override);
+    final index = sectionIndexForRemainingSeconds(override);
+    final futureSeconds = meta.sections.skip(index + 1).fold<int>(
+          0,
+          (sum, section) => sum + ((section.sectionDurationMinutes ?? 0) * 60),
+        );
+    return (remaining - futureSeconds).clamp(0, 1 << 31).toInt();
+  }
 
   int get globalQuestionIndex {
     var offset = 0;
@@ -163,11 +205,22 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
     final currentAnswers = buffered.isNotEmpty
         ? buffered
         : _restoreStoredAnswers(attempt.answers, questions);
-
-    return ExamSessionState(
+    final seededState = ExamSessionState(
       attempt: attempt,
       meta: meta,
       currentAnswers: currentAnswers,
+    );
+    final derivedSectionIndex = seededState.sectionIndexForRemainingSeconds();
+    final derivedQuestionIndex = _firstQuestionIndexForSection(
+      sectionIndex: derivedSectionIndex,
+      questions: questions,
+      sections: sections,
+      answers: currentAnswers,
+    );
+
+    return seededState.copyWith(
+      currentSectionIndex: derivedSectionIndex,
+      currentQuestionIndex: derivedQuestionIndex,
     );
   }
 
@@ -240,10 +293,42 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
   void advanceSection() {
     final current = state.valueOrNull;
     if (current == null) return;
+    final nextSectionIndex = current.currentSectionIndex + 1;
+    final questions =
+        ref.read(examQuestionsProvider(current.meta.id)).valueOrNull ??
+            const <Question>[];
     state = AsyncData(
       current.copyWith(
-        currentSectionIndex: current.currentSectionIndex + 1,
-        currentQuestionIndex: 0,
+        currentSectionIndex: nextSectionIndex,
+        currentQuestionIndex: _firstQuestionIndexForSection(
+          sectionIndex: nextSectionIndex,
+          questions: questions,
+          sections: current.meta.sections,
+          answers: current.currentAnswers,
+        ),
+        showSectionTransition: false,
+      ),
+    );
+  }
+
+  void syncSectionFromRemainingSeconds(int remainingSeconds) {
+    final current = state.valueOrNull;
+    if (current == null || !current.usesSectionTimers) return;
+    final derivedSectionIndex =
+        current.sectionIndexForRemainingSeconds(remainingSeconds);
+    if (derivedSectionIndex == current.currentSectionIndex) return;
+    final questions =
+        ref.read(examQuestionsProvider(current.meta.id)).valueOrNull ??
+            const <Question>[];
+    state = AsyncData(
+      current.copyWith(
+        currentSectionIndex: derivedSectionIndex,
+        currentQuestionIndex: _firstQuestionIndexForSection(
+          sectionIndex: derivedSectionIndex,
+          questions: questions,
+          sections: current.meta.sections,
+          answers: current.currentAnswers,
+        ),
         showSectionTransition: false,
       ),
     );
@@ -590,6 +675,32 @@ class ExamSessionNotifier extends _$ExamSessionNotifier {
       PrefsStorage.instance.prefs.remove('$_prefsPrefix$attemptId');
     } catch (_) {}
   }
+}
+
+int _firstQuestionIndexForSection({
+  required int sectionIndex,
+  required List<Question> questions,
+  required List<SectionMeta> sections,
+  required Map<String, ExamQuestionAnswer> answers,
+}) {
+  if (sectionIndex < 0 || sectionIndex >= sections.length) return 0;
+
+  var offset = 0;
+  for (var index = 0; index < sectionIndex; index++) {
+    offset += sections[index].questionCount;
+  }
+
+  final sectionLength = sections[sectionIndex].questionCount;
+  for (var index = 0; index < sectionLength; index++) {
+    final globalIndex = offset + index;
+    if (globalIndex >= questions.length) break;
+    final question = questions[globalIndex];
+    if (!(answers[question.id]?.isAnswered ?? false)) {
+      return index;
+    }
+  }
+
+  return sectionLength == 0 ? 0 : sectionLength - 1;
 }
 
 @riverpod

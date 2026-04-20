@@ -44,6 +44,7 @@ interface QuestionRow {
   prompt: string;
   explanation: string | null;
   correct_answer: string | null;
+  accepted_answers: string[] | null;
   section_id: string;
   order_index: number;
   question_options: QuestionOptionRow[];
@@ -203,7 +204,7 @@ Deno.serve(async (req) => {
     const { data: questionsRaw } = await supabase
       .from("questions")
       .select(
-        "id, type, skill, prompt, explanation, correct_answer, section_id, order_index, question_options(id, text, is_correct, order_index)",
+        "id, type, skill, prompt, explanation, correct_answer, accepted_answers, section_id, order_index, question_options(id, text, is_correct, order_index)",
       )
       .in("section_id", sectionIds)
       .order("order_index");
@@ -419,8 +420,7 @@ async function buildObjectiveQuestionFeedback(args: {
       const userAnswerText = normalizeString(storedAnswer?.written_answer) ??
         "";
       const isAnswered = userAnswerText.length > 0;
-      const isCorrect = userAnswerText.toLowerCase() ===
-        (question.correct_answer ?? "").trim().toLowerCase();
+      const isCorrect = matchesAcceptedAnswer(userAnswerText, question);
 
       if (!isAnswered) {
         return {
@@ -1151,6 +1151,23 @@ function normalizeString(value: unknown): string | null {
   if (value == null) return null;
   const text = String(value).trim();
   return text.length === 0 ? null : text;
+}
+
+function matchesAcceptedAnswer(
+  writtenAnswer: string | null,
+  question: QuestionRow,
+): boolean {
+  const submitted = normalizeString(writtenAnswer)?.toLowerCase();
+  if (!submitted) return false;
+  const accepted = new Set<string>(
+    [
+      normalizeString(question.correct_answer),
+      ...((question.accepted_answers ?? []).map((value) => normalizeString(value))),
+    ]
+      .filter((value): value is string => value !== null)
+      .map((value) => value.toLowerCase()),
+  );
+  return accepted.has(submitted);
 }
 
 function skillLabel(skill: string): string {

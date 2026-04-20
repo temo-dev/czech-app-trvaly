@@ -122,6 +122,11 @@ Payload mỗi câu hỏi:
 
 Key methods: `answerQuestion(globalIndex, QuestionAnswer)`, `flagQuestion(globalIndex)`, `navigateTo(index)`, `submitExam()`, `tickTimer()`.
 
+Operational notes:
+- When every `exam_section.section_duration_minutes` is non-null and `> 0`, the session uses per-section timers and derives `currentSectionIndex` from `remaining_seconds`.
+- The question renderer now hydrates `intro_text`, `intro_image_url`, `passage_text`, `audio_url`, and `accepted_answers` directly from Supabase instead of overloading `prompt`.
+- Listening `fill_blank` shows the audio player above the input field.
+
 ---
 
 ### `course` — `lib/features/course/providers/course_providers.dart`
@@ -316,6 +321,7 @@ timeout (10 retries exhausted) → *.error('scoring_timeout')
 ```
 
 **Mock test context:** Khi submit speaking/writing trong mock test, `exam_attempt_id` phải được truyền vào `speaking-upload` / `writing-submit`. `grade-exam` JOIN các bảng AI attempt theo `exam_attempt_id + question_id`; nếu AI chưa xong thì câu đó tạm thời chưa có điểm và `exam_results.ai_grading_pending = true` để result screen hiển thị banner chờ. Sau khi ghi `exam_results`, edge function còn trigger `analyze-exam` để batch toàn bộ feedback vào `exam_analysis`.
+`exam_results.passed` hiện được persist theo official bucket rule của đề A2: written `>= 42/70` và speaking `>= 24/40`.
 
 **Operational note:** `speaking-upload` no longer blocks on OpenAI scoring. It inserts the attempt row first, returns `attempt_id` immediately, then uses an Edge Runtime background task to run transcription + grading and update the same row to `ready/error`. Speaking grading now prefers audio-native scoring for both exercise and exam flows, while transcript remains available for review UI and fallback grading.
 

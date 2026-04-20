@@ -78,12 +78,14 @@ Index: `idx_exam_sections_exam_id`. RLS: public read; admin full CRUD.
 | image_url | text | | |
 | passage_text | text | | |
 | correct_answer | text | | |
+| accepted_answers | text[] NOT NULL | `'{}'` | alternative accepted fill-blank answers |
 | explanation | text NOT NULL | `''` | |
 | points | int NOT NULL | `1` | |
 | order_index | int NOT NULL | `0` | |
 | created_at | timestamptz NOT NULL | `now()` | |
 
 Index: `idx_questions_section_id`. RLS: public read; admin full CRUD.
+Operational note: official reading/listening objective items stay `type='mcq'` or `type='fill_blank'`; runtime does not consume CMS-only `reading` / `listening` types.
 
 ---
 
@@ -130,7 +132,14 @@ Indexes: `idx_exam_attempts_user_id`, `idx_exam_attempts_exam_id`, `idx_exam_att
 | guest_token | text | | Mirrored from anonymous exam_attempt for guest-owned reads |
 | total_score | int NOT NULL | `0` | 0–100 |
 | pass_threshold | int NOT NULL | `60` | |
-| section_scores | jsonb NOT NULL | `'{}'` | `{ skill: { score, total } }` |
+| passed | bool NOT NULL | `false` | persisted official pass/fail verdict |
+| section_scores | jsonb NOT NULL | `'{}'` | `{ skill: { score, total } }` using raw points, not percentages |
+| written_score | int NOT NULL | `0` | reading + listening + writing earned points |
+| written_total | int NOT NULL | `0` | official written bucket total |
+| written_pass_threshold | int NOT NULL | `0` | current A2 threshold = `42` |
+| speaking_score | int NOT NULL | `0` | speaking earned points |
+| speaking_total | int NOT NULL | `0` | official speaking bucket total |
+| speaking_pass_threshold | int NOT NULL | `0` | current A2 threshold = `24` |
 | weak_skills | text[] NOT NULL | `'{}'` | skills below 60% |
 | ai_grading_pending | bool NOT NULL | `false` | true khi còn speaking/writing đang chờ AI chấm — result screen hiển thị banner |
 | created_at | timestamptz NOT NULL | `now()` | |
@@ -546,7 +555,8 @@ String id, prompt, explanation
 QuestionType type
 SkillArea skill
 Difficulty difficulty
-String? introText, introImageUrl, audioUrl, imageUrl, correctAnswer
+String? introText, introImageUrl, audioUrl, imageUrl, passageText, correctAnswer
+List<String> acceptedAnswers         // default []
 List<QuestionOption> options          // default []
 List<MatchPair> matchPairs            // default []
 List<String> orderItems               // default []
@@ -571,11 +581,14 @@ Enums:
 String id, userId
 ExamType type
 int totalScore             // 0–100
+bool passed
 int totalQuestions, correctAnswers
 Map<String, int> sectionScores, sectionTotals
 List<QuestionAnswer> answers
 DateTime completedAt
 int passThreshold          // default 60
+int writtenScore, writtenTotal, writtenPassThreshold
+int speakingScore, speakingTotal, speakingPassThreshold
 List<String> weakSkills
 String? recommendation
 int? totalTimeSeconds
@@ -696,16 +709,17 @@ Anonymous client calls also send `x-guest-token`, a stable device token stored i
 
 ### `grade-exam`
 **POST** `{ attempt_id: string }`
-**Response** `{ success, attempt_id, total_score, section_scores: {[skill]: {score, total}}, weak_skills: string[], ai_grading_pending: boolean }`
+**Response** `{ success, attempt_id, total_score, passed, section_scores: {[skill]: {score, total}}, written_score, written_total, written_pass_threshold, speaking_score, speaking_total, speaking_pass_threshold, weak_skills: string[], ai_grading_pending: boolean }`
 
 Grading rules:
 - **MCQ / reading_mcq / listening_mcq**: option UUID match → full points
-- **fill_blank**: case-insensitive trim match → full points
+- **fill_blank**: case-insensitive trim match against `correct_answer` or any `accepted_answers[]` → full points
 - **matching / ordering**: parse JSON answer, compare position-by-position → proportional credit (correct_positions / total)
 - **speaking**: JOIN `ai_speaking_attempts` by `exam_attempt_id` + `question_id` → `round(points * overall_score/100)`; nếu AI chưa xong thì câu này tạm 0 và bật `ai_grading_pending`
 - **writing**: JOIN `ai_writing_attempts` by `exam_attempt_id` + `question_id` → `round(points * overall_score/100)`; nếu AI chưa xong thì câu này tạm 0 và bật `ai_grading_pending`
 
 `ai_grading_pending = true` khi còn attempt nào có `status = 'processing'` — result screen hiển thị banner chờ.
+Official A2 pass rule currently persisted in `exam_results.passed`: written `>= 42/70` and speaking `>= 24/40`.
 Sau khi insert `exam_results` thành công, function còn fire-and-forget `analyze-exam` để tạo `exam_analysis`.
 Guest security: caller phải là owner của `exam_attempts` qua `auth.uid()` hoặc `x-guest-token`.
 
