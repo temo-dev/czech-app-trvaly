@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 
 /// Standard inner-screen AppBar.
@@ -11,6 +12,8 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.showBack = true,
     this.onBack,
     this.bottom,
+    this.centerTitle = false,
+    this.leadingIcon,
   });
 
   final String title;
@@ -18,25 +21,42 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   final bool showBack;
   final VoidCallback? onBack;
   final PreferredSizeWidget? bottom;
+  final bool centerTitle;
+  final IconData? leadingIcon;
 
   @override
   Size get preferredSize => Size.fromHeight(
-        kToolbarHeight + (bottom?.preferredSize.height ?? 0),
+        64 + (bottom?.preferredSize.height ?? 0),
       );
 
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      title: Text(title, style: AppTypography.titleMedium),
-      centerTitle: false,
+      backgroundColor: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      toolbarHeight: 64,
+      title: Text(
+        title,
+        style: AppTypography.titleMedium.copyWith(
+          color: AppColors.onBackground,
+        ),
+      ),
+      centerTitle: centerTitle,
+      titleSpacing: showBack ? 0 : NavigationToolbar.kMiddleSpacing,
       leading: showBack
           ? IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
+              icon: Icon(leadingIcon ?? Icons.arrow_back_rounded),
               onPressed: onBack ?? () => Navigator.of(context).maybePop(),
             )
           : null,
       automaticallyImplyLeading: false,
+      iconTheme: const IconThemeData(color: AppColors.onSurfaceVariant),
       actions: actions,
+      shape: const Border(
+        bottom: BorderSide(color: AppColors.outlineVariant),
+      ),
       bottom: bottom,
     );
   }

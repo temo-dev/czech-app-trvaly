@@ -49,9 +49,7 @@ class ProfileScreen extends ConsumerWidget {
                 return _ProfileContent(
                   user: user,
                   onSignOut: () async {
-                    await ref
-                        .read(currentUserProvider.notifier)
-                        .signOut();
+                    await ref.read(currentUserProvider.notifier).signOut();
                     if (context.mounted) context.go(AppRoutes.landing);
                   },
                 );
@@ -59,55 +57,6 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ── App Bar ───────────────────────────────────────────────────────────────────
-
-class _AppBar extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
-          bottom: BorderSide(
-              color: AppColors.outlineVariant.withOpacity(0.6)),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.onBackground.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.of(context).maybePop(),
-                child: const Icon(Icons.arrow_back_rounded,
-                    color: AppColors.primary, size: 24),
-              ),
-              const Spacer(),
-              Text(
-                'Cá nhân',
-                style: AppTypography.headlineSmall.copyWith(
-                  color: AppColors.primary,
-                  fontSize: 22,
-                ),
-              ),
-              const Spacer(),
-              const SizedBox(width: 24),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -180,8 +129,7 @@ class _UserHeader extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                    color: AppColors.primary.withOpacity(0.2),
-                    width: 2),
+                    color: AppColors.primary.withOpacity(0.2), width: 2),
                 color: AppColors.surfaceContainerLow,
               ),
               child: ClipOval(
@@ -189,9 +137,7 @@ class _UserHeader extends StatelessWidget {
                     ? Image.network(avatarUrl, fit: BoxFit.cover)
                     : Center(
                         child: Text(
-                          name.isNotEmpty
-                              ? name[0].toUpperCase()
-                              : '?',
+                          name.isNotEmpty ? name[0].toUpperCase() : '?',
                           style: AppTypography.headlineLarge.copyWith(
                             color: AppColors.primary,
                             fontSize: 36,
@@ -208,8 +154,7 @@ class _UserHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                      color: AppColors.surface, width: 2),
+                  border: Border.all(color: AppColors.surface, width: 2),
                   boxShadow: [
                     BoxShadow(
                       color: AppColors.primary.withOpacity(0.3),
@@ -295,8 +240,7 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-            color: AppColors.outlineVariant.withOpacity(0.3)),
+        border: Border.all(color: AppColors.outlineVariant.withOpacity(0.3)),
         boxShadow: [
           BoxShadow(
             color: AppColors.onBackground.withOpacity(0.04),
@@ -355,8 +299,7 @@ class _ActiveCourseSection extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.primaryContainer.withOpacity(0.1),
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(
-                color: AppColors.primary.withOpacity(0.2)),
+            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
           ),
           child: Stack(
             clipBehavior: Clip.none,
@@ -378,21 +321,19 @@ class _ActiveCourseSection extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(
-                                    AppRadius.full),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.full),
                               ),
                               child: Text(
                                 'TIẾNG SÉC',
-                                style:
-                                    AppTypography.labelUppercase.copyWith(
+                                style: AppTypography.labelUppercase.copyWith(
                                   color: Colors.white,
                                   fontSize: 9,
                                 ),
@@ -419,14 +360,12 @@ class _ActiveCourseSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   ClipRRect(
-                    borderRadius:
-                        BorderRadius.circular(AppRadius.full),
+                    borderRadius: BorderRadius.circular(AppRadius.full),
                     child: LinearProgressIndicator(
                       value: 0.35,
-                      backgroundColor:
-                          AppColors.surfaceContainerHighest,
-                      valueColor: const AlwaysStoppedAnimation(
-                          AppColors.primary),
+                      backgroundColor: AppColors.surfaceContainerHighest,
+                      valueColor:
+                          const AlwaysStoppedAnimation(AppColors.primary),
                       minHeight: 10,
                     ),
                   ),
@@ -434,8 +373,7 @@ class _ActiveCourseSection extends StatelessWidget {
                   Row(
                     children: [
                       const Icon(Icons.schedule_rounded,
-                          size: 14,
-                          color: AppColors.onSurfaceVariant),
+                          size: 14, color: AppColors.onSurfaceVariant),
                       const SizedBox(width: 4),
                       Text(
                         'Cập nhật lần cuối: 2 giờ trước',
@@ -506,8 +444,7 @@ class _QuickLink extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surfaceContainer,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(
-              color: AppColors.outlineVariant.withOpacity(0.4)),
+          border: Border.all(color: AppColors.outlineVariant.withOpacity(0.4)),
         ),
         child: Row(
           children: [
@@ -530,8 +467,8 @@ class _QuickLink extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: Text(label,
-                  style: AppTypography.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w600)),
+                  style: AppTypography.bodyMedium
+                      .copyWith(fontWeight: FontWeight.w600)),
             ),
             const Icon(Icons.chevron_right_rounded,
                 color: AppColors.onSurfaceVariant, size: 22),
@@ -560,8 +497,8 @@ class _AccountSection extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(
-                color: AppColors.outlineVariant.withOpacity(0.4)),
+            border:
+                Border.all(color: AppColors.outlineVariant.withOpacity(0.4)),
           ),
           child: Column(
             children: [
@@ -570,16 +507,6 @@ class _AccountSection extends StatelessWidget {
                 label: 'Cài đặt tài khoản',
                 onTap: () => context.push(AppRoutes.settings),
                 isFirst: true,
-              ),
-              _AccountRow(
-                icon: Icons.lock_reset_rounded,
-                label: 'Đổi mật khẩu',
-                onTap: () {},
-              ),
-              _AccountRow(
-                icon: Icons.help_center_rounded,
-                label: 'Hỗ trợ',
-                onTap: () {},
                 isLast: true,
               ),
             ],
@@ -609,8 +536,7 @@ class _AccountRow extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           border: !isLast
               ? Border(
@@ -622,13 +548,12 @@ class _AccountRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon,
-                color: AppColors.onSurfaceVariant, size: 22),
+            Icon(icon, color: AppColors.onSurfaceVariant, size: 22),
             const SizedBox(width: 16),
             Expanded(
               child: Text(label,
-                  style: AppTypography.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w500)),
+                  style: AppTypography.bodyMedium
+                      .copyWith(fontWeight: FontWeight.w500)),
             ),
             const Icon(Icons.chevron_right_rounded,
                 color: AppColors.outline, size: 20),
@@ -651,15 +576,13 @@ class _LogoutButton extends StatelessWidget {
         height: 56,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(
-              color: AppColors.error.withOpacity(0.2), width: 2),
+          border: Border.all(color: AppColors.error.withOpacity(0.2), width: 2),
         ),
         alignment: Alignment.center,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.logout_rounded,
-                color: AppColors.error, size: 20),
+            const Icon(Icons.logout_rounded, color: AppColors.error, size: 20),
             const SizedBox(width: 8),
             Text(
               'Đăng xuất',

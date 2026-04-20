@@ -33,17 +33,9 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     final friendsAsync = ref.watch(friendsProvider);
     final pendingAsync = ref.watch(pendingRequestsProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        title: Text(
-          'Bạn bè',
-          style: AppTypography.titleLarge.copyWith(color: AppColors.onSurface),
-        ),
-      ),
-      body: ListView(
+    return ColoredBox(
+      color: AppColors.surface,
+      child: ListView(
         children: [
           // ── Search bar ────────────────────────────────────────────────
           Padding(
@@ -53,8 +45,8 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
               onChanged: (v) => setState(() => _query = v),
               decoration: InputDecoration(
                 hintText: 'Tìm người dùng...',
-                prefixIcon: const Icon(Icons.search,
-                    color: AppColors.onSurfaceVariant),
+                prefixIcon:
+                    const Icon(Icons.search, color: AppColors.onSurfaceVariant),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.close),
@@ -201,9 +193,8 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   }
 
   Future<void> _openDm(UserProfile profile) async {
-    final roomId = await ref
-        .read(openDmNotifierProvider.notifier)
-        .open(profile.id);
+    final roomId =
+        await ref.read(openDmNotifierProvider.notifier).open(profile.id);
     if (roomId != null && mounted) {
       context.push(
         AppRoutes.chatRoomPath(roomId),
@@ -268,9 +259,7 @@ class _SearchResults extends ConsumerWidget {
           );
         }
         return Column(
-          children: users
-              .map((u) => _SearchUserTile(profile: u))
-              .toList(),
+          children: users.map((u) => _SearchUserTile(profile: u)).toList(),
         );
       },
     );
@@ -288,9 +277,8 @@ class _SearchUserTile extends ConsumerWidget {
           horizontal: AppSpacing.x6, vertical: AppSpacing.x1),
       leading: CircleAvatar(
         radius: 21,
-        backgroundImage: profile.avatarUrl != null
-            ? NetworkImage(profile.avatarUrl!)
-            : null,
+        backgroundImage:
+            profile.avatarUrl != null ? NetworkImage(profile.avatarUrl!) : null,
         backgroundColor: AppColors.primaryFixed,
         child: profile.avatarUrl == null
             ? Text(
@@ -370,9 +358,7 @@ class _FriendshipButton extends ConsumerWidget {
   }
 
   Future<void> _sendRequest(WidgetRef ref, UserProfile profile) async {
-    await ref
-        .read(friendshipNotifierProvider.notifier)
-        .sendRequest(profile.id);
+    await ref.read(friendshipNotifierProvider.notifier).sendRequest(profile.id);
   }
 
   Future<void> _accept(WidgetRef ref, UserProfile profile) async {

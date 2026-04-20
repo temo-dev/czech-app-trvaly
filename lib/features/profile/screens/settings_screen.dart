@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:app_czech/core/router/app_routes.dart';
 import 'package:app_czech/core/storage/prefs_storage.dart';
-import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/shared/providers/auth_provider.dart';
 import 'package:app_czech/shared/widgets/app_button.dart';
+import 'package:app_czech/shared/widgets/app_top_bar.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -18,7 +18,11 @@ class SettingsScreen extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cài đặt')),
+      appBar: AppTopBar(
+        title: 'Cài đặt',
+        onBack: () =>
+            context.canPop() ? context.pop() : context.go(AppRoutes.profile),
+      ),
       body: SingleChildScrollView(
         child: ResponsivePageContainer(
           child: Padding(
@@ -32,30 +36,7 @@ class SettingsScreen extends ConsumerWidget {
                   icon: Icons.notifications_outlined,
                   label: 'Nhắc nhở học hàng ngày',
                   onTap: () => context.push(AppRoutes.notifications),
-                  trailing: const Icon(Icons.chevron_right_rounded,
-                      size: 20),
-                ),
-
-                const SizedBox(height: AppSpacing.x4),
-
-                // ── Subscription ─────────────────────────────────────────────
-                _SectionHeader(label: 'Tài khoản'),
-                _SettingsTile(
-                  icon: Icons.workspace_premium_rounded,
-                  iconColor: AppColors.xpGold,
-                  label: 'Nâng cấp lên Pro',
-                  onTap: () => context.push(AppRoutes.subscribe),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.x2, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.xpGold.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text('Pro',
-                        style: AppTypography.labelSmall
-                            .copyWith(color: AppColors.xpGold)),
-                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: 20),
                 ),
 
                 const SizedBox(height: AppSpacing.x4),
@@ -76,20 +57,6 @@ class SettingsScreen extends ConsumerWidget {
                           .copyWith(color: cs.onSurfaceVariant)),
                   onTap: null,
                 ),
-                _SettingsTile(
-                  icon: Icons.privacy_tip_outlined,
-                  label: 'Chính sách bảo mật',
-                  onTap: () {},
-                  trailing: const Icon(Icons.open_in_new_rounded,
-                      size: 16),
-                ),
-                _SettingsTile(
-                  icon: Icons.article_outlined,
-                  label: 'Điều khoản sử dụng',
-                  onTap: () {},
-                  trailing: const Icon(Icons.open_in_new_rounded,
-                      size: 16),
-                ),
 
                 const SizedBox(height: AppSpacing.x6),
                 const Divider(),
@@ -101,9 +68,7 @@ class SettingsScreen extends ConsumerWidget {
                   variant: AppButtonVariant.secondary,
                   icon: Icons.logout_rounded,
                   onPressed: () async {
-                    await ref
-                        .read(currentUserProvider.notifier)
-                        .signOut();
+                    await ref.read(currentUserProvider.notifier).signOut();
                     if (context.mounted) context.go(AppRoutes.landing);
                   },
                 ),
@@ -155,8 +120,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(
-          bottom: AppSpacing.x2, top: AppSpacing.x1),
+      padding: const EdgeInsets.only(bottom: AppSpacing.x2, top: AppSpacing.x1),
       child: Text(
         label,
         style: AppTypography.labelMedium.copyWith(
@@ -172,14 +136,12 @@ class _SettingsTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.iconColor,
     this.trailing,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  final Color? iconColor;
   final Widget? trailing;
 
   @override
@@ -194,13 +156,12 @@ class _SettingsTile extends StatelessWidget {
         border: Border.all(color: cs.outlineVariant),
       ),
       child: ListTile(
-        leading: Icon(icon, color: iconColor ?? cs.onSurface, size: 22),
+        leading: Icon(icon, color: cs.onSurface, size: 22),
         title: Text(label, style: AppTypography.bodyMedium),
         trailing: trailing,
         onTap: onTap,
         dense: true,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }

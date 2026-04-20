@@ -13,7 +13,6 @@ import 'package:app_czech/features/landing/screens/landing_screen.dart';
 import 'package:app_czech/features/auth/screens/login_screen.dart';
 import 'package:app_czech/features/auth/screens/signup_screen.dart';
 import 'package:app_czech/features/auth/screens/forgot_password_screen.dart';
-import 'package:app_czech/features/onboarding/screens/onboarding_screen.dart';
 import 'package:app_czech/features/dashboard/screens/dashboard_screen.dart';
 import 'package:app_czech/features/course/screens/course_catalog_screen.dart';
 import 'package:app_czech/features/course/screens/course_detail_screen.dart';
@@ -44,7 +43,6 @@ import 'package:app_czech/features/chat/screens/inbox_screen.dart';
 import 'package:app_czech/features/chat/screens/chat_room_screen.dart';
 import 'package:app_czech/features/profile/screens/profile_screen.dart';
 import 'package:app_czech/features/profile/screens/settings_screen.dart';
-import 'package:app_czech/features/subscription/screens/subscription_screen.dart';
 import 'package:app_czech/features/course/screens/unlock_bonus_screen.dart';
 import 'package:app_czech/shared/widgets/error_state.dart';
 
@@ -114,9 +112,6 @@ GoRouter appRouter(Ref ref) {
       GoRoute(
           path: AppRoutes.forgotPassword,
           builder: (_, __) => const ForgotPasswordScreen()),
-      GoRoute(
-          path: AppRoutes.onboarding,
-          builder: (_, __) => const OnboardingScreen()),
 
       // ── Free mock test (no auth required) ─────────────────────────────────
       GoRoute(
@@ -298,11 +293,6 @@ GoRouter appRouter(Ref ref) {
           GoRoute(
               path: AppRoutes.settings,
               builder: (_, __) => const SettingsScreen()),
-
-          // Subscription
-          GoRoute(
-              path: AppRoutes.subscribe,
-              builder: (_, __) => const SubscriptionScreen()),
 
           // Unlock bonus practice
           GoRoute(

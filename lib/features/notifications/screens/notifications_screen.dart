@@ -4,6 +4,7 @@ import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/features/notifications/providers/notification_prefs_provider.dart';
+import 'package:app_czech/shared/widgets/app_top_bar.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
 
 class NotificationsScreen extends ConsumerWidget {
@@ -15,91 +16,25 @@ class NotificationsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.surface,
-      body: Column(
-        children: [
-          _AppBar(),
-          Expanded(
-            child: async.when(
-              loading: () => const ShimmerCardList(count: 3),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline_rounded, size: 48),
-                    const SizedBox(height: 16),
-                    Text('Không tải được cài đặt.',
-                        style: AppTypography.bodyMedium),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () =>
-                          ref.refresh(notificationPrefsProvider),
-                      child: const Text('Thử lại'),
-                    ),
-                  ],
-                ),
+      appBar: AppTopBar(title: 'Nhắc nhở học tập'),
+      body: async.when(
+        loading: () => const ShimmerCardList(count: 3),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 48),
+              const SizedBox(height: 16),
+              Text('Không tải được cài đặt.', style: AppTypography.bodyMedium),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => ref.refresh(notificationPrefsProvider),
+                child: const Text('Thử lại'),
               ),
-              data: (prefs) => _NotificationBody(prefs: prefs),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── App Bar ───────────────────────────────────────────────────────────────────
-
-class _AppBar extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
-          bottom: BorderSide(
-              color: AppColors.outlineVariant.withOpacity(0.6)),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.onBackground.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: 64,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: const Icon(Icons.arrow_back_rounded,
-                      color: AppColors.primary, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  'Notifications',
-                  style: AppTypography.headlineSmall.copyWith(
-                    color: AppColors.primary,
-                    fontSize: 22,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'Trvalý Exam',
-                  style: AppTypography.headlineSmall.copyWith(
-                    color: AppColors.primary,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
         ),
+        data: (prefs) => _NotificationBody(prefs: prefs),
       ),
     );
   }
@@ -112,8 +47,7 @@ class _NotificationBody extends ConsumerStatefulWidget {
   final NotificationPrefs prefs;
 
   @override
-  ConsumerState<_NotificationBody> createState() =>
-      _NotificationBodyState();
+  ConsumerState<_NotificationBody> createState() => _NotificationBodyState();
 }
 
 class _NotificationBodyState extends ConsumerState<_NotificationBody> {
@@ -211,8 +145,7 @@ class _NotificationBodyState extends ConsumerState<_NotificationBody> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: AppColors.primary,
-                  borderRadius:
-                      BorderRadius.circular(AppRadius.lg),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                   boxShadow: [
                     BoxShadow(
                       color: AppColors.primary.withOpacity(0.25),
@@ -227,8 +160,7 @@ class _NotificationBodyState extends ConsumerState<_NotificationBody> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white),
+                            strokeWidth: 2, color: Colors.white),
                       )
                     : Text(
                         'Lưu cài đặt',
@@ -261,8 +193,7 @@ class _ToggleCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-            color: AppColors.outlineVariant.withOpacity(0.3)),
+        border: Border.all(color: AppColors.outlineVariant.withOpacity(0.3)),
         boxShadow: [
           BoxShadow(
             color: AppColors.onBackground.withOpacity(0.04),
@@ -330,8 +261,8 @@ class _TimePickerSection extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               'Thời gian nhắc nhở',
-              style: AppTypography.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w700),
+              style: AppTypography.bodyMedium
+                  .copyWith(fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -343,8 +274,7 @@ class _TimePickerSection extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.surfaceContainerLowest,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(
-                color: AppColors.primary, width: 2),
+            border: Border.all(color: AppColors.primary, width: 2),
             boxShadow: [
               BoxShadow(
                 color: AppColors.onBackground.withOpacity(0.04),
@@ -425,17 +355,14 @@ class _QuickTimeChip extends StatelessWidget {
           color: AppColors.surfaceContainerLow,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: isPrimary
-              ? Border.all(
-                  color: AppColors.primary.withOpacity(0.2))
+              ? Border.all(color: AppColors.primary.withOpacity(0.2))
               : null,
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: AppTypography.bodySmall.copyWith(
-            color: isPrimary
-                ? AppColors.primary
-                : AppColors.onBackground,
+            color: isPrimary ? AppColors.primary : AppColors.onBackground,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -539,8 +466,8 @@ class _PreviewCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.surfaceContainerHighest.withOpacity(0.5),
             borderRadius: BorderRadius.circular(AppRadius.xl),
-            border: Border.all(
-                color: AppColors.outlineVariant.withOpacity(0.4)),
+            border:
+                Border.all(color: AppColors.outlineVariant.withOpacity(0.4)),
           ),
           child: Row(
             children: [

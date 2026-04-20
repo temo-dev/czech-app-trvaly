@@ -8,6 +8,7 @@ import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/features/chat/providers/chat_providers.dart';
 import 'package:app_czech/features/chat/screens/friends_screen.dart';
 import 'package:app_czech/features/chat/widgets/conversation_card.dart';
+import 'package:app_czech/shared/widgets/app_top_bar.dart';
 
 class InboxScreen extends ConsumerWidget {
   const InboxScreen({super.key});
@@ -20,17 +21,12 @@ class InboxScreen extends ConsumerWidget {
       length: 2,
       child: Scaffold(
         backgroundColor: AppColors.surface,
-        appBar: AppBar(
-          backgroundColor: AppColors.surface,
-          elevation: 0,
-          title: Text(
-            'Tin nhắn',
-            style:
-                AppTypography.titleLarge.copyWith(color: AppColors.onSurface),
-          ),
+        appBar: AppTopBar(
+          title: 'Tin nhắn',
+          showBack: false,
           bottom: TabBar(
-            labelStyle: AppTypography.labelMedium
-                .copyWith(fontWeight: FontWeight.w600),
+            labelStyle:
+                AppTypography.labelMedium.copyWith(fontWeight: FontWeight.w600),
             unselectedLabelStyle: AppTypography.labelMedium,
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.onSurfaceVariant,

@@ -237,54 +237,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 32),
-
-                      // Social login divider
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Divider(
-                              color: AppColors.outlineVariant.withOpacity(0.6),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              'HOẶC TIẾP TỤC VỚI',
-                              style: AppTypography.labelUppercase.copyWith(
-                                color:
-                                    AppColors.onSurfaceVariant.withOpacity(0.6),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Divider(
-                              color: AppColors.outlineVariant.withOpacity(0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Social buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SocialButton(
-                            icon: Icons.g_mobiledata_rounded,
-                            label: 'Google',
-                            onTap: () {/* TODO: Google sign-in */},
-                          ),
-                          const SizedBox(width: 12),
-                          SocialButton(
-                            icon: Icons.apple_rounded,
-                            label: 'Apple',
-                            onTap: () {/* TODO: Apple sign-in */},
-                          ),
-                        ],
-                      ),
-
                       const SizedBox(height: 24),
 
                       // Sign up link
@@ -367,48 +319,6 @@ class AuthAppBar extends StatelessWidget implements PreferredSizeWidget {
           // Spacer for symmetry
           const SizedBox(width: 56),
         ],
-      ),
-    );
-  }
-}
-
-class SocialButton extends StatelessWidget {
-  const SocialButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: AppColors.outlineVariant.withOpacity(0.6),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: AppColors.onSurfaceVariant),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: AppTypography.labelMedium.copyWith(
-                color: AppColors.onBackground,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -9,10 +9,7 @@ abstract final class AppRoutes {
   static const login = '/auth/login';
   static const signup = '/auth/signup';
   static const forgotPassword = '/auth/forgot-password';
-  static const resetPassword = '/auth/reset-password';  // deep link: ?token=
-
-  // ── Onboarding ─────────────────────────────────────────────────────────────
-  static const onboarding = '/onboarding';
+  static const resetPassword = '/auth/reset-password'; // deep link: ?token=
 
   // ── Free mock test (guest-accessible) ─────────────────────────────────────
   static const mockTestIntro = '/mock-test/intro';
@@ -61,16 +58,13 @@ abstract final class AppRoutes {
 
   static const profile = '/app/profile';
   static const settings = '/app/profile/settings';
-
-  static const subscribe = '/app/subscribe';
   static const unlockBonus = '/app/unlock-bonus/:lessonId';
 
   // ── Error ──────────────────────────────────────────────────────────────────
   static const error = '/error';
 
   // ── Path helpers ───────────────────────────────────────────────────────────
-  static String courseDetailPath(String courseId) =>
-      '/app/courses/$courseId';
+  static String courseDetailPath(String courseId) => '/app/courses/$courseId';
   static String moduleDetailPath(String courseId, String moduleId) =>
       '/app/courses/$courseId/modules/$moduleId';
   static String lessonPlayerPath(

@@ -138,11 +138,6 @@ class WritingFeedbackScreen extends ConsumerWidget {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.history_rounded),
-                    color: AppColors.primary,
-                    onPressed: () {},
-                  ),
                 ],
               ),
             ),
@@ -592,11 +587,6 @@ class _CorrectedVersionCard extends StatelessWidget {
               Text(
                 'Bản đã chỉnh sửa',
                 style: AppTypography.headlineSmall.copyWith(fontSize: 18),
-              ),
-              IconButton(
-                icon: const Icon(Icons.copy_rounded,
-                    size: 18, color: AppColors.onSurfaceVariant),
-                onPressed: () {},
               ),
             ],
           ),

@@ -140,11 +140,6 @@ class SpeakingFeedbackScreen extends ConsumerWidget {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.more_vert_rounded),
-                    color: AppColors.primary,
-                    onPressed: () {},
-                  ),
                 ],
               ),
             ),
@@ -777,32 +772,6 @@ class _SampleAnswerCard extends StatelessWidget {
                     style: AppTypography.headlineSmall.copyWith(fontSize: 20),
                   ),
                 ],
-              ),
-              GestureDetector(
-                onTap: () {},
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(AppRadius.full),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.play_circle_filled_rounded,
-                          color: Colors.white, size: 18),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Nghe mẫu',
-                        style: AppTypography.labelSmall.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ],
           ),

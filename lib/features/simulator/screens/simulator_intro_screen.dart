@@ -8,6 +8,7 @@ import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
 import 'package:app_czech/shared/providers/subscription_provider.dart';
 import 'package:app_czech/shared/widgets/app_button.dart';
+import 'package:app_czech/shared/widgets/app_top_bar.dart';
 import 'package:app_czech/shared/widgets/responsive_page_container.dart';
 
 /// Full exam simulator intro — subscription-gated.
@@ -28,7 +29,11 @@ class SimulatorIntroScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: _buildAppBar(context),
+      appBar: AppTopBar(
+        title: 'Mô phỏng thi thử',
+        onBack: () =>
+            context.canPop() ? context.pop() : context.go(AppRoutes.dashboard),
+      ),
       body: ResponsivePageContainer(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.x6),
@@ -80,8 +85,7 @@ class SimulatorIntroScreen extends ConsumerWidget {
                     ..._sections.map((s) {
                       final (label, icon, detail) = s;
                       return Padding(
-                        padding:
-                            const EdgeInsets.only(bottom: AppSpacing.x3),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.x3),
                         child: Row(
                           children: [
                             Container(
@@ -158,15 +162,19 @@ class SimulatorIntroScreen extends ConsumerWidget {
                   ),
                 )
               else
-                AppButton(
-                  label: 'Nâng cấp Premium',
-                  onPressed: () => context.push(AppRoutes.subscribe),
+                Text(
+                  'Simulator Premium sẽ quay lại khi luồng đăng ký hoàn chỉnh.',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               const SizedBox(height: AppSpacing.x3),
               Center(
                 child: TextButton(
-                  onPressed: () =>
-                      context.canPop() ? context.pop() : context.go(AppRoutes.dashboard),
+                  onPressed: () => context.canPop()
+                      ? context.pop()
+                      : context.go(AppRoutes.dashboard),
                   child: Text(
                     'Quay lại',
                     style: AppTypography.labelMedium.copyWith(
@@ -176,62 +184,6 @@ class SimulatorIntroScreen extends ConsumerWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(64),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          border: const Border(
-            bottom: BorderSide(color: AppColors.outlineVariant),
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.x2,
-              vertical: AppSpacing.x2,
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  color: AppColors.onSurfaceVariant,
-                  onPressed: () =>
-                      context.canPop() ? context.pop() : context.go(AppRoutes.dashboard),
-                ),
-                Text(
-                  'Exam Simulator',
-                  style: AppTypography.titleMedium.copyWith(
-                    color: AppColors.onBackground,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.x3, vertical: AppSpacing.x1),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryFixed,
-                    borderRadius: BorderRadius.circular(AppRadius.full),
-                  ),
-                  child: Text(
-                    'PREMIUM',
-                    style: AppTypography.labelUppercase.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.x2),
-              ],
-            ),
           ),
         ),
       ),

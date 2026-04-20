@@ -10,7 +10,7 @@ import 'package:app_czech/shared/widgets/app_button.dart';
 import 'package:app_czech/shared/widgets/app_text_field.dart';
 import 'package:app_czech/features/mock_test/providers/exam_result_provider.dart';
 import '../providers/auth_notifier.dart';
-import 'login_screen.dart' show AuthAppBar, SocialButton;
+import 'login_screen.dart' show AuthAppBar;
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -187,9 +187,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                           color: AppColors.onSurfaceVariant,
                                         ),
                                       ),
-                                      InlineLinkButton(
-                                        label: 'Điều khoản dịch vụ',
-                                        onTap: () {/* TODO: open terms */},
+                                      Text(
+                                        'Điều khoản dịch vụ',
+                                        style: AppTypography.bodySmall.copyWith(
+                                          color: AppColors.onSurfaceVariant,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                       Text(
                                         ' và ',
@@ -197,9 +200,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                           color: AppColors.onSurfaceVariant,
                                         ),
                                       ),
-                                      InlineLinkButton(
-                                        label: 'Chính sách bảo mật',
-                                        onTap: () {/* TODO: open privacy */},
+                                      Text(
+                                        'Chính sách bảo mật',
+                                        style: AppTypography.bodySmall.copyWith(
+                                          color: AppColors.onSurfaceVariant,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -230,59 +236,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             loading: isSubmitting,
                             onPressed: isSubmitting ? null : _submit,
                             icon: Icons.arrow_forward_rounded,
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // Divider
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Divider(
-                                  color:
-                                      AppColors.outlineVariant.withOpacity(0.6),
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
-                                child: Text(
-                                  'HOẶC ĐĂNG KÝ BẰNG',
-                                  style: AppTypography.labelUppercase.copyWith(
-                                    color: AppColors.outline.withOpacity(0.8),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Divider(
-                                  color:
-                                      AppColors.outlineVariant.withOpacity(0.6),
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // Social options (2-col grid)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: SocialButton(
-                                  icon: Icons.g_mobiledata_rounded,
-                                  label: 'Google',
-                                  onTap: () {/* TODO */},
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: SocialButton(
-                                  icon: Icons.apple_rounded,
-                                  label: 'Apple',
-                                  onTap: () {/* TODO */},
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),

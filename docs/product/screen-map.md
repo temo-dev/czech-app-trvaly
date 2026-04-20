@@ -38,12 +38,6 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 
 ---
 
-### `OnboardingScreen`
-**File**: `lib/features/onboarding/screens/onboarding_screen.dart`
-**Provider**: `currentUserProvider`
-**States**: multi-step (locale, exam date, daily goal)
-**Actions**: saves preferences → `/app/dashboard`
-
 ---
 
 ## Mock Test (Public)
@@ -186,7 +180,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **File**: `lib/features/simulator/screens/simulator_intro_screen.dart`
 **Provider**: `mockExamMetaProvider`, `isPremiumProvider`
 **States**: `loading`, `success`, `locked` (non-premium)
-**Actions**: "Bắt đầu" → creates attempt → `/app/simulator/question/0`; "Đăng ký Premium" → `/app/subscribe`
+**Actions**: "Bắt đầu" → creates attempt → `/app/simulator/question/0`
 
 ---
 
@@ -333,7 +327,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **Provider**: `currentUserProvider`
 **States**: `loading`, `success`, `error`
 **UI**: avatar, display name, XP, streak, subscription badge, exam date countdown
-**Actions**: → `/app/profile/settings`; → `/app/subscribe`
+**Actions**: → `/app/profile/settings`; → `/app/notifications`; → `/app/progress`
 
 ---
 
@@ -342,14 +336,6 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **Provider**: `currentUserProvider`, `notificationPrefsProvider`
 **States**: `loading`, `success`
 **Actions**: edit display name/avatar/exam date/daily goal; change locale; sign out
-
----
-
-### `SubscriptionScreen`
-**File**: `lib/features/subscription/screens/subscription_screen.dart`
-**Provider**: `subscriptionStatusProvider`, `currentUserProvider`
-**States**: `loading`, `active (already subscribed)`, `free (upgrade CTA)`
-**Actions**: purchase → platform IAP (iOS) or Stripe (web) → update `profiles.subscription_tier`
 
 ---
 

@@ -24,7 +24,6 @@ Canonical route list for GoRouter. All constants live in `lib/core/router/app_ro
 | `/auth/signup` | `SignupScreen` | |
 | `/auth/forgot-password` | `ForgotPasswordScreen` | |
 | `/auth/reset-password` | (deep link) | `?token=` query param |
-| `/onboarding` | `OnboardingScreen` | |
 | `/mock-test/intro` | `MockTestIntroScreen` | `?examId=` query param |
 | `/mock-test/question/:attemptId` | `MockTestQuestionScreen` | guest accessible |
 | `/mock-test/result/:attemptId` | `MockTestResultScreen` | guest accessible |
@@ -97,7 +96,6 @@ Wrapped by `ShellRoute` → `AppShell`. Bottom nav shown unless on full-screen f
 | `/app/notifications` | `NotificationsScreen` |
 | `/app/profile` | `ProfileScreen` |
 | `/app/profile/settings` | `SettingsScreen` |
-| `/app/subscribe` | `SubscriptionScreen` |
 | `/app/unlock-bonus/:lessonId` | `UnlockBonusScreen` |
 
 ### Error
