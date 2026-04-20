@@ -114,6 +114,8 @@ Czech language enforcement: if Whisper detects non-Czech OR GPT returns `is_czec
 
 Writing reference resolution: mock test sends real `question_id` from `questions`, while lesson/practice writing can send `exercise_id` from `exercises`. `writing-submit` normalizes these references server-side and also tolerates older clients that accidentally send an exercise UUID through `question_id`, preventing FK violation `23503` on `ai_writing_attempts.question_id`.
 
+Objective review write sequence: `ai-review-submit` inserts the `ai_teacher_reviews` row with `status: 'processing'` and `result_payload: null`, calls GPT, then does a single UPDATE to `status: 'ready'` with the full payload atomically. This ensures the row is never visible as `ready` with a null payload if the update fails.
+
 Guest security: anonymous mock-test and AI rows (`exam_attempts`, `exam_results`, `exam_analysis`, `ai_*_attempts`, `ai_teacher_reviews`) are scoped by persisted `guest_token`. Edge Functions using service-role also re-check ownership against `user_id` or `guest_token` instead of trusting raw UUIDs.
 
 **Edge Function JWT config — critical:** This project uses ES256 JWT signing. The Supabase edge runtime only supports HS256 for its built-in pre-verification step, so all functions must be deployed with `verify_jwt = false`. Auth is handled manually inside each function via `assertCanAccessExamAttempt` / `getAuthUserId` in `_shared/guest_access.ts`. `config.toml` declares `verify_jwt = false` for every function. When adding a new edge function, always add the entry to `config.toml` and deploy with `--no-verify-jwt`:

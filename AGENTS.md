@@ -64,6 +64,17 @@ flutter analyze
 
 ---
 
+## Exploration Workflow
+
+Prefer `code-review-graph` as the first step when exploring the codebase.
+
+- Refresh the graph before exploration when the codebase has changed since the last graph snapshot. Prefer incremental update first; use a full rebuild only after large structural refactors or if graph results look stale/incomplete.
+- Start discovery with graph context before manual text search. Use `get_minimal_context` first, then follow with graph tools such as `get_review_context`, `detect_changes`, `query_graph`, `semantic_search_nodes`, or `get_affected_flows` depending on the task.
+- Use `rg`/file reads only after the graph narrows the likely files, symbols, or flows, or when verifying exact string usage and generated code details.
+- Treat graph output as the default map of the codebase. Do not begin broad exploration with manual `grep`/`glob` unless the graph is unavailable or the task is purely literal text lookup.
+
+---
+
 ## Environment Setup
 
 Environment values are compile-time only via `--dart-define-from-file=env.<flavor>.json`.

@@ -481,11 +481,13 @@ RLS: view if requester or addressee; insert if requester; update if addressee; d
 
 ### `dm_rooms` / `dm_members` / `dm_messages`
 
-**`dm_rooms`**: `id, created_at`. RLS: visible only to members.
+**`dm_rooms`**: `id, created_at`. RLS: SELECT via `is_room_member(id)`.
 
-**`dm_members`**: `(room_id, user_id)` composite PK; `last_read_at`, `joined_at`. Index: `idx_dm_members_user`. Realtime: enabled.
+**`dm_members`**: `(room_id, user_id)` composite PK; `last_read_at`, `joined_at`. Index: `idx_dm_members_user`. Realtime: enabled. RLS: SELECT via `is_room_member(room_id)`; UPDATE restricted to own row (`user_id = auth.uid()`).
 
-**`dm_messages`**: `id, room_id, sender_id, message_type CHECK IN ('text','image','file'), body (1–4000 chars for text), attachment_url/name/size/mime, created_at`. Index: `idx_dm_messages_room` on `(room_id, created_at DESC)`. Realtime: enabled.
+**`dm_messages`**: `id, room_id, sender_id, message_type CHECK IN ('text','image','file'), body (1–4000 chars for text), attachment_url/name/size/mime, created_at`. Index: `idx_dm_messages_room` on `(room_id, created_at DESC)`. Realtime: enabled. RLS: SELECT and INSERT via `is_room_member(room_id)`.
+
+**RLS note — `is_room_member(room_id)`**: SECURITY DEFINER helper function that bypasses RLS when querying `dm_members` internally. Required to avoid infinite recursion (PostgreSQL error `42P17`) that would occur if the `dm_members` SELECT policy queried `dm_members` directly. All four DM policies (`dm_rooms` SELECT, `dm_members` SELECT, `dm_messages` SELECT/INSERT) delegate membership checks to this function.
 
 ---
 
@@ -499,6 +501,7 @@ RLS: view if requester or addressee; insert if requester; update if addressee; d
 | `sync_profile_to_leaderboard` | trigger | Auto-upserts to leaderboard_weekly on profile INSERT or UPDATE of weekly_xp/display_name/avatar_url. |
 | `unlock_lesson_bonus` | `(p_lesson_id uuid, p_user_id uuid) → void` | Deducts XP, marks lesson.bonus_unlocked = true. Raises: 'lesson_not_found', 'insufficient_xp'. |
 | `find_or_create_dm` | `(other_user_id uuid) → uuid` | Checks friendship is 'accepted', finds or creates DM room. Raises: 'not_friends'. SECURITY DEFINER. |
+| `is_room_member` | `(p_room_id uuid) → boolean STABLE` | Returns true if `auth.uid()` is in `dm_members` for the given room. SECURITY DEFINER (bypasses RLS to avoid recursive policy loop). Used by all DM RLS policies. |
 | `is_admin` | `() → boolean STABLE` | Returns profiles.role = 'admin' for current user. Used in all admin RLS policies. |
 | `cms_dashboard_stats` | `() → jsonb` | Aggregate stats for CMS dashboard. Admin-only. |
 

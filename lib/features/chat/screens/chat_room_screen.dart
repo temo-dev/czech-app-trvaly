@@ -62,7 +62,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     ref.listen(chatMessagesProvider(widget.roomId), (_, next) {
       next.whenData((_) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-        ref.read(chatNotifierProvider(widget.roomId).notifier).markRead();
       });
     });
 

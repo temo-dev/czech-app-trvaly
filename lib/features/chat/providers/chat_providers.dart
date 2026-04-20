@@ -67,17 +67,38 @@ Future<List<DmConversation>> _fetchConversations(String userId) async {
   final roomIds =
       myMemberships.map((m) => m['room_id'] as String).toList();
 
-  // 2. Peer members with profile info
+  // 2. Peer members (no embedded join — dm_members.user_id FK points to auth.users, not profiles)
   final peerRows = await supabase
       .from('dm_members')
-      .select('room_id, user_id, profiles(display_name, avatar_url)')
+      .select('room_id, user_id')
       .inFilter('room_id', roomIds)
       .neq('user_id', userId);
 
+  final peerUserIds = (peerRows as List)
+      .map((r) => r['user_id'] as String)
+      .toSet()
+      .toList();
+
+  final profileRows = peerUserIds.isNotEmpty
+      ? await supabase
+          .from('public_profiles')
+          .select('id, display_name, avatar_url')
+          .inFilter('id', peerUserIds)
+      : [];
+
+  final profileById = <String, Map<String, dynamic>>{
+    for (final p in (profileRows as List))
+      (p as Map)['id'] as String: Map<String, dynamic>.from(p),
+  };
+
   final peerByRoom = <String, Map<String, dynamic>>{};
-  for (final row in (peerRows as List)) {
+  for (final row in peerRows) {
     final r = Map<String, dynamic>.from(row as Map);
-    peerByRoom[r['room_id'] as String] = r;
+    final profile = profileById[r['user_id'] as String];
+    peerByRoom[r['room_id'] as String] = {
+      ...r,
+      'profiles': profile,
+    };
   }
 
   // 3. Last message + unread count per room (parallel)
@@ -201,14 +222,40 @@ Future<List<ChatMessage>> _fetchMessages(String roomId) async {
   final rows = await supabase
       .from('dm_messages')
       .select(
-          'id, room_id, sender_id, message_type, body, attachment_url, attachment_name, attachment_size, attachment_mime, created_at, sender:profiles!sender_id(display_name, avatar_url)')
+          'id, room_id, sender_id, message_type, body, attachment_url, attachment_name, attachment_size, attachment_mime, created_at')
       .eq('room_id', roomId)
       .order('created_at', ascending: true)
       .limit(100);
 
-  return (rows as List)
-      .map((r) => ChatMessage.fromMap(Map<String, dynamic>.from(r as Map)))
+  final messages = (rows as List)
+      .map((r) => Map<String, dynamic>.from(r as Map))
       .toList();
+
+  if (messages.isEmpty) return [];
+
+  final senderIds = messages
+      .map((m) => m['sender_id'] as String?)
+      .whereType<String>()
+      .toSet()
+      .toList();
+
+  final profileRows = await supabase
+      .from('public_profiles')
+      .select('id, display_name, avatar_url')
+      .inFilter('id', senderIds);
+
+  final profileById = <String, Map<String, dynamic>>{
+    for (final p in (profileRows as List))
+      (p as Map)['id'] as String: Map<String, dynamic>.from(p),
+  };
+
+  return messages.map((m) {
+    final profile = profileById[m['sender_id'] as String?];
+    return ChatMessage.fromMap({
+      ...m,
+      'sender': profile,
+    });
+  }).toList();
 }
 
 // ── Unread count (derived from conversations) ──────────────────────────────
@@ -232,11 +279,14 @@ class ChatNotifier extends _$ChatNotifier {
   Future<void> sendMessage(String body) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
-    await supabase.from('dm_messages').insert({
-      'room_id': roomId,
-      'sender_id': userId,
-      'message_type': 'text',
-      'body': body,
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await supabase.from('dm_messages').insert({
+        'room_id': roomId,
+        'sender_id': userId,
+        'message_type': 'text',
+        'body': body,
+      });
     });
   }
 
@@ -245,7 +295,7 @@ class ChatNotifier extends _$ChatNotifier {
     if (userId == null) return;
     await supabase
         .from('dm_members')
-        .update({'last_read_at': DateTime.now().toIso8601String()})
+        .update({'last_read_at': DateTime.now().toUtc().toIso8601String()})
         .eq('room_id', roomId)
         .eq('user_id', userId);
   }

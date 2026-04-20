@@ -81,12 +81,14 @@ class _MessageInputBarState extends ConsumerState<MessageInputBar> {
     }
 
     if (text.isEmpty) return;
-    _controller.clear();
-    setState(() {});
 
     await ref
         .read(chatNotifierProvider(widget.roomId).notifier)
         .sendMessage(text);
+
+    if (ref.read(chatNotifierProvider(widget.roomId)).hasError) return;
+    _controller.clear();
+    setState(() {});
   }
 
   bool get _canSend =>
@@ -97,6 +99,27 @@ class _MessageInputBarState extends ConsumerState<MessageInputBar> {
     final isUploading = ref
         .watch(attachmentUploadNotifierProvider(widget.roomId))
         .isLoading;
+
+    ref.listen(chatNotifierProvider(widget.roomId), (_, next) {
+      next.whenOrNull(
+        error: (_, __) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gửi tin nhắn thất bại. Thử lại.')),
+          );
+        },
+      );
+    });
+    ref.listen(attachmentUploadNotifierProvider(widget.roomId), (_, next) {
+      next.whenOrNull(
+        error: (_, __) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tải file thất bại. Thử lại.')),
+          );
+        },
+      );
+    });
 
     return Column(
       mainAxisSize: MainAxisSize.min,

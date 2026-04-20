@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
       writtenAnswer: body.written_answer ?? null,
     });
 
+    // Insert as "processing" first so the row never exists in a ready+null-payload state.
     const inserted = await insertReviewRow({
       supabase,
       requestKey,
@@ -175,8 +176,8 @@ Deno.serve(async (req) => {
       lessonId: body.lesson_id ?? null,
       examAttemptId: body.exam_attempt_id ?? null,
       modality: "objective",
-      status: "ready",
-      verdict: payload.verdict,
+      status: "processing",
+      verdict: null,
       resultPayload: null,
       inputPayload: {
         selected_option_id: body.selected_option_id ?? null,
@@ -189,13 +190,19 @@ Deno.serve(async (req) => {
       review_id: inserted.id,
       source,
     };
-    await supabase
+    const { error: updateError } = await supabase
       .from("ai_teacher_reviews")
       .update({
+        status: "ready",
+        verdict: payload.verdict,
         result_payload: finalPayload,
         updated_at: new Date().toISOString(),
       })
       .eq("id", inserted.id);
+
+    if (updateError) {
+      throw new Error(`Failed to finalize review: ${updateError.message}`);
+    }
 
     return jsonResponse({ review_id: inserted.id }, 200);
   } catch (err) {

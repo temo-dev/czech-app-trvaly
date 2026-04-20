@@ -52,23 +52,38 @@ Future<List<UserProfile>> _fetchFriends(String userId) async {
       .eq('status', 'accepted')
       .or('requester_id.eq.$userId,addressee_id.eq.$userId');
 
+  final friendships = (rows as List)
+      .map((row) => Map<String, dynamic>.from(row as Map))
+      .toList();
+
+  if (friendships.isEmpty) return [];
+
+  final peerIds = friendships.map((r) {
+    return r['requester_id'] == userId
+        ? r['addressee_id'] as String
+        : r['requester_id'] as String;
+  }).toList();
+
+  final profileRows = await supabase
+      .from('public_profiles')
+      .select('id, display_name, avatar_url, total_xp')
+      .inFilter('id', peerIds);
+
+  final profileById = <String, Map<String, dynamic>>{
+    for (final p in (profileRows as List))
+      (p as Map)['id'] as String: Map<String, dynamic>.from(p),
+  };
+
   final result = <UserProfile>[];
-  for (final row in (rows as List)) {
-    final r = Map<String, dynamic>.from(row as Map);
+  for (final r in friendships) {
     final friendshipId = r['id'] as String;
     final peerId = r['requester_id'] == userId
         ? r['addressee_id'] as String
         : r['requester_id'] as String;
-
-    final profileData = await supabase
-        .from('public_profiles')
-        .select('id, display_name, avatar_url, total_xp')
-        .eq('id', peerId)
-        .maybeSingle();
-
-    if (profileData != null) {
+    final profile = profileById[peerId];
+    if (profile != null) {
       result.add(UserProfile.fromMap(
-        Map<String, dynamic>.from(profileData as Map),
+        profile,
         friendshipStatus: FriendshipStatus.accepted,
         friendshipId: friendshipId,
         isRequester: r['requester_id'] == userId,
@@ -130,21 +145,33 @@ Future<List<UserProfile>> _fetchPendingRequests(String userId) async {
       .eq('addressee_id', userId)
       .eq('status', 'pending');
 
+  final friendships = (rows as List)
+      .map((row) => Map<String, dynamic>.from(row as Map))
+      .toList();
+
+  if (friendships.isEmpty) return [];
+
+  final requesterIds =
+      friendships.map((r) => r['requester_id'] as String).toList();
+
+  final profileRows = await supabase
+      .from('public_profiles')
+      .select('id, display_name, avatar_url, total_xp')
+      .inFilter('id', requesterIds);
+
+  final profileById = <String, Map<String, dynamic>>{
+    for (final p in (profileRows as List))
+      (p as Map)['id'] as String: Map<String, dynamic>.from(p),
+  };
+
   final result = <UserProfile>[];
-  for (final row in (rows as List)) {
-    final r = Map<String, dynamic>.from(row as Map);
+  for (final r in friendships) {
     final friendshipId = r['id'] as String;
     final requesterId = r['requester_id'] as String;
-
-    final profileData = await supabase
-        .from('public_profiles')
-        .select('id, display_name, avatar_url, total_xp')
-        .eq('id', requesterId)
-        .maybeSingle();
-
-    if (profileData != null) {
+    final profile = profileById[requesterId];
+    if (profile != null) {
       result.add(UserProfile.fromMap(
-        Map<String, dynamic>.from(profileData as Map),
+        profile,
         friendshipStatus: FriendshipStatus.pending,
         friendshipId: friendshipId,
         isRequester: false,
