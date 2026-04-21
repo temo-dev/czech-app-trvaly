@@ -84,7 +84,7 @@ Build query: fetches `currentUserProvider`, latest `exam_results` row, `leaderbo
 | `mockExamMetaProvider` | `AsyncNotifier<ExamMeta>` | Single exam by ID (arg) |
 | `examQuestionsProvider` | `AsyncNotifier<List<Question>>` | Questions for all sections of an attempt |
 | `examResultProvider` | `AsyncNotifier<MockTestResult>` | Result by attemptId (arg) — includes `aiGradingPending` flag |
-| `examAnalysisProvider` | `FutureProvider.autoDispose.family<ExamAnalysis?, String>` | Polls `exam_analysis` every 3s (max 30 retries) until status = `ready` / `error`; returns `null` on timeout so UI keeps shimmer/fallback |
+| `examAnalysisProvider` | `FutureProvider.autoDispose.family<ExamAnalysis?, String>` | Fetches `exam_analysis` by `attempt_id`; when status = `processing` it returns the row immediately and schedules another refresh after 3s so mock-test UI can show whole-exam grading progress instead of waiting silently |
 | `questionFeedbackProvider` | `AsyncNotifier<QuestionAiFeedback?>` | **Auto-fetch** AI feedback via `question-feedback` edge function; kết quả lấy từ cache `question_ai_feedback` nếu đã tồn tại |
 | `examSessionNotifier` | `Notifier<ExamSessionState>` | **See state machine below** |
 
@@ -313,21 +313,22 @@ Both speaking and writing use polling-based result screens, but speaking now ret
 ```
 submit (upload/submit edge fn) → create attempt row (`processing`) → { attempt_id }
     ↓
-poll every 3s (result edge fn) → { status: 'pending' | 'ready' | 'error' }
-    ↓ (max 10 retries)
+poll result edge fn → { status: 'pending' | 'ready' | 'error' }
+    ↓
 ready → update state to SpeakingState.ready / WritingState.ready
 error → update state to *.error(message), show retry CTA
-timeout (10 retries exhausted) → *.error('scoring_timeout')
+timeout → keep pending copy for AI Teacher review; speaking/writing result screens may still show retry/error CTA
 ```
 
-**Mock test context:** Khi submit speaking/writing trong mock test, `exam_attempt_id` phải được truyền vào `speaking-upload` / `writing-submit`. `grade-exam` JOIN các bảng AI attempt theo `exam_attempt_id + question_id`; nếu AI chưa xong thì câu đó tạm thời chưa có điểm và `exam_results.ai_grading_pending = true` để result screen hiển thị banner chờ. Sau khi ghi `exam_results`, edge function còn trigger `analyze-exam` để batch toàn bộ feedback vào `exam_analysis`.
+**Mock test context:** Khi submit speaking/writing trong mock test, `exam_attempt_id` phải được truyền vào `speaking-upload` / `writing-submit`. `grade-exam` JOIN các bảng AI attempt theo `exam_attempt_id + question_id`; nếu AI chưa xong thì câu đó tạm thời chưa có điểm và `exam_results.ai_grading_pending = true` để result screen hiển thị banner chờ. Sau khi ghi `exam_results`, edge function còn trigger `analyze-exam` để batch toàn bộ feedback vào `exam_analysis`, gồm `question_feedbacks` và `teacher_reviews_by_question`.
 `exam_results.passed` hiện được persist theo official bucket rule của đề A2: written `>= 42/70` và speaking `>= 24/40`.
+Trong lúc `ai_grading_pending = true`, app phải coi row này là provisional: chưa hiển thị kết luận đậu/rớt, tổng điểm cuối, weak skills, hoặc breakdown kỹ năng chính thức. Khi speaking/writing attempt mock test hoàn tất (`ready` hoặc `error`), edge function sẽ trigger `grade-exam` lại để chốt row cuối.
 
-**Operational note:** `speaking-upload` no longer blocks on OpenAI scoring. It inserts the attempt row first, returns `attempt_id` immediately, then uses an Edge Runtime background task to run transcription + grading and update the same row to `ready/error`. Speaking grading now prefers audio-native scoring for both exercise and exam flows, while transcript remains available for review UI and fallback grading.
+**Operational note:** `speaking-upload` no longer blocks on OpenAI scoring. It inserts the attempt row first, returns `attempt_id` immediately, then uses an Edge Runtime background task to run transcription + grading and update the same row to `ready/error`. For `wav`/`mp3`, the function now starts transcription and audio-native scoring in parallel, persists the transcript as soon as it is available, and uses that intermediate transcript presence to distinguish `transcribing` vs `scoring` while the row remains `processing`. Speaking grading still prefers audio-native scoring for both exercise and exam flows, while transcript remains available for review UI and fallback grading.
 
 `writing-submit` now follows the same async pattern: it resolves `question_id`/`exercise_id`, inserts `ai_writing_attempts(status='processing')`, returns `attempt_id` immediately, then uses an Edge Runtime background task to score the essay with `gpt-5-mini` and update the same row to `ready/error`.
 
-`aiTeacherReviewEntryProvider` also auto-polls while `ai-review-result` returns `pending`. Pending responses now include a user-facing `message` so review cards/detail screens can distinguish between “đang đợi speaking/writing scoring” and “đang tạo nhận xét”.
+`aiTeacherReviewEntryProvider` also auto-polls while `ai-review-result` returns `pending`. Pending responses now include a user-facing `message` plus optional `processing_stage`, so review cards/detail screens can distinguish between “đang nhận transcript”, “đang chấm bài nói/bài viết”, and “đang hoàn thiện nhận xét”. Subjective speaking/writing reviews now poll at `2s x 20 retries`; objective reviews keep the previous slower cadence.
 
 ## Question Feedback Pattern (Lesson + Review)
 
@@ -341,7 +342,7 @@ edge function check cache (question_ai_feedback table)
     └─ cache miss → gọi GPT → upsert vào cache → trả về
     ↓
 Lesson flow: hiển thị LessonAnswerFeedbackSheet (bottom sheet) trước khi sang câu tiếp
-Mock test review: `analyze-exam` gọi lại cùng cache/prompt này theo batch cho objective questions; result screen đọc `exam_analysis.question_feedbacks` nên không cần tap từng câu để khởi động AI
+Mock test review: `analyze-exam` gọi lại cùng cache/prompt này theo batch cho objective questions; result screen đọc `exam_analysis.question_feedbacks` cho summary card và `teacher_reviews_by_question` cho subjective detail nên không còn tap từng câu để khởi động AI Teacher review.
 ```
 
 ---

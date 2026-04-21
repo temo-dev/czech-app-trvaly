@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
-import '../models/mock_test_result.dart';
+import 'package:app_czech/features/mock_test/models/mock_test_result.dart';
 
 /// Horizontal bar chart showing score per skill.
 class SkillBreakdownChart extends StatefulWidget {
@@ -14,8 +14,7 @@ class SkillBreakdownChart extends StatefulWidget {
   final Map<String, SectionResult> sectionScores;
 
   @override
-  State<SkillBreakdownChart> createState() =>
-      _SkillBreakdownChartState();
+  State<SkillBreakdownChart> createState() => _SkillBreakdownChartState();
 }
 
 class _SkillBreakdownChartState extends State<SkillBreakdownChart>
@@ -49,11 +48,13 @@ class _SkillBreakdownChartState extends State<SkillBreakdownChart>
         .map((k) => MapEntry(k, widget.sectionScores[k]!))
         .toList();
     return Column(
-      children: skills.map((e) => _SkillBar(
-        skill: e.key,
-        result: e.value,
-        animation: _controller,
-      )).toList(),
+      children: skills
+          .map((e) => _SkillBar(
+                skill: e.key,
+                result: e.value,
+                animation: _controller,
+              ))
+          .toList(),
     );
   }
 }
@@ -71,17 +72,17 @@ class _SkillBar extends AnimatedWidget {
   Animation<double> get animation => listenable as Animation<double>;
 
   static const _skillLabels = {
-    'reading':   'Đọc hiểu',
+    'reading': 'Đọc hiểu',
     'listening': 'Nghe hiểu',
-    'writing':   'Viết',
-    'speaking':  'Nói',
+    'writing': 'Viết',
+    'speaking': 'Nói',
   };
 
   static const _skillIcons = {
-    'reading':   Icons.menu_book_outlined,
+    'reading': Icons.menu_book_outlined,
     'listening': Icons.headphones_outlined,
-    'writing':   Icons.edit_note_outlined,
-    'speaking':  Icons.mic_outlined,
+    'writing': Icons.edit_note_outlined,
+    'speaking': Icons.mic_outlined,
   };
 
   Color _barColor(double pct) {
@@ -112,7 +113,14 @@ class _SkillBar extends AnimatedWidget {
                 child: Text(label, style: AppTypography.labelMedium),
               ),
               Text(
-                '${result.score}%',
+                '${result.score}/${result.total}',
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.x2),
+              Text(
+                '${(pct * 100).round()}%',
                 style: AppTypography.labelMedium.copyWith(
                   color: color,
                   fontWeight: FontWeight.w700,

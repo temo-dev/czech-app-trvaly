@@ -46,6 +46,8 @@ class MockTestResult with _$MockTestResult {
 }
 
 extension MockTestResultX on MockTestResult {
+  bool get hasOfficialResult => !aiGradingPending;
+
   ScoreBand get band {
     if (totalScore >= 85) return ScoreBand.excellent;
     if (totalScore >= 70) return ScoreBand.good;

@@ -6,13 +6,11 @@ import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_radius.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
-import 'package:app_czech/features/ai_teacher/models/ai_teacher_review.dart';
-import 'package:app_czech/features/ai_teacher/widgets/ai_teacher_review_widgets.dart';
 import 'package:app_czech/features/exercise/widgets/question_shell.dart';
 import 'package:app_czech/features/mock_test/models/exam_analysis.dart';
+import 'package:app_czech/features/mock_test/providers/exam_result_provider.dart';
 import 'package:app_czech/shared/models/question_model.dart';
 import 'package:app_czech/shared/widgets/loading_shimmer.dart';
-import '../providers/exam_result_provider.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -78,9 +76,11 @@ class _ReviewToggleHeader extends StatelessWidget {
           children: [
             const Icon(Icons.rate_review_outlined, size: 20),
             const SizedBox(width: AppSpacing.x2),
-            Expanded(
-              child: Text('Xem lại chi tiết bài thi',
-                  style: AppTypography.titleSmall),
+            const Expanded(
+              child: Text(
+                'Xem lại chi tiết bài thi',
+                style: AppTypography.titleSmall,
+              ),
             ),
             Icon(
               expanded
@@ -114,10 +114,12 @@ class _ReviewBody extends ConsumerWidget {
         padding: EdgeInsets.symmetric(vertical: AppSpacing.x6),
         child: Center(child: CircularProgressIndicator()),
       ),
-      error: (e, _) => Padding(
-        padding: const EdgeInsets.all(AppSpacing.x4),
-        child: Text('Không thể tải chi tiết bài thi.',
-            style: AppTypography.bodySmall),
+      error: (e, _) => const Padding(
+        padding: EdgeInsets.all(AppSpacing.x4),
+        child: Text(
+          'Không thể tải chi tiết bài thi.',
+          style: AppTypography.bodySmall,
+        ),
       ),
       data: (items) {
         final objectiveItems = items
@@ -502,12 +504,18 @@ class _ExpandedContent extends StatelessWidget {
           ],
 
           // Question renderer — reuse exercise widgets with isSubmitted: true
-          _QuestionRenderer(item: item),
+          _QuestionRenderer(
+            item: item,
+            analysis: analysis,
+          ),
 
           // Writing questions: custom review panel (no "Đúng/Sai" framing)
           if (item.question.type == QuestionType.writing) ...[
             const SizedBox(height: AppSpacing.x4),
-            _WritingReviewPanel(item: item),
+            _WritingReviewPanel(
+              item: item,
+              analysis: analysis,
+            ),
           ] else if (!_isSubjective) ...[
             const SizedBox(height: AppSpacing.x4),
             _PreloadedQuestionFeedback(
@@ -525,8 +533,12 @@ class _ExpandedContent extends StatelessWidget {
 // ── Question renderer per type ────────────────────────────────────────────────
 
 class _QuestionRenderer extends StatelessWidget {
-  const _QuestionRenderer({required this.item});
+  const _QuestionRenderer({
+    required this.item,
+    required this.analysis,
+  });
   final QuestionReviewItem item;
+  final ExamAnalysis? analysis;
 
   @override
   Widget build(BuildContext context) {
@@ -536,7 +548,10 @@ class _QuestionRenderer extends StatelessWidget {
     // which mutates shared speakingSessionProvider and doesn't support
     // multi-instance in the same widget tree)
     if (q.type == QuestionType.speaking) {
-      return _SpeakingReviewPanel(item: item);
+      return _SpeakingReviewPanel(
+        item: item,
+        analysis: analysis,
+      );
     }
 
     // All other types: reuse QuestionShell with isSubmitted: true
@@ -568,14 +583,17 @@ class _QuestionRenderer extends StatelessWidget {
 
 // ── Speaking review panel ─────────────────────────────────────────────────────
 
-class _SpeakingReviewPanel extends ConsumerWidget {
-  const _SpeakingReviewPanel({required this.item});
+class _SpeakingReviewPanel extends StatelessWidget {
+  const _SpeakingReviewPanel({
+    required this.item,
+    required this.analysis,
+  });
   final QuestionReviewItem item;
+  final ExamAnalysis? analysis;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final attemptId = item.aiAttemptId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -621,36 +639,14 @@ class _SpeakingReviewPanel extends ConsumerWidget {
         ),
 
         // AI feedback section
-        if (attemptId != null) ...[
+        if (item.isAnswered) ...[
           const SizedBox(height: AppSpacing.x3),
-          _SpeakingAiFeedback(
-            attemptId: attemptId,
-            questionId: item.question.id,
-          ),
-        ] else if (item.isAnswered) ...[
-          const SizedBox(height: AppSpacing.x3),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.x3),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: cs.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline_rounded,
-                    size: 16, color: cs.onSurfaceVariant),
-                const SizedBox(width: AppSpacing.x2),
-                Expanded(
-                  child: Text(
-                    'Bài ghi âm chưa được chấm điểm AI. '
-                    'Thử luyện tập lại để nhận nhận xét chi tiết.',
-                    style: AppTypography.labelSmall
-                        .copyWith(color: cs.onSurfaceVariant),
-                  ),
-                ),
-              ],
-            ),
+          _SubjectiveExamFeedbackCard(
+            item: item,
+            analysis: analysis,
+            pendingLabel:
+                'AI đang chấm toàn bộ bài thi và chuẩn bị nhận xét cho bài nói...',
+            emptyMessage: 'Chưa có nhận xét chi tiết cho bài nói này.',
           ),
         ],
 
@@ -671,8 +667,11 @@ class _SpeakingReviewPanel extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.lightbulb_outline_rounded,
-                        size: 16, color: AppColors.primary),
+                    const Icon(
+                      Icons.lightbulb_outline_rounded,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: AppSpacing.x2),
                     Text(
                       'Câu trả lời gợi ý',
@@ -693,47 +692,15 @@ class _SpeakingReviewPanel extends ConsumerWidget {
   }
 }
 
-// ── Inline AI speaking feedback ───────────────────────────────────────────────
-
-class _SpeakingAiFeedback extends ConsumerWidget {
-  const _SpeakingAiFeedback({
-    required this.attemptId,
-    required this.questionId,
-  });
-  final String attemptId;
-  final String questionId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final request = AiTeacherReviewRequest(
-      source: 'mock_test',
-      questionId: questionId,
-      aiAttemptId: attemptId,
-      questionType: QuestionType.speaking,
-    );
-
-    return AiTeacherInlineReviewCard(
-      request: request,
-      pendingLabel: 'AI Teacher đang chuẩn bị nhận xét cho bài nói...',
-      emptyMessage: 'Chưa có AI Teacher review cho bài nói này.',
-      showDetailCta: true,
-      onTapDetail: () => context.push(
-        AppRoutes.speakingFeedback,
-        extra: {
-          'attemptId': attemptId,
-          'questionId': questionId,
-          'source': 'mock_test',
-        },
-      ),
-    );
-  }
-}
-
 // ── Writing review panel ──────────────────────────────────────────────────────
 
 class _WritingReviewPanel extends StatelessWidget {
-  const _WritingReviewPanel({required this.item});
+  const _WritingReviewPanel({
+    required this.item,
+    required this.analysis,
+  });
   final QuestionReviewItem item;
+  final ExamAnalysis? analysis;
 
   @override
   Widget build(BuildContext context) {
@@ -799,15 +766,13 @@ class _WritingReviewPanel extends StatelessWidget {
         // AI feedback section
         if (item.isAnswered) ...[
           const SizedBox(height: AppSpacing.x3),
-          if (item.aiAttemptId != null)
-            _WritingAiFeedback(
-              attemptId: item.aiAttemptId!,
-              questionId: item.question.id,
-            )
-          else
-            _AiUnavailableCard(
-              message: 'Bài viết này chưa có AI attempt gắn với mock exam.',
-            ),
+          _SubjectiveExamFeedbackCard(
+            item: item,
+            analysis: analysis,
+            pendingLabel:
+                'AI đang chấm toàn bộ bài thi và chuẩn bị nhận xét cho bài viết...',
+            emptyMessage: 'Chưa có nhận xét chi tiết cho bài viết này.',
+          ),
         ],
 
         // Tiêu chí chấm điểm
@@ -825,8 +790,11 @@ class _WritingReviewPanel extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.fact_check_outlined,
-                        size: 16, color: AppColors.primary),
+                    const Icon(
+                      Icons.fact_check_outlined,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: AppSpacing.x2),
                     Text(
                       'Tiêu chí chấm điểm',
@@ -864,8 +832,11 @@ class _WritingReviewPanel extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.lightbulb_outline_rounded,
-                        size: 16, color: AppColors.primary),
+                    const Icon(
+                      Icons.lightbulb_outline_rounded,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: AppSpacing.x2),
                     Text(
                       'Bài mẫu tham khảo',
@@ -890,37 +861,196 @@ class _WritingReviewPanel extends StatelessWidget {
   }
 }
 
-// ── Inline AI writing feedback ────────────────────────────────────────────────
-
-class _WritingAiFeedback extends ConsumerWidget {
-  const _WritingAiFeedback({
-    required this.attemptId,
-    required this.questionId,
+class _SubjectiveExamFeedbackCard extends StatelessWidget {
+  const _SubjectiveExamFeedbackCard({
+    required this.item,
+    required this.analysis,
+    required this.pendingLabel,
+    required this.emptyMessage,
   });
-  final String attemptId;
-  final String questionId;
+
+  final QuestionReviewItem item;
+  final ExamAnalysis? analysis;
+  final String pendingLabel;
+  final String emptyMessage;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final request = AiTeacherReviewRequest(
-      source: 'mock_test',
-      questionId: questionId,
-      aiAttemptId: attemptId,
-      questionType: QuestionType.writing,
-    );
+  Widget build(BuildContext context) {
+    if (analysis == null || analysis!.isProcessing) {
+      return _ExamAnalysisPendingCard(label: pendingLabel);
+    }
 
-    return AiTeacherInlineReviewCard(
-      request: request,
-      pendingLabel: 'AI Teacher đang chuẩn bị nhận xét cho bài viết...',
-      emptyMessage: 'Chưa có AI Teacher review cho bài viết này.',
-      showDetailCta: true,
-      onTapDetail: () => context.push(
-        AppRoutes.writingFeedback,
-        extra: {
-          'attemptId': attemptId,
-          'questionId': questionId,
-          'source': 'mock_test',
-        },
+    final feedback = analysis!.questionFeedbacks[item.question.id];
+    final review = analysis!.teacherReviewForQuestion(item.question.id);
+
+    if (feedback == null) {
+      return _AiUnavailableCard(message: emptyMessage);
+    }
+
+    if (feedback.skipped && review == null) {
+      return _AiUnavailableCard(
+        message: feedback.summary.isNotEmpty ? feedback.summary : emptyMessage,
+      );
+    }
+
+    final accent = switch (feedback.verdict) {
+      'correct' => AppColors.success,
+      'partial' => AppColors.primary,
+      'needs_retry' => AppColors.warning,
+      _ => AppColors.primary,
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 16,
+                color: accent,
+              ),
+              const SizedBox(width: AppSpacing.x2),
+              Expanded(
+                child: Text(
+                  'AI Teacher đã chấm xong câu này',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (review?.overallScore != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x2,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                  ),
+                  child: Text(
+                    '${review!.overallScore}/100',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (feedback.summary.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.x3),
+            Text(
+              feedback.summary,
+              style: AppTypography.bodySmall.copyWith(height: 1.55),
+            ),
+          ],
+          if (feedback.criteria.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.x3),
+            ...feedback.criteria.take(2).map(
+                  (criterion) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.x2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 14,
+                          color: accent,
+                        ),
+                        const SizedBox(width: AppSpacing.x2),
+                        Expanded(
+                          child: Text(
+                            criterion.tip.isNotEmpty
+                                ? '${criterion.label}: ${criterion.tip}'
+                                : '${criterion.label}: ${criterion.feedback}',
+                            style: AppTypography.labelSmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
+          if (feedback.shortTips.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.x2),
+            Wrap(
+              spacing: AppSpacing.x2,
+              runSpacing: AppSpacing.x2,
+              children: feedback.shortTips
+                  .take(3)
+                  .map(
+                    (tip) => _FeedbackChip(
+                      icon: Icons.flash_on_outlined,
+                      label: tip,
+                      color: accent,
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          if (review != null) ...[
+            const SizedBox(height: AppSpacing.x3),
+            TextButton.icon(
+              onPressed: () => context.push(
+                AppRoutes.mockTestSubjectiveReviewPath(
+                  item.attemptId,
+                  item.question.id,
+                ),
+              ),
+              icon: const Icon(Icons.open_in_new_rounded, size: 16),
+              label: const Text('Xem nhận xét chi tiết'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ExamAnalysisPendingCard extends StatelessWidget {
+  const _ExamAnalysisPendingCard({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1176,7 +1306,11 @@ class _UnansweredNotice extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber_rounded, size: 15, color: AppColors.error),
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 15,
+            color: AppColors.error,
+          ),
           const SizedBox(width: AppSpacing.x2),
           Text('Bạn chưa trả lời câu hỏi này',
               style: AppTypography.labelSmall.copyWith(color: AppColors.error)),

@@ -7,6 +7,7 @@ import 'package:app_czech/core/storage/prefs_storage.dart';
 import 'package:app_czech/core/theme/app_colors.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/features/mock_test/models/exam_analysis.dart';
 import 'package:app_czech/features/mock_test/models/mock_test_result.dart';
 import 'package:app_czech/features/mock_test/providers/exam_analysis_provider.dart';
 import 'package:app_czech/features/mock_test/providers/exam_result_provider.dart';
@@ -117,8 +118,12 @@ class _ResultBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final analysis =
-        ref.watch(examAnalysisProvider(result.attemptId)).valueOrNull;
+    final analysisAsync = ref.watch(examAnalysisProvider(result.attemptId));
+    final analysis = analysisAsync.valueOrNull;
+    final isBatchReviewProcessing = analysisAsync.isLoading ||
+        analysis?.status == ExamAnalysisStatus.processing;
+    final isResultPending = result.aiGradingPending || isBatchReviewProcessing;
+    final hasOfficialResult = result.hasOfficialResult;
 
     return ResponsivePageContainer(
       maxWidth: 640,
@@ -127,85 +132,172 @@ class _ResultBody extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // AI grading pending banner
-            if (result.aiGradingPending) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.x4, vertical: AppSpacing.x3),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2)),
-                    const SizedBox(width: AppSpacing.x3),
-                    Expanded(
-                      child: Text(
-                        'Điểm bài nói/viết đang được AI chấm — kết quả sẽ cập nhật sau ít phút.',
-                        style: AppTypography.bodySmall
-                            .copyWith(color: AppColors.primary),
-                      ),
-                    ),
-                  ],
-                ),
+            if (isResultPending) ...[
+              _PendingResultState(
+                result: result,
               ),
-              const SizedBox(height: AppSpacing.x4),
-            ],
+            ] else ...[
+              // Score hero
+              Center(child: TotalScoreHero(result: result)),
+              const SizedBox(height: AppSpacing.x6),
 
-            // Score hero
-            Center(child: TotalScoreHero(result: result)),
-            const SizedBox(height: AppSpacing.x6),
+              if (hasOfficialResult &&
+                  result.writtenTotal > 0 &&
+                  result.speakingTotal > 0) ...[
+                _OfficialPassRuleCard(result: result),
+                const SizedBox(height: AppSpacing.x5),
+              ],
 
-            if (result.writtenTotal > 0 && result.speakingTotal > 0) ...[
-              _OfficialPassRuleCard(result: result),
+              // Skill breakdown
+              if (hasOfficialResult && result.sectionScores.isNotEmpty) ...[
+                const Text(
+                  'Kết quả từng kỹ năng',
+                  style: AppTypography.titleSmall,
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                SkillBreakdownChart(sectionScores: result.sectionScores),
+                const SizedBox(height: AppSpacing.x5),
+              ],
+
+              // Weak skills
+              if (hasOfficialResult && result.weakSkills.isNotEmpty) ...[
+                _WeakSkillsRow(skills: result.weakSkills),
+                const SizedBox(height: AppSpacing.x5),
+              ],
+
+              if (!hasOfficialResult) ...[
+                _PendingOfficialResultCard(result: result),
+                const SizedBox(height: AppSpacing.x5),
+              ],
+
+              OverallInsightsCard(analysis: analysis),
               const SizedBox(height: AppSpacing.x5),
-            ],
 
-            // Skill breakdown
-            if (result.sectionScores.isNotEmpty) ...[
-              const Text(
-                'Kết quả từng kỹ năng',
-                style: AppTypography.titleSmall,
+              // Review section
+              QuestionReviewList(
+                attemptId: result.attemptId,
+                analysis: analysis,
               ),
-              const SizedBox(height: AppSpacing.x4),
-              SkillBreakdownChart(sectionScores: result.sectionScores),
-              const SizedBox(height: AppSpacing.x5),
+              const SizedBox(height: AppSpacing.x6),
+
+              // CTA section
+              ResultCTASection(
+                isAuthenticated: isAuthenticated,
+                onSignup: onSignup,
+                onLogin: onLogin,
+                onRetake: onRetake,
+                onGoToDashboard: onGoToDashboard,
+              ),
+              const SizedBox(height: AppSpacing.x8),
             ],
-
-            // Weak skills
-            if (result.weakSkills.isNotEmpty) ...[
-              _WeakSkillsRow(skills: result.weakSkills),
-              const SizedBox(height: AppSpacing.x5),
-            ],
-
-            OverallInsightsCard(analysis: analysis),
-            const SizedBox(height: AppSpacing.x5),
-
-            // Review section
-            QuestionReviewList(
-              attemptId: result.attemptId,
-              analysis: analysis,
-            ),
-            const SizedBox(height: AppSpacing.x6),
-
-            // CTA section
-            ResultCTASection(
-              isAuthenticated: isAuthenticated,
-              onSignup: onSignup,
-              onLogin: onLogin,
-              onRetake: onRetake,
-              onGoToDashboard: onGoToDashboard,
-            ),
-            const SizedBox(height: AppSpacing.x8),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PendingResultState extends StatelessWidget {
+  const _PendingResultState({
+    required this.result,
+  });
+
+  final MockTestResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.x5),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(height: AppSpacing.x4),
+              const Text(
+                'AI đang chấm bài thi',
+                style: AppTypography.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.x2),
+              Text(
+                'Kết quả sẽ chỉ hiển thị khi phần nói và phần viết được chấm xong theo rule chính thức của bài thi Trvaly A2.',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                  height: 1.55,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.x4),
+              Text(
+                'Chuẩn chính thức: Viết ${result.writtenPassThreshold}/${result.writtenTotal} và Nói ${result.speakingPassThreshold}/${result.speakingTotal}.',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.x8),
+      ],
+    );
+  }
+}
+
+class _PendingOfficialResultCard extends StatelessWidget {
+  const _PendingOfficialResultCard({required this.result});
+
+  final MockTestResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Kết quả chính thức đang được hoàn tất',
+            style: AppTypography.titleSmall,
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            'Theo rule bài thi Trvaly A2, trạng thái đậu/rớt chỉ được chốt khi đủ cả phần viết và phần nói. Trong lúc AI còn chấm, app sẽ chưa hiển thị tổng điểm cuối hoặc kết quả từng kỹ năng.',
+            style: AppTypography.bodySmall.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          Text(
+            'Chuẩn chính thức: Viết ${result.writtenPassThreshold}/${result.writtenTotal} và Nói ${result.speakingPassThreshold}/${result.speakingTotal}.',
+            style: AppTypography.labelMedium.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

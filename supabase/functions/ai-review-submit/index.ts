@@ -30,7 +30,7 @@ Nhiệm vụ:
 
 Trả về JSON đúng định dạng:
 {
-  "summary": "<Nhận xét tổng quan 1-3 câu bằng tiếng Việt>",
+  "summary": "<Nhận xét tổng quan 1-2 câu bằng tiếng Việt>",
   "reinforcement": "<Nếu làm đúng: 1 câu củng cố ngắn. Nếu sai: để trống>",
   "criteria": [
     { "title": "Độ chính xác", "score": <0-100>, "max_score": 100, "feedback": "<giải thích ngắn>", "tip": "<mẹo ngắn>" }
@@ -297,8 +297,8 @@ async function createSubjectiveReview(args: {
       status: row["status"] === "ready"
         ? "ready"
         : row["status"] === "error"
-        ? "error"
-        : "processing",
+          ? "error"
+          : "processing",
       verdict: writingPayload?.verdict ?? null,
       resultPayload: writingPayload,
       inputPayload: { ai_attempt_id: attemptId },
@@ -380,8 +380,8 @@ async function createSubjectiveReview(args: {
     status: row["status"] === "ready"
       ? "ready"
       : row["status"] === "error"
-      ? "error"
-      : "processing",
+        ? "error"
+        : "processing",
     verdict: speakingPayload?.verdict ?? null,
     resultPayload: speakingPayload,
     inputPayload: { ai_attempt_id: attemptId },
@@ -465,10 +465,9 @@ async function buildObjectiveReviewPayload(args: {
       `Câu trả lời của học viên: "${userAnswerText}"`,
       `Mức độ đúng: ${correctness.verdict}`,
       options.length > 0
-        ? `Các lựa chọn: ${
-          options.map((option) => `${option["id"]}: ${option["text"]}`).join(
-            " | ",
-          )
+        ? `Các lựa chọn: ${options.map((option) => `${option["id"]}: ${option["text"]}`).join(
+          " | ",
+        )
         }`
         : "",
     ].filter((line) => line.length > 0).join("\n"),

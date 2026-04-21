@@ -68,16 +68,16 @@ Widget inventory with file paths and key props. Organized by feature.
 
 | Widget | Props | Notes |
 |---|---|---|
-| `QuestionShell` | `question, child, onSubmit` | Wraps any exercise type |
+| `QuestionShell` | `question, child, onSubmit` | Dispatches exam/exercise question types; listening `fill_blank` also renders inline audio playback when `audio_url` exists |
 | `QuestionIntro` | `introText?, introImageUrl?` | Context/passage shown above prompt |
 | `McqExercise` | `options, selectedId, onSelect` | |
 | `McqOptionTile` | `option, isSelected, isCorrect?, isWrong?, onTap` | |
 | `FillBlankExercise` | `prompt, controller` | |
-| `ListeningExercise` | `audioUrl, options, selectedId, onSelect` | |
+| `ListeningExercise` | `audioUrl, options, selectedId, onSelect` | Uses the inline `AudioPlayerBar` and plays remote Supabase audio via `just_audio` |
 | `ReadingPassageExercise` | `passageText, question` | |
 | `SpeakingRecorderExercise` | `onRecordingComplete(audioPath)` | |
 | `WritingInputExercise` | `prompt, controller, maxLength` | |
-| `AudioPlayerBar` | `audioUrl` | |
+| `AudioPlayerBar` | `audioUrl` | Lightweight inline audio player owned by the widget itself; supports remote listening assets and limited play counts in test flows |
 | `ExplanationPanel` | `correctAnswer, explanation, isCorrect` | |
 
 ---

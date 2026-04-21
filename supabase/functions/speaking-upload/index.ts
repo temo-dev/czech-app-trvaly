@@ -9,7 +9,10 @@ import {
   transcribeAudio,
 } from "../_shared/openai.ts";
 import { VIETNAMESE_FEEDBACK_REQUIREMENT } from "../_shared/vietnamese.ts";
-import { ensureVietnameseUserFacingJson } from "../_shared/vietnamese_guard.ts";
+import {
+  ensureVietnameseUserFacingJson,
+  inspectUserFacingEnglish,
+} from "../_shared/vietnamese_guard.ts";
 import {
   createClient,
   type SupabaseClient,
@@ -29,75 +32,148 @@ function buildSpeakingSystemPrompt(
   scoringMode: "audio_native" | "transcript_fallback",
 ): string {
   const toneInstruction = reviewMode === "exam"
-    ? "Giữ giọng nhận xét nghiêm túc, ngắn gọn, giống review bài thi. Không coaching trong lúc làm bài."
-    : "Giữ giọng nhận xét mang tính hướng dẫn học tập hơn, giải thích rõ lỗi và cách sửa.";
+    ? [
+      "Giữ giọng nhận xét nghiêm túc, khách quan, ngắn gọn như giám khảo chấm thi.",
+      "Không dùng giọng cổ vũ quá mức.",
+      "Không coaching trực tiếp trong khi chấm; chỉ nêu lỗi và gợi ý sau đánh giá.",
+    ].join(" ")
+    : [
+      "Giữ giọng nhận xét như giáo viên hướng dẫn: rõ ràng, cụ thể, dễ hiểu.",
+      "Ưu tiên lỗi quan trọng nhất và cách sửa thực tế.",
+    ].join(" ");
+
   const evidenceInstruction = scoringMode === "audio_native"
-    ? "Bạn PHẢI nghe audio để chấm pronunciation và fluency. Transcript chỉ dùng để hiển thị lại cho học viên và hỗ trợ phân tích nội dung. Nếu audio và transcript mâu thuẫn, ưu tiên audio."
-    : "Bạn đang ở chế độ fallback không có audio trực tiếp. Hãy chấm thận trọng hơn và ghi nhận nội dung transcript làm tín hiệu chính, nhưng vẫn cố giữ rubric speaking nhất quán.";
+    ? [
+      "PHẢI ưu tiên audio làm nguồn chính để chấm pronunciation và fluency.",
+      "Transcript chỉ để tham chiếu nội dung.",
+      "Nếu audio và transcript mâu thuẫn, ưu tiên audio.",
+      "Không suy đoán nếu audio không rõ.",
+    ].join(" ")
+    : [
+      "Chế độ fallback: không có audio trực tiếp.",
+      "Dùng transcript làm nguồn chính.",
+      "Không được giả định chi tiết phát âm.",
+      "Nếu không chắc chắn, phải thể hiện mức độ không chắc.",
+    ].join(" ");
 
   return `
-Bạn là giám khảo chấm điểm bài thi nói tiếng Séc cho người học người Việt Nam.
-Người học đang luyện thi kỳ thi trình độ A2 để xin trạng thái Trvalý pobyt (cư trú lâu dài) tại Cộng hòa Séc.
+Bạn là giám khảo AI chấm bài nói tiếng Séc cho người Việt luyện thi A2 (Trvalý pobyt).
+
+Mục tiêu:
+- chấm công bằng, nhất quán
+- chỉ nêu lỗi có cơ sở
+- feedback dễ hiểu cho người Việt
 
 ${toneInstruction}
 ${evidenceInstruction}
 
-⚠️ QUY TẮC QUAN TRỌNG NHẤT: Bài thi YÊU CẦU trả lời bằng TIẾNG SÉC.
-- Nếu bài nói KHÔNG phải tiếng Séc (tiếng Anh, tiếng Việt, hoặc ngôn ngữ khác), hãy cho điểm 0 tất cả các tiêu chí và giải thích rõ lý do bằng tiếng Việt.
-- Chỉ chấm điểm bình thường khi bài nói thực sự là tiếng Séc.
+QUY TẮC NGÔN NGỮ:
+- Bài phải bằng TIẾNG SÉC.
+- Nếu không phải tiếng Séc:
+  - is_czech = false
+  - tất cả điểm = 0
+  - giải thích bằng tiếng Việt
+- Nếu trộn ngôn ngữ:
+  - phần lớn là Séc → chấm nhưng trừ điểm
+  - không phải Séc → 0 điểm
 
-Tiêu chí chấm (chỉ áp dụng khi bài nói là tiếng Séc):
-- pronunciation (phát âm): 0–100 — độ rõ ràng, chính xác và mức tự nhiên của âm thanh tiếng Séc
-- fluency (độ lưu loát): 0–100 — nhịp nói, ngắt câu tự nhiên, tốc độ nói, độ ngập ngừng
-- vocabulary (từ vựng): 0–100 — sử dụng từ phù hợp, đa dạng, đúng ngữ cảnh
-- task_achievement (trả lời đúng câu hỏi): 0–100 — câu trả lời có liên quan và đáp ứng đúng yêu cầu của câu hỏi không
+THANG ĐIỂM:
+- 90-100: rất tốt
+- 75-89: tốt
+- 60-74: đạt
+- 40-59: yếu
+- 1-39: rất yếu
+- 0: sai ngôn ngữ
 
-Lưu ý với bài tiếng Séc: Người học nói tiếng Việt là tiếng mẹ đẻ, những lỗi điển hình bao gồm:
-dấu thanh tiếng Séc (háček), phụ âm đặc biệt (ř, č, ž, š), trật tự từ, giới từ, và các đuôi danh từ biến cách.
+NGUYÊN TẮC CHẤM:
+- grammar: ngữ pháp, trật tự, biến cách, chia động từ, agreement, giới từ
+- pronunciation: âm, rõ ràng, âm đặc trưng
+- fluency: nhịp nói, ngắt câu tự nhiên, tốc độ nói, độ ngập ngừng
+- vocabulary: sử dụng từ phù hợp, đa dạng, đúng ngữ cảnh, tự nhiên
+- task_achievement: câu trả lời có liên quan và đáp ứng đúng yêu cầu của câu hỏi không
 
-Hãy trả về JSON theo đúng định dạng sau (không có văn bản nào khác):
+QUY TẮC overall_score:
+- phản ánh khả năng giao tiếp tổng thể
+- task_achievement có trọng số cao
+- lỗi nặng kéo điểm xuống mạnh
+- không lấy trung bình máy móc
+
+PHÂN TÍCH LỖI:
+- tối đa 8 lỗi quan trọng
+- ưu tiên các lỗi liên quan đến ngữ pháp, từ vựng
+- nếu đã có transcript thì lỗi phải map đúng vào transcript
+- nếu transcript chưa sẵn sàng thì transcript_issues có thể là []
+- không bịa lỗi
+- nếu không chắc → nói rõ
+
+FEEDBACK:
+- viết bằng tiếng Việt
+- corrected_answer bằng tiếng Séc, ngắn, chuẩn A2
+- tip ngắn, actionable
+
+OUTPUT JSON (CHỈ JSON):
 {
-  "detected_language": "<ISO-639-1 hoặc tên ngôn ngữ dễ hiểu, ví dụ cs / vi / en / czech>",
-  "is_czech": <true nếu bài nói là tiếng Séc, false nếu không phải>,
-  "overall_score": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
-  "pronunciation": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
-  "fluency": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
-  "vocabulary": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
-  "task_achievement": <int 0-100, bắt buộc là 0 nếu is_czech = false>,
+  "detected_language": "<cs|vi|en|...>",
+  "is_czech": <boolean>,
+  "confidence": "<low|medium|high>",
+
+  "cefr_estimate": "<below_a2|a2|above_a2>",
+  "major_issues": ["<vấn đề 1>", "<vấn đề 2>"],
+  "next_step_focus": "<1 trọng tâm luyện tập duy nhất cho lần sau>",
+
+  "overall_score": <0-100>,
+  "grammar": <0-100>,
+  "pronunciation": <0-100>,
+  "fluency": <0-100>,
+  "vocabulary": <0-100>,
+  "task_achievement": <0-100>,
+
   "transcript_issues": [
     {
-      "word": "<1 từ/cụm ngắn có mặt trong transcript>",
+      "word": "<từ/cụm>",
       "type": "<pronunciation|grammar|vocabulary>",
-      "suggestion": "<cách sửa ngắn gọn>",
-      "explanation": "<vì sao đây là lỗi, bằng tiếng Việt>"
+      "severity": "<low|medium|high>",
+      "suggestion": "<cách sửa>",
+      "explanation": "<giải thích tiếng Việt>"
     }
   ],
+
   "pronunciation_feedback": {
-    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về phát âm, liệt kê lỗi cụ thể.>",
-    "tip": "<Lời khuyên ngắn 1 câu, actionable: cách luyện phát âm đúng. Để trống nếu không phải tiếng Séc.>"
+    "detail": "<...>",
+    "tip": "<...>"
   },
   "grammar_feedback": {
-    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về ngữ pháp.>",
-    "tip": "<Lời khuyên ngắn 1 câu về ngữ pháp. Để trống nếu không phải tiếng Séc.>"
+    "detail": "<...>",
+    "tip": "<...>"
   },
   "vocabulary_feedback": {
-    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về từ vựng.>",
-    "tip": "<Lời khuyên ngắn 1 câu về từ vựng. Để trống nếu không phải tiếng Séc.>"
+    "detail": "<...>",
+    "tip": "<...>"
   },
   "fluency_feedback": {
-    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét CHI TIẾT về độ lưu loát: nhịp nói, ngắt câu, ngập ngừng.>",
-    "tip": "<Lời khuyên ngắn 1 câu về cách nói lưu loát hơn. Để trống nếu không phải tiếng Séc.>"
+    "detail": "<...>",
+    "tip": "<...>"
   },
   "content_feedback": {
-    "detail": "<Nếu không phải tiếng Séc: để trống. Nếu tiếng Séc: nhận xét về nội dung và mức độ trả lời đúng câu hỏi.>",
-    "tip": "<Lời khuyên ngắn 1 câu về nội dung/cách trả lời. Để trống nếu không phải tiếng Séc.>"
+    "detail": "<...>",
+    "tip": "<...>"
   },
-  "short_tips": ["<tip1 ngắn gọn>", "<tip2 ngắn gọn>", "<tip3 ngắn gọn>"],
-  "overall_feedback": "<Nếu không phải tiếng Séc: giải thích rõ bằng tiếng Việt rằng bài thi yêu cầu trả lời bằng tiếng Séc, không chấp nhận ngôn ngữ khác. Nếu tiếng Séc: nhận xét tổng quan 2-3 câu.>",
-  "corrected_answer": "<Nếu không phải tiếng Séc: để trống hoặc đưa 1 mẫu ngắn phù hợp. Nếu tiếng Séc: câu trả lời đã sửa hoàn chỉnh bằng tiếng Séc.>"
+
+  "short_tips": ["<tip1>", "<tip2>", "<tip3>"],
+
+  "overall_feedback": "<nhận xét tổng quan>",
+  "corrected_answer": "<câu sửa chuẩn>"
 }
 
-Lưu ý: short_tips là tối đa 3 lời khuyên ngắn gọn, mỗi tip tối đa 15 từ, ưu tiên lỗi cần sửa nhất. Để trống array [] nếu không phải tiếng Séc.
+RÀNG BUỘC:
+- Nếu is_czech = false → tất cả điểm = 0
+- transcript_issues ≤ 5
+- short_tips ≤ 3
+- mỗi tip ≤ 15 từ
+- major_issues đúng 1–2 vấn đề quan trọng nhất
+- next_step_focus chỉ 1 hành động cụ thể
+- không thêm text ngoài JSON
+- không bịa lỗi
 
 ${VIETNAMESE_FEEDBACK_REQUIREMENT}
 `.trim();
@@ -110,6 +186,16 @@ type SpeakingUploadBody = {
   audio_b64?: string;
   audio_format?: string;
   exam_attempt_id?: string;
+};
+
+type ScoringMode = "audio_native" | "transcript_fallback";
+
+type ScoringResult = {
+  payload: Record<string, unknown>;
+  scoringMode: ScoringMode;
+  scoringMs: number;
+  guardMs: number;
+  guardTriggered: boolean;
 };
 
 Deno.serve(async (req) => {
@@ -195,6 +281,7 @@ Deno.serve(async (req) => {
     EdgeRuntime.waitUntil(processSpeakingAttempt({
       supabase,
       attemptId,
+      examAttemptId: exam_attempt_id ?? null,
       apiKey,
       audioBytes,
       audioFormat: normalizeAudioFormat(audio_format),
@@ -215,6 +302,7 @@ Deno.serve(async (req) => {
 async function processSpeakingAttempt(args: {
   supabase: SupabaseClient;
   attemptId: string;
+  examAttemptId: string | null;
   apiKey: string;
   audioBytes: Uint8Array;
   audioFormat: string | null;
@@ -224,6 +312,7 @@ async function processSpeakingAttempt(args: {
   const {
     supabase,
     attemptId,
+    examAttemptId,
     apiKey,
     audioBytes,
     audioFormat,
@@ -231,33 +320,84 @@ async function processSpeakingAttempt(args: {
     reviewMode,
   } = args;
 
+  const processingStartedAt = Date.now();
+  let transcriptionMs: number | null = null;
+  let scoringMs: number | null = null;
+  let guardMs = 0;
+  let guardTriggered = false;
+  let scoringMode: ScoringMode = audioFormat === "wav" || audioFormat === "mp3"
+    ? "audio_native"
+    : "transcript_fallback";
+
   try {
     const transcriptionFilename = `audio_${attemptId}.${audioFormat ?? "m4a"}`;
-    const { text: transcript } = await transcribeAudio(
+    const transcriptionStartedAt = Date.now();
+    const transcriptionPromise = transcribeAudio(
       apiKey,
       audioBytes,
       transcriptionFilename,
-      { model: getSpeakingTranscriptionModel() },
+      { model: getSpeakingTranscriptionModel(), language: "cs" },
     );
 
-    const scored = await scoreSpeakingAttempt({
-      apiKey,
-      audioBytes,
-      audioFormat,
-      questionPrompt,
-      reviewMode,
-      transcript,
-      attemptId,
-    });
+    const audioNativePromise = audioFormat === "wav" || audioFormat === "mp3"
+      ? scoreSpeakingAudioNative({
+        apiKey,
+        audioBytes,
+        audioFormat: audioFormat as "wav" | "mp3",
+        questionPrompt,
+        reviewMode,
+      }).then((result) => ({ ok: true as const, result })).catch((error) => ({
+        ok: false as const,
+        error,
+      }))
+      : null;
+
+    const { text: transcript } = await transcriptionPromise;
+    transcriptionMs = Date.now() - transcriptionStartedAt;
+
+    await supabase
+      .from("ai_speaking_attempts")
+      .update({
+        transcript,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", attemptId);
+
+    let scoredResult: ScoringResult;
+    if (audioNativePromise) {
+      const nativeResult = await audioNativePromise;
+      if (nativeResult.ok) {
+        scoredResult = nativeResult.result;
+      } else {
+        console.warn(
+          `speaking audio-native scoring fallback for ${attemptId}:`,
+          nativeResult.error,
+        );
+        scoredResult = await scoreSpeakingTranscriptFallback({
+          apiKey,
+          questionPrompt,
+          reviewMode,
+          transcript,
+        });
+      }
+    } else {
+      scoredResult = await scoreSpeakingTranscriptFallback({
+        apiKey,
+        questionPrompt,
+        reviewMode,
+        transcript,
+      });
+    }
+
+    scoringMode = scoredResult.scoringMode;
+    scoringMs = scoredResult.scoringMs;
+    guardMs = scoredResult.guardMs;
+    guardTriggered = scoredResult.guardTriggered;
+
+    const scored = scoredResult.payload;
     const detectedLanguage = String(scored["detected_language"] ?? "unknown");
     const isCzech = scored["is_czech"] === true;
     const overallScore = isCzech ? Number(scored["overall_score"] ?? 0) : 0;
-    const scoringMode = String(
-      scored["scoring_mode"] ??
-        (audioFormat === "wav" || audioFormat === "mp3"
-          ? "audio_native"
-          : "transcript_fallback"),
-    );
     const nonCzechFeedback = isCzech ? "" : String(
       scored["overall_feedback"] ??
         `Bài thi yêu cầu trả lời bằng tiếng Séc. Ngôn ngữ phát hiện: "${detectedLanguage}". Vui lòng thử lại bằng tiếng Séc.`,
@@ -324,60 +464,98 @@ async function processSpeakingAttempt(args: {
         updated_at: new Date().toISOString(),
       })
       .eq("id", attemptId);
+
+    logSpeakingLatency({
+      attemptId,
+      reviewMode,
+      audioFormat,
+      scoringMode,
+      transcriptionMs,
+      scoringMs,
+      guardMs,
+      guardTriggered,
+      totalMs: Date.now() - processingStartedAt,
+      status: "ready",
+    });
+
+    if (examAttemptId) {
+      await regradeExamAttempt(supabase, examAttemptId);
+    }
   } catch (error) {
     console.error("speaking background processing error:", error);
+    logSpeakingLatency({
+      attemptId,
+      reviewMode,
+      audioFormat,
+      scoringMode,
+      transcriptionMs,
+      scoringMs,
+      guardMs,
+      guardTriggered,
+      totalMs: Date.now() - processingStartedAt,
+      status: "error",
+      error: String(error),
+    });
     await markAttemptError(supabase, attemptId, String(error));
+    if (examAttemptId) {
+      await regradeExamAttempt(supabase, examAttemptId);
+    }
   }
 }
 
-async function scoreSpeakingAttempt(args: {
+async function scoreSpeakingAudioNative(args: {
   apiKey: string;
   audioBytes: Uint8Array;
-  audioFormat: string | null;
+  audioFormat: "wav" | "mp3";
   questionPrompt: string;
   reviewMode: "exam" | "exercise";
-  transcript: string;
-  attemptId: string;
-}): Promise<Record<string, unknown>> {
+}): Promise<ScoringResult> {
   const {
     apiKey,
     audioBytes,
     audioFormat,
     questionPrompt,
     reviewMode,
-    transcript,
-    attemptId,
   } = args;
 
-  const transcriptPrompt = buildSpeakingUserPrompt({
+  const scoringStartedAt = Date.now();
+  const audioPrompt = buildSpeakingUserPrompt({
     questionPrompt,
-    transcript,
     reviewMode,
+    transcript: null,
   });
 
-  if (audioFormat === "wav" || audioFormat === "mp3") {
-    try {
-      const rawScored = await chatCompleteWithAudio(
-        apiKey,
-        buildSpeakingSystemPrompt(reviewMode, "audio_native"),
-        transcriptPrompt,
-        audioBytes,
-        audioFormat,
-        { model: getSpeakingAudioModel(), timeoutMs: 60_000 },
-      );
-      const scored = await ensureVietnameseUserFacingJson(
-        apiKey,
-        rawScored,
-        "speaking.scoring_payload",
-      );
-      return { ...scored, scoring_mode: "audio_native" };
-    } catch (error) {
-      console.warn(
-        `speaking audio-native scoring fallback for ${attemptId}:`,
-        error,
-      );
-    }
-  }
+  const rawScored = await chatCompleteWithAudio(
+    apiKey,
+    buildSpeakingSystemPrompt(reviewMode, "audio_native"),
+    audioPrompt,
+    audioBytes,
+    audioFormat,
+    { model: getSpeakingAudioModel(), timeoutMs: 60_000 },
+  );
+  const normalized = await normalizeSpeakingScoringPayload(apiKey, rawScored);
+  return {
+    payload: { ...normalized.payload, scoring_mode: "audio_native" },
+    scoringMode: "audio_native",
+    scoringMs: Date.now() - scoringStartedAt,
+    guardMs: normalized.guardMs,
+    guardTriggered: normalized.guardTriggered,
+  };
+}
+
+async function scoreSpeakingTranscriptFallback(args: {
+  apiKey: string;
+  questionPrompt: string;
+  reviewMode: "exam" | "exercise";
+  transcript: string;
+}): Promise<ScoringResult> {
+  const { apiKey, questionPrompt, reviewMode, transcript } = args;
+  const scoringStartedAt = Date.now();
+  const transcriptPrompt = buildSpeakingUserPrompt({
+    questionPrompt,
+    reviewMode,
+    transcript,
+  });
 
   const rawScored = await chatComplete(
     apiKey,
@@ -385,31 +563,69 @@ async function scoreSpeakingAttempt(args: {
     transcriptPrompt,
     { model: getSpeakingScoringModel(), timeoutMs: 45_000 },
   );
-  const scored = await ensureVietnameseUserFacingJson(
+  const normalized = await normalizeSpeakingScoringPayload(apiKey, rawScored);
+  return {
+    payload: { ...normalized.payload, scoring_mode: "transcript_fallback" },
+    scoringMode: "transcript_fallback",
+    scoringMs: Date.now() - scoringStartedAt,
+    guardMs: normalized.guardMs,
+    guardTriggered: normalized.guardTriggered,
+  };
+}
+
+async function normalizeSpeakingScoringPayload(
+  apiKey: string,
+  payload: Record<string, unknown>,
+): Promise<{
+  payload: Record<string, unknown>;
+  guardMs: number;
+  guardTriggered: boolean;
+}> {
+  const inspection = inspectUserFacingEnglish(payload);
+  const guardTriggered = inspection.suspiciousCount > 0;
+  const guardStartedAt = Date.now();
+  const normalized = await ensureVietnameseUserFacingJson(
     apiKey,
-    rawScored,
+    payload,
     "speaking.scoring_payload",
   );
-  return { ...scored, scoring_mode: "transcript_fallback" };
+  return {
+    payload: normalized,
+    guardMs: Date.now() - guardStartedAt,
+    guardTriggered,
+  };
 }
 
 function buildSpeakingUserPrompt(args: {
   questionPrompt: string;
-  transcript: string;
   reviewMode: "exam" | "exercise";
+  transcript: string | null;
 }): string {
   const { questionPrompt, transcript, reviewMode } = args;
   const contextLabel = reviewMode === "exam"
     ? "mock test / exam speaking review"
     : "lesson / practice speaking review";
 
-  return [
+  const lines = [
     `Ngữ cảnh: ${contextLabel}.`,
     `Câu hỏi thi: "${questionPrompt}"`,
-    "Transcript bài nói của học viên (để hiển thị lại trong review):",
-    `"${transcript}"`,
-    "Nếu transcript và audio không khớp hoàn toàn, hãy chấm pronunciation/fluency theo audio, và dùng transcript để map lỗi + corrected answer.",
-  ].join("\n\n");
+  ];
+
+  if (transcript != null) {
+    lines.push(
+      "Transcript bài nói của học viên (để hiển thị lại trong review):",
+      `"${transcript}"`,
+      "Nếu transcript và audio không khớp hoàn toàn, hãy chấm pronunciation/fluency theo audio, và dùng transcript để map lỗi + corrected answer.",
+    );
+  } else {
+    lines.push(
+      "Transcript chưa sẵn sàng ở bước chấm audio-native song song.",
+      "Hãy chấm các tiêu chí dựa trên audio và câu hỏi.",
+      "Nếu chưa có transcript thì transcript_issues có thể là [] và không được bịa lỗi theo từng token.",
+    );
+  }
+
+  return lines.join("\n\n");
 }
 
 async function normalizeSpeakingRefs(
@@ -489,6 +705,19 @@ async function markAttemptError(
   }
 }
 
+async function regradeExamAttempt(
+  supabase: SupabaseClient,
+  examAttemptId: string,
+) {
+  try {
+    await supabase.functions.invoke("grade-exam", {
+      body: { attempt_id: examAttemptId },
+    });
+  } catch (error) {
+    console.warn("speaking-upload regrade trigger failed:", error);
+  }
+}
+
 function getFeedbackDetail(val: unknown): string {
   if (typeof val === "string") return val;
   if (val && typeof val === "object") {
@@ -519,6 +748,40 @@ function normalizeAudioFormat(value: unknown): string | null {
     return format;
   }
   return null;
+}
+
+function logSpeakingLatency(args: {
+  attemptId: string;
+  reviewMode: "exam" | "exercise";
+  audioFormat: string | null;
+  scoringMode: ScoringMode;
+  transcriptionMs: number | null;
+  scoringMs: number | null;
+  guardMs: number;
+  guardTriggered: boolean;
+  totalMs: number;
+  status: "ready" | "error";
+  error?: string;
+}) {
+  const payload: Record<string, unknown> = {
+    event: "speaking_processing_latency",
+    attempt_id: args.attemptId,
+    review_mode: args.reviewMode,
+    audio_format: args.audioFormat,
+    scoring_mode: args.scoringMode,
+    transcription_ms: args.transcriptionMs,
+    scoring_ms: args.scoringMs,
+    guard_ms: args.guardMs,
+    guard_triggered: args.guardTriggered,
+    total_ms: args.totalMs,
+    status: args.status,
+  };
+
+  if (args.error) {
+    payload.error = args.error.slice(0, 300);
+  }
+
+  console.log(JSON.stringify(payload));
 }
 
 function jsonResponse(body: Record<string, unknown>, status: number) {

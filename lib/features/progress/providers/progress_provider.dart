@@ -16,12 +16,14 @@ class ExamHistoryItem {
     required this.totalScore,
     required this.passThreshold,
     required this.passed,
+    required this.aiGradingPending,
     required this.createdAt,
   });
   final String attemptId;
   final int totalScore;
   final int passThreshold;
   final bool passed;
+  final bool aiGradingPending;
   final DateTime createdAt;
 }
 
@@ -69,24 +71,29 @@ final progressProvider = FutureProvider.autoDispose<ProgressData>((ref) async {
   // Exam history (last 20 results)
   final resultsRaw = await supabase
       .from('exam_results')
-      .select('attempt_id, total_score, pass_threshold, passed, created_at')
+      .select(
+          'attempt_id, total_score, pass_threshold, passed, ai_grading_pending, created_at')
       .eq('user_id', userId)
       .order('created_at', ascending: false)
       .limit(20);
 
-  final examHistory = (resultsRaw as List).map((r) {
-    final rm = Map<String, dynamic>.from(r as Map);
-    return ExamHistoryItem(
-      attemptId: rm['attempt_id'] as String? ?? '',
-      totalScore: rm['total_score'] as int? ?? 0,
-      passThreshold: rm['pass_threshold'] as int? ?? 60,
-      passed: rm['passed'] as bool? ??
-          ((rm['total_score'] as int? ?? 0) >=
-              (rm['pass_threshold'] as int? ?? 60)),
-      createdAt: DateTime.tryParse(rm['created_at'] as String? ?? '') ??
-          DateTime.now(),
-    );
-  }).toList();
+  final examHistory = (resultsRaw as List)
+      .map((r) {
+        final rm = Map<String, dynamic>.from(r as Map);
+        return ExamHistoryItem(
+          attemptId: rm['attempt_id'] as String? ?? '',
+          totalScore: rm['total_score'] as int? ?? 0,
+          passThreshold: rm['pass_threshold'] as int? ?? 60,
+          passed: rm['passed'] as bool? ??
+              ((rm['total_score'] as int? ?? 0) >=
+                  (rm['pass_threshold'] as int? ?? 60)),
+          aiGradingPending: rm['ai_grading_pending'] as bool? ?? false,
+          createdAt: DateTime.tryParse(rm['created_at'] as String? ?? '') ??
+              DateTime.now(),
+        );
+      })
+      .where((item) => !item.aiGradingPending)
+      .toList();
 
   // Skill scores: average from section_scores across all results
   final Map<String, List<double>> skillAccum = {};

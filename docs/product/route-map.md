@@ -27,6 +27,7 @@ Canonical route list for GoRouter. All constants live in `lib/core/router/app_ro
 | `/mock-test/intro` | `MockTestIntroScreen` | `?examId=` query param |
 | `/mock-test/question/:attemptId` | `MockTestQuestionScreen` | guest accessible |
 | `/mock-test/result/:attemptId` | `MockTestResultScreen` | guest accessible |
+| `/mock-test/result/:attemptId/review/:questionId` | `MockTestSubjectiveReviewScreen` | guest accessible; read-only subjective exam review |
 
 ---
 

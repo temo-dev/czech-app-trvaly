@@ -160,6 +160,7 @@ Batch AI analysis row for a submitted mock exam. Created by `analyze-exam` after
 | guest_token | text | | Mirrored from anonymous exam_attempt for guest-owned reads |
 | status | text NOT NULL | `'processing'` | CHECK IN (`processing`,`ready`,`error`) |
 | question_feedbacks | jsonb NOT NULL | `'{}'` | keyed by `question_id`; objective: `{ verdict, error_analysis, correct_explanation, short_tip, key_concept, matching_feedback?, skipped }`; speaking/writing: `{ verdict, summary, criteria, short_tips, skipped }` |
+| teacher_reviews_by_question | jsonb NOT NULL | `'{}'` | keyed by `question_id`; full read-only AI Teacher payload for mock-test speaking/writing review `{ review_id, status, modality, source, verdict, summary, reinforcement, criteria, mistakes, suggestions, corrected_answer, artifacts, is_premium }` |
 | skill_insights | jsonb NOT NULL | `'{}'` | `{ reading: {summary, main_issue}, listening: {...}, writing: {...}, speaking: {...} }` |
 | overall_recommendations | jsonb NOT NULL | `'[]'` | `[{ title, detail }]` |
 | error_message | text | | |
@@ -720,6 +721,7 @@ Grading rules:
 
 `ai_grading_pending = true` khi còn attempt nào có `status = 'processing'` — result screen hiển thị banner chờ.
 Official A2 pass rule currently persisted in `exam_results.passed`: written `>= 42/70` and speaking `>= 24/40`.
+Operational rule: trong lúc `ai_grading_pending = true`, client chỉ được coi row này là provisional. `speaking-upload` và `writing-submit` sẽ gọi lại `grade-exam` sau khi mock-test attempt kết thúc để refresh `exam_results` với điểm cuối.
 Sau khi insert `exam_results` thành công, function còn fire-and-forget `analyze-exam` để tạo `exam_analysis`.
 Guest security: caller phải là owner của `exam_attempts` qua `auth.uid()` hoặc `x-guest-token`.
 
@@ -736,6 +738,9 @@ Flow:
 - objective questions:
   - đúng: ưu tiên `question.explanation` làm `correct_explanation`
   - sai: dùng lại cache/prompt của `question-feedback` (`gpt-5-mini` nếu cache miss)
+- materialize subjective exam review:
+  - summary card data → `question_feedbacks`
+  - full read-only detail payload → `teacher_reviews_by_question`
 - 1 synthesis `gpt-5.1` call để tạo `skill_insights` + `overall_recommendations`
 - update `exam_analysis(status='ready')`
 
@@ -764,7 +769,7 @@ Cache-first flow: lookup `question_ai_feedback` by `(question_id, user_answer_ha
 
 Cache: kết quả được lưu vào `question_ai_feedback` theo `(question_id, sha256(user_answer_text))`. Nếu cache hit → trả về ngay, không gọi GPT.
 Matching/ordering: `matching_feedback: [{ item, issue }]` chỉ có trong response khi `question_type` là matching/ordering.
-Function này vẫn được giữ cho lesson/practice flow; mock test review objective feedback giờ được preload sẵn bởi `analyze-exam`.
+Function này vẫn được giữ cho lesson/practice flow; mock test review path không còn gọi `ai-review-submit` từ result screen nữa vì objective feedback và subjective exam review đều được preload/materialize bởi `analyze-exam`.
 
 ---
 
@@ -772,11 +777,12 @@ Function này vẫn được giữ cho lesson/practice flow; mock test review ob
 **POST** `{ lesson_id?, question_id, audio_b64?, audio_format?, exam_attempt_id? }`
 **Response** `{ attempt_id: string }`
 
-Creates `ai_speaking_attempts` row with `status='processing'`, then runs background transcription via `gpt-4o-transcribe` and speaking grading. Preferred path is audio-native grading (`OPENAI_SPEAKING_AUDIO_MODEL`) when the uploaded format is supported (`wav`/`mp3`); otherwise the edge function falls back to transcript-based grading via `OPENAI_SPEAKING_SCORING_MODEL`. The HTTP response returns as soon as the attempt row is created; clients should poll `speaking-result` for final status.
+Creates `ai_speaking_attempts` row with `status='processing'`, then runs background transcription via `gpt-4o-transcribe` and speaking grading. Preferred path is audio-native grading (`OPENAI_SPEAKING_AUDIO_MODEL`) when the uploaded format is supported (`wav`/`mp3`); otherwise the edge function falls back to transcript-based grading via `OPENAI_SPEAKING_SCORING_MODEL`. For supported formats, transcription and audio-native scoring now start in parallel; the transcript is persisted as soon as it is ready so downstream review polling can tell whether the attempt is still transcribing or already scoring. The HTTP response returns as soon as the attempt row is created; clients should poll `speaking-result` for final status.
 Czech enforcement: the grading model explicitly classifies whether the spoken answer is Czech; if `is_czech=false` → all scores zero.
 `exam_attempt_id` phải được truyền khi gọi từ mock test — dùng để `grade-exam` JOIN lấy điểm thực.
 Nếu request anonymous thì row `ai_speaking_attempts` được gắn `guest_token` và `speaking-result` chỉ trả cho đúng token đó.
 Transcript vẫn được lưu để show lại cho học viên ở review, nhưng transcript không còn là source of truth duy nhất cho pronunciation/fluency.
+Latency diagnostics: structured logs include `audio_format`, `review_mode`, `scoring_mode`, `transcription_ms`, `scoring_ms`, `guard_ms`, `guard_triggered`, và `total_ms`.
 
 **FK-safety rule (edge function):** Client chỉ nên gửi `question_id` (UUID từ bảng `questions`). KHÔNG gửi `exercise_id` khi đã có `question_id`. Edge function sẽ lookup `question_id` trong bảng `questions`; nếu tìm thấy thì `exercise_id` bị clear về `null` trước khi insert — tránh lỗi FK violation `23503` do UUID của question không tồn tại trong bảng `exercises`. Nếu `question_id` không tìm thấy trong `questions`, edge function coi đó là exercise ID (fallback cho practice flow) và chuyển sang `exercise_id`.
 

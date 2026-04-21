@@ -194,7 +194,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     _setStateSafely(state.copyWith(status: SpeakingStatus.uploading));
 
     final audioPath = state.audioPath!;
-    final audioFormat = state.audioFormat ?? _inferAudioFormatFromPath(audioPath);
+    final audioFormat =
+        state.audioFormat ?? _inferAudioFormatFromPath(audioPath);
     try {
       String? resultAttemptId;
 
@@ -285,6 +286,8 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     String? exerciseId,
     String? examAttemptId,
   }) async {
+    _logMockTestIosAudioFormat(audioFormat, bytes.length, examAttemptId);
+
     // Use a flag instead of re-throwing inside catch — that way genuine
     // network/HTTP failures still fall through to the DB insert fallback,
     // while an explicit "audio rejected" response from the edge function
@@ -347,6 +350,22 @@ class SpeakingSessionNotifier extends StateNotifier<SpeakingState> {
     }
 
     throw Exception('Không thể tải lên bài ghi âm. Vui lòng thử lại.');
+  }
+
+  void _logMockTestIosAudioFormat(
+    String? audioFormat,
+    int byteLength,
+    String? examAttemptId,
+  ) {
+    if (kIsWeb || examAttemptId == null) return;
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+
+    debugPrint(jsonEncode({
+      'event': 'mock_test_speaking_upload_client',
+      'platform': 'ios',
+      'audio_format': audioFormat ?? 'unknown',
+      'bytes': byteLength,
+    }));
   }
 
   Future<dynamic> _invokeUploadFunction({

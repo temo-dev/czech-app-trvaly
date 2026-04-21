@@ -199,6 +199,8 @@ class _DashboardBody extends ConsumerWidget {
                       Expanded(
                         child: _LatestTestCard(
                           score: data.latestResult?.totalScore,
+                          isPending:
+                              data.latestResult?.aiGradingPending ?? false,
                           onTap: () {
                             final attemptId = data.latestResult?.attemptId;
                             if (attemptId != null) {
@@ -337,8 +339,9 @@ class _DailyGoalCard extends StatelessWidget {
 }
 
 class _LatestTestCard extends StatelessWidget {
-  const _LatestTestCard({this.score, this.onTap});
+  const _LatestTestCard({this.score, this.isPending = false, this.onTap});
   final int? score;
+  final bool isPending;
   final VoidCallback? onTap;
 
   @override
@@ -374,16 +377,22 @@ class _LatestTestCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            score != null ? '$score%' : '--',
+            isPending
+                ? '...'
+                : score != null
+                    ? '$score%'
+                    : '--',
             style: AppTypography.headlineLarge.copyWith(
               color: AppColors.tertiary,
               fontSize: 36,
             ),
           ),
           Text(
-            score != null
-                ? (score! >= 70 ? 'Đạt yêu cầu' : 'Cần cố gắng thêm')
-                : 'Chưa có dữ liệu',
+            isPending
+                ? 'AI đang hoàn tất chấm bài'
+                : score != null
+                    ? (score! >= 70 ? 'Đạt yêu cầu' : 'Cần cố gắng thêm')
+                    : 'Chưa có dữ liệu',
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.onSurfaceVariant,
             ),

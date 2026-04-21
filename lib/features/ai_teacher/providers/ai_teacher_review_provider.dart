@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:app_czech/core/supabase/supabase_config.dart';
 import 'package:app_czech/features/ai_teacher/models/ai_teacher_review.dart';
-import 'package:app_czech/features/mock_test/providers/exam_result_provider.dart';
-import 'package:app_czech/shared/models/question_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AiTeacherReviewController {
@@ -11,8 +9,16 @@ class AiTeacherReviewController {
 
   final AiTeacherReviewRequest request;
 
-  static const _pollRetries = 10;
-  static const pollInterval = Duration(seconds: 3);
+  static const _subjectivePollRetries = 20;
+  static const _objectivePollRetries = 10;
+  static const _subjectivePollInterval = Duration(seconds: 2);
+  static const _objectivePollInterval = Duration(seconds: 3);
+
+  static int pollRetriesFor(AiTeacherReviewRequest request) =>
+      request.isSubjective ? _subjectivePollRetries : _objectivePollRetries;
+
+  static Duration pollIntervalFor(AiTeacherReviewRequest request) =>
+      request.isSubjective ? _subjectivePollInterval : _objectivePollInterval;
 
   Future<String?> submit() async {
     final response = await supabase.functions.invoke(
@@ -42,19 +48,25 @@ class AiTeacherReviewController {
       );
     }
 
-    for (var i = 0; i < _pollRetries; i++) {
+    final pollRetries = pollRetriesFor(request);
+    final pollInterval = pollIntervalFor(request);
+    AiTeacherReviewResponse? lastPending;
+
+    for (var i = 0; i < pollRetries; i++) {
       final result = await fetch(reviewId);
       if (!result.isPending) return result;
-      if (i < _pollRetries - 1) {
+      lastPending = result;
+      if (i < pollRetries - 1) {
         await Future.delayed(pollInterval);
       }
     }
 
-    return AiTeacherReviewResponse(
-      status: AiTeacherReviewStatus.pending,
-      reviewId: reviewId,
-      message: 'AI Teacher vẫn đang chuẩn bị nhận xét.',
-    );
+    return lastPending ??
+        AiTeacherReviewResponse(
+          status: AiTeacherReviewStatus.pending,
+          reviewId: reviewId,
+          message: 'AI Teacher vẫn đang chuẩn bị nhận xét.',
+        );
   }
 }
 
@@ -81,7 +93,7 @@ final aiTeacherReviewEntryProvider = FutureProvider.autoDispose
 
   if (response.isPending) {
     final timer = Timer(
-      AiTeacherReviewController.pollInterval,
+      AiTeacherReviewController.pollIntervalFor(request),
       ref.invalidateSelf,
     );
     ref.onDispose(timer.cancel);
@@ -89,57 +101,3 @@ final aiTeacherReviewEntryProvider = FutureProvider.autoDispose
 
   return response;
 });
-
-final aiTeacherReviewBatchProvider =
-    FutureProvider.autoDispose.family<Map<String, String>, String>(
-  (ref, attemptId) async {
-    final reviewItems = await ref.watch(examReviewProvider(attemptId).future);
-    final reviewIds = <String, String>{};
-
-    for (final item in reviewItems) {
-      final request = _buildBatchRequest(item);
-      if (request == null) continue;
-      try {
-        final reviewId =
-            await ref.read(aiTeacherReviewControllerProvider(request)).submit();
-        if (reviewId != null) {
-          reviewIds[item.question.id] = reviewId;
-        }
-      } catch (_) {
-        // Best-effort pre-generation only.
-      }
-    }
-
-    return reviewIds;
-  },
-);
-
-AiTeacherReviewRequest? _buildBatchRequest(QuestionReviewItem item) {
-  final question = item.question;
-
-  switch (question.type) {
-    case QuestionType.writing:
-    case QuestionType.speaking:
-      if (!item.isAnswered || item.aiAttemptId == null) return null;
-      return AiTeacherReviewRequest(
-        source: 'mock_test',
-        questionId: question.id,
-        examAttemptId: item.attemptId,
-        aiAttemptId: item.aiAttemptId,
-        questionType: question.type,
-      );
-    case QuestionType.mcq:
-    case QuestionType.fillBlank:
-    case QuestionType.matching:
-    case QuestionType.ordering:
-      if (!item.isAnswered || item.isCorrect) return null;
-      return AiTeacherReviewRequest(
-        source: 'mock_test',
-        questionId: question.id,
-        examAttemptId: item.attemptId,
-        selectedOptionId: item.selectedOption?.id,
-        writtenAnswer: item.userAnswer,
-        questionType: question.type,
-      );
-  }
-}

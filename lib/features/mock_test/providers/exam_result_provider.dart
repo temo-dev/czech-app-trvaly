@@ -1,20 +1,22 @@
+import 'dart:async';
+
 import 'package:app_czech/core/storage/prefs_storage.dart';
 import 'package:app_czech/core/supabase/supabase_config.dart';
 import 'package:app_czech/features/mock_test/models/exam_question_answer.dart';
 import 'package:app_czech/features/mock_test/models/mock_test_result.dart';
+import 'package:app_czech/features/mock_test/providers/exam_questions_provider.dart';
 import 'package:app_czech/shared/models/question_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-
-import 'exam_questions_provider.dart';
 
 part 'exam_result_provider.g.dart';
 
 const _resultPollRetries = 15;
 const _resultPollInterval = Duration(seconds: 1);
+const _resultRefreshInterval = Duration(seconds: 3);
 
 @riverpod
-Future<MockTestResult> examResult(ExamResultRef ref, String attemptId) async {
+Future<MockTestResult> examResult(Ref ref, String attemptId) async {
   Map<String, dynamic>? raw;
 
   for (var i = 0; i < _resultPollRetries; i++) {
@@ -51,7 +53,7 @@ Future<MockTestResult> examResult(ExamResultRef ref, String attemptId) async {
   final rawWeak = raw['weak_skills'];
   final weakSkills = rawWeak is List ? List<String>.from(rawWeak) : <String>[];
 
-  return MockTestResult(
+  final result = MockTestResult(
     id: raw['id'] as String,
     attemptId: raw['attempt_id'] as String,
     userId: raw['user_id'] as String?,
@@ -71,6 +73,13 @@ Future<MockTestResult> examResult(ExamResultRef ref, String attemptId) async {
     aiGradingPending: raw['ai_grading_pending'] as bool? ?? false,
     createdAt: DateTime.parse(raw['created_at'] as String),
   );
+
+  if (result.aiGradingPending) {
+    final timer = Timer(_resultRefreshInterval, ref.invalidateSelf);
+    ref.onDispose(timer.cancel);
+  }
+
+  return result;
 }
 
 Future<void> linkPendingAttempt(String userId) async {
@@ -166,7 +175,7 @@ class QuestionReviewItem {
 
 @riverpod
 Future<List<QuestionReviewItem>> examReview(
-  ExamReviewRef ref,
+  Ref ref,
   String attemptId,
 ) async {
   final attemptRow = await supabase
@@ -214,16 +223,9 @@ Future<List<QuestionReviewItem>> examReview(
     final index = entry.key;
     final question = entry.value;
     final storedAnswer = answers[question.id];
-    final userAnswer = switch (question.type) {
-      QuestionType.mcq => storedAnswer?.selectedOptionId,
-      QuestionType.writing ||
-      QuestionType.fillBlank =>
-        storedAnswer?.writtenAnswer,
-      QuestionType.speaking => storedAnswer?.writtenAnswer,
-      QuestionType.matching ||
-      QuestionType.ordering =>
-        storedAnswer?.writtenAnswer,
-    };
+    final userAnswer = (question.type == QuestionType.mcq)
+        ? storedAnswer?.selectedOptionId
+        : storedAnswer?.writtenAnswer;
     final isAnswered = storedAnswer?.isAnswered ?? false;
     final section = sectionForIndex[index] ??
         (

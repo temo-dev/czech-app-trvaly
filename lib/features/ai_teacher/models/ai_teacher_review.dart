@@ -244,12 +244,14 @@ class AiTeacherReviewResponse {
     required this.reviewId,
     this.review,
     this.message,
+    this.processingStage,
   });
 
   final AiTeacherReviewStatus status;
   final String? reviewId;
   final AiTeacherReview? review;
   final String? message;
+  final String? processingStage;
 
   bool get isPending => status == AiTeacherReviewStatus.pending;
   bool get isReady => status == AiTeacherReviewStatus.ready && review != null;
@@ -267,6 +269,7 @@ class AiTeacherReviewResponse {
       reviewId: reviewId,
       review: review,
       message: json['message'] as String?,
+      processingStage: json['processing_stage'] as String?,
     );
   }
 }
@@ -298,6 +301,11 @@ class AiTeacherReviewRequest {
       (selectedOptionId?.isNotEmpty ?? false) ||
       (writtenAnswer?.trim().isNotEmpty ?? false) ||
       (aiAttemptId?.isNotEmpty ?? false);
+
+  bool get isSubjective =>
+      (aiAttemptId?.isNotEmpty ?? false) ||
+      questionType == QuestionType.speaking ||
+      questionType == QuestionType.writing;
 
   Map<String, dynamic> toBody() {
     return {

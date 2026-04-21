@@ -129,13 +129,13 @@ Client                          Edge Function              OpenAI
 
 Czech language enforcement: speaking grading prompt explicitly classifies whether the spoken answer is Czech. If the model returns `is_czech: false` → all metric scores are zeroed and the learner gets a Vietnamese explanation.
 
-Speaking scoring contract: transcript is still generated and stored for review UX, but the authoritative speaking score now prefers audio-native grading when the uploaded format is supported (`wav`/`mp3`). This unified scoring core is used for both speaking exam and speaking exercise flows. If audio-native grading is unavailable, the edge function falls back to transcript-based scoring while preserving the same response shape.
+Speaking scoring contract: transcript is still generated and stored for review UX, but the authoritative speaking score now prefers audio-native grading when the uploaded format is supported (`wav`/`mp3`). This unified scoring core is used for both speaking exam and speaking exercise flows. For supported formats, `speaking-upload` now starts transcription and audio-native grading in parallel, then persists the final attempt only after both branches complete. If audio-native grading is unavailable, the edge function falls back to transcript-based scoring while preserving the same response shape.
 
 Language contract for AI feedback: all user-facing AI explanations, summaries, tips, suggestions, and review labels must be returned in Vietnamese. Czech may appear only inside quoted examples, transcripts, or corrected answers where the exam domain requires it.
 
 Vietnamese guardrail: if a model response still contains suspicious English in user-facing feedback fields, Edge Functions run a final JSON normalization pass (`OPENAI_VIETNAMESE_GUARD_MODEL`, default `gpt-5-mini`) before persisting or returning the payload. This pass preserves Czech learner content such as transcripts, corrected answers, and original text spans.
 
-Operational logging: the guard emits structured log events with `event: "vietnamese_guard"` whenever it is triggered. Logs include only metadata such as `context`, `context_group`, `context_slug`, model name, suspicious field paths/counts, rewrite result, and fallback errors; they do not include learner transcript or feedback text.
+Operational logging: the guard emits structured log events with `event: "vietnamese_guard"` whenever it is triggered. Logs include only metadata such as `context`, `context_group`, `context_slug`, model name, suspicious field paths/counts, rewrite result, and fallback errors; they do not include learner transcript or feedback text. Speaking background processing also emits structured latency logs containing `audio_format`, `review_mode`, `scoring_mode`, `transcription_ms`, `scoring_ms`, `guard_ms`, `guard_triggered`, and `total_ms` so latency regressions can be isolated by stage.
 
 Quick monitoring workflow:
 - Tất cả event guard: lọc `event="vietnamese_guard"`
@@ -149,7 +149,14 @@ Writing reference resolution: mock test sends real `question_id` from `questions
 
 Objective review write sequence: `ai-review-submit` inserts the `ai_teacher_reviews` row with `status: 'processing'` and `result_payload: null`, calls `gpt-5-mini`, then does a single UPDATE to `status: 'ready'` with the full payload atomically. This ensures the row is never visible as `ready` with a null payload if the update fails.
 
-AI Teacher polling note: `ai-review-result` can now return a pending `message` that explains whether the review is still waiting on speaking/writing scoring or is already generating feedback. Flutter review providers auto-poll again while the response remains pending.
+AI Teacher polling note: `ai-review-result` can now return a pending `message` plus optional `processing_stage` (`transcribing`, `scoring`, `hydrating_review`) so review cards can distinguish between “đang nhận transcript”, “đang chấm”, and “đang hoàn thiện review”. Flutter review providers auto-poll again while the response remains pending, using a faster cadence for subjective speaking/writing reviews.
+
+Exam vs exercise review split:
+- `exercise` / lesson / practice keep the per-question AI Teacher flow via `ai-review-submit` and `ai-review-result`.
+- `mock_test` review no longer starts AI Teacher per question from the result screen. `analyze-exam` materializes both summary feedback (`question_feedbacks`) and full subjective review payloads (`teacher_reviews_by_question`) into `exam_analysis`.
+- Mock test detail screens read those materialized payloads directly from `exam_analysis`, so the learner sees one whole-exam grading state and then the full review set together.
+- While `exam_results.ai_grading_pending = true`, the app treats `exam_results` as provisional only. Final score, pass/fail, weak skills, and per-skill official breakdown must stay hidden until subjective attempts finish.
+- When a mock-test speaking or writing attempt reaches `ready` or `error`, the edge function triggers `grade-exam` again for the same `exam_attempt_id`, which refreshes `exam_results` and re-triggers `analyze-exam`.
 
 Guest security: anonymous mock-test and AI rows (`exam_attempts`, `exam_results`, `exam_analysis`, `ai_*_attempts`, `ai_teacher_reviews`) are scoped by persisted `guest_token`. Edge Functions using service-role also re-check ownership against `user_id` or `guest_token` instead of trusting raw UUIDs.
 

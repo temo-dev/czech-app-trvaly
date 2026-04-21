@@ -57,7 +57,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **States**: `loading`, `active`, `sectionTransition`, `submitting`, `submitted`, `error`
 **UI**: top bar (timer, section label, progress), question area, navigation panel, autosave indicator
 **Actions**: answer → autosave to `exam_attempts.answers` theo `question_id`; "Nộp bài" → đảm bảo writing AI attempts được tạo, gọi `grade-exam`, chờ `exam_results` row rồi mới chuyển `/mock-test/result/:attemptId`
-**Special**: timer ticks via `Ticker`; timer sync xuống DB theo checkpoint + lifecycle; section transition card shown between skills; nếu mọi section đều có `section_duration_minutes`, timer và điều hướng được khóa theo từng section thay vì một countdown global
+**Special**: timer ticks via `Ticker`; timer sync xuống DB theo checkpoint + lifecycle; section transition card shown between skills; nếu mọi section đều có `section_duration_minutes`, timer và điều hướng được khóa theo từng section thay vì một countdown global; listening prompts and listening fill-blank now play real remote audio through the inline exercise audio player instead of a mock UI state
 
 ---
 
@@ -67,7 +67,15 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **States**: `loading` (shimmer), `success`, `error`, `analysis_loading`
 **UI**: total score hero, pass/fail badge, skill breakdown chart, weak skills list, `OverallInsightsCard`, preloaded `QuestionReviewList`, CTA (signup if guest, retry or review if auth)
 **Actions**: "Xem lại đáp án" → review mode on same screen; "Thi lại" → new attempt; auth CTA → `/auth/signup`
-**Special**: polling có kiểm soát cho tới khi `exam_results` row sẵn sàng; sau đó tiếp tục poll `exam_analysis` để lấy insight + feedback preload cho objective questions; speaking/writing review vẫn đọc AI attempts đã gắn với exam, không submit lại writing; result hero và summary card hiển thị thêm official written-vs-speaking bucket status bên cạnh tổng phần trăm
+**Special**: polling có kiểm soát cho tới khi `exam_results` row sẵn sàng; sau đó tiếp tục đọc `exam_analysis` làm source of truth duy nhất cho mock-test review. Objective summary đọc từ `question_feedbacks`; speaking/writing summary cũng đọc từ `question_feedbacks`, còn detail screen đọc từ `teacher_reviews_by_question`. Khi `exam_results.ai_grading_pending = true`, màn này chỉ hiển thị trạng thái “AI đang chấm toàn bộ bài thi” + rule official, chưa hiển thị tổng điểm cuối / pass-fail / breakdown kỹ năng như kết quả chính thức.
+
+### `MockTestSubjectiveReviewScreen`
+**File**: `lib/features/mock_test/screens/mock_test_subjective_review_screen.dart`
+**Provider**: `examAnalysisProvider`
+**States**: `loading` (skeleton), `processing`, `ready`, `error`
+**UI**: read-only `AiTeacherDetailView` cho 1 câu speaking/writing trong mock test
+**Actions**: back → `/mock-test/result/:attemptId`
+**Special**: screen này chỉ dùng cho mock test; không submit hay poll `ai_teacher_reviews`, chỉ đọc payload đã materialize trong `exam_analysis.teacher_reviews_by_question`
 
 ---
 
@@ -162,6 +170,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **States**: `question`, `submitting`
 **UI**: `QuestionShell` + appropriate exercise widget (MCQ, fill-blank, listening, reading, speaking recorder, writing input)
 **Actions**: submit answer → `exerciseSession.submitAnswer()` → `awardXp()` if correct → `/app/practice/explanation`
+**Special**: listening exercises and listening fill-blank questions use the inline audio player backed by `just_audio`, so exercise flows consume the same remote `audio_url` assets as mock tests
 
 ---
 
@@ -226,6 +235,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **States**: `loading` (shimmer), `processing` (polling indicator), `ready`, `error` (with retry)
 **UI**: total score ring, metric breakdown cards (Phát âm/Lưu loát/Từ vựng/Ngữ pháp), annotated transcript (highlighted issues), short tips, corrected answer
 **Actions**: "Thử lại" → back to recording; "Xem đánh giá giáo viên" → `/app/teacher/inbox`
+**Special**: dùng cho lesson/practice/exercise path; mock test dùng `MockTestSubjectiveReviewScreen` thay vì route này
 
 ---
 
@@ -246,6 +256,7 @@ Per-screen contracts: file path, provider(s), UI states, and key interactions.
 **States**: `loading` (shimmer), `processing`, `ready`, `error` (with retry)
 **UI**: total score ring, metric breakdown cards (Ngữ pháp/Từ vựng/Mạch lạc/Nội dung), annotated text (highlighted grammar/vocab spans), corrected essay, short tips
 **Actions**: "Thử lại" → back to prompt; "Xem đánh giá giáo viên" → `/app/teacher/inbox`
+**Special**: dùng cho lesson/practice/exercise path; mock test dùng `MockTestSubjectiveReviewScreen` thay vì route này
 
 ---
 

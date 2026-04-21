@@ -104,7 +104,12 @@ async function hydrateReviewIfNeeded(
 
     if (!writingAttempt) return row;
     const attempt = writingAttempt as Record<string, unknown>;
-    if (attempt["status"] === "processing") return row;
+    if (attempt["status"] === "processing") {
+      return {
+        ...row,
+        processing_stage: "scoring",
+      };
+    }
 
     if (attempt["status"] === "error") {
       await supabase
@@ -161,18 +166,23 @@ async function hydrateReviewIfNeeded(
 
   if (!speakingAttempt) return row;
   const attempt = speakingAttempt as Record<string, unknown>;
-  if (attempt["status"] === "processing") return row;
+  if (attempt["status"] === "processing") {
+    return {
+      ...row,
+      processing_stage: resolveSpeakingProcessingStage(attempt),
+    };
+  }
 
   if (attempt["status"] === "error") {
     await supabase
       .from("ai_teacher_reviews")
-        .update({
-          status: "error",
-          error_message: normalizeReviewErrorMessage(
-            attempt["error_message"] as string | undefined,
-          ),
-          updated_at: new Date().toISOString(),
-        })
+      .update({
+        status: "error",
+        error_message: normalizeReviewErrorMessage(
+          attempt["error_message"] as string | undefined,
+        ),
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", rowId);
     return {
       ...row,
@@ -232,13 +242,31 @@ function normalizeReviewErrorMessage(message: string | undefined): string {
 
 function buildPendingPayload(row: Record<string, unknown>) {
   const modality = String(row["modality"] ?? "objective");
+  const processingStage = normalizeProcessingStage(
+    row["processing_stage"] as string | undefined,
+  );
   let message = "AI Teacher đang tạo nhận xét cho câu này.";
 
   if (row["writing_attempt_id"]) {
-    message = "AI Teacher đang đợi bài viết được chấm xong để tạo nhận xét.";
+    message = processingStage == "hydrating_review"
+      ? "AI Teacher đang chuẩn bị nhận xét cuối cho bài viết."
+      : "AI Teacher đang chấm bài viết trước khi tạo nhận xét.";
   } else if (row["speaking_attempt_id"]) {
-    message =
-      "AI Teacher đang đợi transcript và kết quả chấm bài nói để tạo nhận xét.";
+    switch (processingStage) {
+      case "transcribing":
+        message =
+          "AI Teacher đang nhận transcript bài nói trước khi tạo nhận xét.";
+        break;
+      case "scoring":
+        message = "AI Teacher đang chấm bài nói trước khi tạo nhận xét.";
+        break;
+      case "hydrating_review":
+        message = "AI Teacher đang chuẩn bị nhận xét cuối cho bài nói.";
+        break;
+      default:
+        message =
+          "AI Teacher đang đợi transcript và kết quả chấm bài nói để tạo nhận xét.";
+    }
   } else if (modality === "objective") {
     message = "AI Teacher đang phân tích câu trả lời và tạo nhận xét.";
   }
@@ -247,5 +275,28 @@ function buildPendingPayload(row: Record<string, unknown>) {
     status: "pending",
     review_id: row["id"],
     message,
+    ...(processingStage != null ? { processing_stage: processingStage } : {}),
   };
+}
+
+function resolveSpeakingProcessingStage(
+  attempt: Record<string, unknown>,
+): "transcribing" | "scoring" {
+  const transcript = String(attempt["transcript"] ?? "").trim();
+  return transcript.length == 0 ? "transcribing" : "scoring";
+}
+
+function normalizeProcessingStage(value: string | undefined):
+  | "transcribing"
+  | "scoring"
+  | "hydrating_review"
+  | null {
+  switch (value) {
+    case "transcribing":
+    case "scoring":
+    case "hydrating_review":
+      return value;
+    default:
+      return null;
+  }
 }

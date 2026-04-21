@@ -51,7 +51,7 @@ Trả về JSON chính xác theo định dạng sau (không có văn bản nào 
   "format_feedback": "<Nhận xét về hình thức: cấu trúc bài (mở/thân/kết), độ dài, văn phong có phù hợp thể loại (thư/đơn/bài luận) không.>",
   "short_tips": ["<tip1 ngắn gọn, tối đa 15 từ>", "<tip2>", "<tip3>"],
   "corrected_essay": "<Toàn bộ bài viết đã được sửa hoàn chỉnh, đúng ngữ pháp tiếng Séc>",
-  "overall_feedback": "<Nhận xét tổng quan 2-3 câu bằng tiếng Việt, tóm tắt điểm mạnh và lỗi cần ưu tiên sửa nhất.>"
+  "overall_feedback": "<Nhận xét tổng quan 1-2 câu bằng tiếng Việt, tóm tắt điểm mạnh và lỗi cần ưu tiên sửa nhất.>"
 }
 
 Lưu ý quan trọng về annotated_spans:
@@ -148,6 +148,7 @@ Deno.serve(async (req) => {
     EdgeRuntime.waitUntil(processWritingAttempt({
       supabase,
       attemptId,
+      examAttemptId,
       apiKey,
       promptText,
       text,
@@ -166,11 +167,13 @@ Deno.serve(async (req) => {
 async function processWritingAttempt(args: {
   supabase: SupabaseClient;
   attemptId: string;
+  examAttemptId: string | null;
   apiKey: string;
   promptText: string;
   text: string;
 }) {
-  const { supabase, attemptId, apiKey, promptText, text } = args;
+  const { supabase, attemptId, examAttemptId, apiKey, promptText, text } =
+    args;
 
   try {
     const userMessage =
@@ -226,9 +229,16 @@ async function processWritingAttempt(args: {
         `Failed to update writing attempt: ${updateError.message}`,
       );
     }
+
+    if (examAttemptId) {
+      await regradeExamAttempt(supabase, examAttemptId);
+    }
   } catch (err) {
     console.error("writing-submit background error:", err);
     await markAttemptError(supabase, attemptId, String(err));
+    if (examAttemptId) {
+      await regradeExamAttempt(supabase, examAttemptId);
+    }
   }
 }
 
@@ -303,6 +313,19 @@ async function markAttemptError(
       updated_at: new Date().toISOString(),
     })
     .eq("id", attemptId);
+}
+
+async function regradeExamAttempt(
+  supabase: SupabaseClient,
+  examAttemptId: string,
+) {
+  try {
+    await supabase.functions.invoke("grade-exam", {
+      body: { attempt_id: examAttemptId },
+    });
+  } catch (error) {
+    console.warn("writing-submit regrade trigger failed:", error);
+  }
 }
 
 function normalizeAnnotatedSpans(value: unknown, originalText: string) {

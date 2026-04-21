@@ -18,7 +18,8 @@ class LatestResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final scoreColor = _scoreColor(result.band);
+    final isPending = result.aiGradingPending;
+    final scoreColor = isPending ? AppColors.primary : _scoreColor(result.band);
     final passed = result.passed;
 
     return GestureDetector(
@@ -36,11 +37,11 @@ class LatestResultCard extends StatelessWidget {
           children: [
             // Score ring
             ProgressRing(
-              value: result.totalScore / 100,
+              value: isPending ? 0 : result.totalScore / 100,
               size: 64,
               strokeWidth: 6,
               color: scoreColor,
-              label: '${result.totalScore}',
+              label: isPending ? '...' : '${result.totalScore}',
               labelStyle: AppTypography.titleMedium.copyWith(
                 color: scoreColor,
                 fontWeight: FontWeight.w700,
@@ -58,17 +59,21 @@ class LatestResultCard extends StatelessWidget {
                         style: AppTypography.titleSmall,
                       ),
                       const SizedBox(width: AppSpacing.x2),
-                      _PassBadge(passed: passed),
+                      isPending
+                          ? const _PendingBadge()
+                          : _PassBadge(passed: passed),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.x1),
                   Text(
-                    _formatDate(result.createdAt),
+                    isPending
+                        ? 'AI đang hoàn tất chấm bài thi'
+                        : _formatDate(result.createdAt),
                     style: AppTypography.bodySmall.copyWith(
                       color: cs.onSurfaceVariant,
                     ),
                   ),
-                  if (result.sectionScores.isNotEmpty) ...[
+                  if (!isPending && result.sectionScores.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.x2),
                     _SectionMiniBar(sectionScores: result.sectionScores),
                   ],
@@ -94,11 +99,44 @@ class LatestResultCard extends StatelessWidget {
 
   String _formatDate(DateTime dt) {
     final months = [
-      'tháng 1', 'tháng 2', 'tháng 3', 'tháng 4',
-      'tháng 5', 'tháng 6', 'tháng 7', 'tháng 8',
-      'tháng 9', 'tháng 10', 'tháng 11', 'tháng 12',
+      'tháng 1',
+      'tháng 2',
+      'tháng 3',
+      'tháng 4',
+      'tháng 5',
+      'tháng 6',
+      'tháng 7',
+      'tháng 8',
+      'tháng 9',
+      'tháng 10',
+      'tháng 11',
+      'tháng 12',
     ];
     return '${dt.day} ${months[dt.month - 1]}, ${dt.year}';
+  }
+}
+
+class _PendingBadge extends StatelessWidget {
+  const _PendingBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x2,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.primaryFixed,
+        borderRadius: AppRadius.fullAll,
+      ),
+      child: Text(
+        'Đang chấm',
+        style: AppTypography.labelSmall.copyWith(
+          color: AppColors.primary,
+        ),
+      ),
+    );
   }
 }
 
@@ -129,7 +167,6 @@ class _PassBadge extends StatelessWidget {
 class _SectionMiniBar extends StatelessWidget {
   const _SectionMiniBar({required this.sectionScores});
   final Map<String, SectionResult> sectionScores;
-
 
   @override
   Widget build(BuildContext context) {

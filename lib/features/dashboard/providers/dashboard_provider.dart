@@ -21,10 +21,12 @@ final dashboardProvider =
   final latestResult = results[0] as MockTestResult?;
   final leaderboardResult = results[1] as _LeaderboardResult;
   final courseData = results[2] as _CourseData;
+  final finalizedLatestResult =
+      latestResult?.hasOfficialResult == true ? latestResult : null;
 
   // ── Build recommendation from weakest skill (or active course skill) ──────
-  final weakSkill = latestResult?.weakSkills.isNotEmpty == true
-      ? latestResult!.weakSkills.first
+  final weakSkill = finalizedLatestResult?.weakSkills.isNotEmpty == true
+      ? finalizedLatestResult!.weakSkills.first
       : courseData.activeCourse?.skill;
 
   RecommendedLesson? recommendation;
@@ -87,6 +89,7 @@ Future<MockTestResult?> _fetchLatestResult(String userId) async {
       speakingScore: raw['speaking_score'] as int? ?? 0,
       speakingTotal: raw['speaking_total'] as int? ?? 40,
       speakingPassThreshold: raw['speaking_pass_threshold'] as int? ?? 24,
+      aiGradingPending: raw['ai_grading_pending'] as bool? ?? false,
       createdAt: DateTime.parse(raw['created_at'] as String),
     );
   } catch (_) {

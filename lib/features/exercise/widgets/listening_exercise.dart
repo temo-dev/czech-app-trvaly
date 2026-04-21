@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:app_czech/core/theme/app_spacing.dart';
 import 'package:app_czech/core/theme/app_typography.dart';
+import 'package:app_czech/features/exercise/widgets/audio_player_bar.dart';
+import 'package:app_czech/features/exercise/widgets/mcq_exercise.dart';
 import 'package:app_czech/shared/models/question_model.dart';
-import 'audio_player_bar.dart';
-import 'mcq_exercise.dart';
 
 /// Listening exercise: audio player bar above MCQ options.
 /// The audio URL comes from [Question.audioUrl].
@@ -66,13 +66,11 @@ class _NoAudioPlaceholder extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.headphones_outlined,
-              size: 20, color: cs.onSurfaceVariant),
+          Icon(Icons.headphones_outlined, size: 20, color: cs.onSurfaceVariant),
           const SizedBox(width: AppSpacing.x3),
           Text(
             'Không có file âm thanh cho câu hỏi này',
-            style: AppTypography.bodySmall
-                .copyWith(color: cs.onSurfaceVariant),
+            style: AppTypography.bodySmall.copyWith(color: cs.onSurfaceVariant),
           ),
         ],
       ),

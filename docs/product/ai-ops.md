@@ -45,6 +45,7 @@ Nguyên tắc:
 - speaking/writing là interactive flow, ưu tiên tốc độ + chất lượng ổn định
 - speaking ưu tiên audio-native scoring khi format upload hỗ trợ (`wav`/`mp3`); transcript chỉ là review artifact và fallback signal
 - `exam_analysis` là batch/background flow, ưu tiên chất lượng synthesis hơn latency
+- mock test review không còn gọi `ai-review-submit` từ result screen; `analyze-exam` materialize summary + full subjective review vào `exam_analysis`
 - `OPENAI_DEFAULT_CHAT_MODEL` chỉ là fallback, không nên là nơi quyết định model thật cho flow nghiệp vụ
 
 ---
@@ -149,7 +150,8 @@ Trước khi đổi model/env:
 - kiểm tra model mới có hỗ trợ đúng endpoint đang dùng
 - ưu tiên đổi qua env trước, tránh hardcode mới
 - kiểm tra speaking/writing vẫn giữ contract `{ attempt_id }` + polling
-- kiểm tra AI Teacher review vẫn ra `pending/ready/error` đúng như cũ
+- kiểm tra AI Teacher review lesson/practice vẫn ra `pending/ready/error` đúng như cũ
+- kiểm tra mock test result không phát sinh `ai-review-submit` khi mở từng câu speaking/writing
 
 Trước khi deploy Edge Functions:
 - mọi function phải vẫn dùng `verify_jwt = false`
@@ -160,9 +162,10 @@ Trước khi deploy Edge Functions:
 Sau khi deploy:
 - submit 1 bài speaking
 - submit 1 bài writing
-- mở 1 AI Teacher review objective
-- mở 1 AI Teacher review subjective
+- mở 1 AI Teacher review objective trong lesson/practice
+- mở 1 AI Teacher review subjective trong lesson/practice
 - nộp 1 mock test có speaking/writing để xác nhận `grade-exam` + `analyze-exam`
+- mở mock test result và 1 detail subjective để xác nhận dữ liệu đến từ `exam_analysis.teacher_reviews_by_question`
 - xem logs `vietnamese_guard` để chắc guard không fallback bất thường
 
 ---
@@ -191,13 +194,15 @@ Nếu guard `fallback`:
 
 Kiểm tra:
 - `ai_speaking_attempts.status`
-- `speaking-upload` log background processing
+- `speaking-upload` structured latency log (`transcription_ms`, `scoring_ms`, `guard_ms`, `audio_format`, `scoring_mode`)
 - `ai_teacher_reviews.status` nếu đang ở màn review
+- `ai-review-result.processing_stage` nếu đang ở màn review
 - `exam_results.ai_grading_pending` nếu là mock test
 
 Nguyên nhân thường gặp:
 - transcription/scoring timeout
 - background task fail
+- thiết bị upload `m4a` nên không đi được nhánh audio-native
 - AI Teacher đang đợi attempt row chuyển sang `ready`
 
 ### 3. Writing stuck ở pending quá lâu
@@ -218,11 +223,16 @@ Kiểm tra:
 - `exam_results.ai_grading_pending`
 - các row `ai_speaking_attempts` / `ai_writing_attempts` theo `exam_attempt_id`
 - `exam_analysis.status`
+- logs `speaking-upload regrade trigger failed` / `writing-submit regrade trigger failed`
 
 Nếu `exam_analysis` chậm:
 - xem `analyze-exam` log
 - kiểm tra objective feedback cache miss có bất thường không
 - kiểm tra synthesis model response
+
+Nếu speaking/writing đã `ready` nhưng banner vẫn còn:
+- re-run `grade-exam` thủ công với `attempt_id`
+- sau đó kiểm tra lại `exam_results.ai_grading_pending`
 
 ### 5. Objective feedback bị lỗi hoặc không preload
 

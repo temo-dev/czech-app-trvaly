@@ -29,6 +29,7 @@ import 'package:app_czech/features/mock_test/screens/exam_catalog_screen.dart';
 import 'package:app_czech/features/mock_test/screens/mock_test_intro_screen.dart';
 import 'package:app_czech/features/mock_test/screens/mock_test_question_screen.dart';
 import 'package:app_czech/features/mock_test/screens/mock_test_result_screen.dart';
+import 'package:app_czech/features/mock_test/screens/mock_test_subjective_review_screen.dart';
 import 'package:app_czech/features/speaking_ai/screens/speaking_prompt_screen.dart';
 import 'package:app_czech/features/speaking_ai/screens/speaking_recording_screen.dart';
 import 'package:app_czech/features/speaking_ai/screens/speaking_feedback_screen.dart';
@@ -130,6 +131,13 @@ GoRouter appRouter(Ref ref) {
         path: AppRoutes.mockTestResult,
         builder: (_, state) => MockTestResultScreen(
           attemptId: state.pathParameters['attemptId'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.mockTestSubjectiveReview,
+        builder: (_, state) => MockTestSubjectiveReviewScreen(
+          attemptId: state.pathParameters['attemptId'] ?? '',
+          questionId: state.pathParameters['questionId'] ?? '',
         ),
       ),
 

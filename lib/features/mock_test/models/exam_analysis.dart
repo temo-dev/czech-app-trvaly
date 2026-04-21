@@ -1,3 +1,4 @@
+import 'package:app_czech/features/ai_teacher/models/ai_teacher_review.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'exam_analysis.freezed.dart';
@@ -99,6 +100,13 @@ class ExamAnalysis with _$ExamAnalysis {
     @JsonKey(name: 'overall_recommendations')
     @Default([])
     List<OverallRecommendation> overallRecommendations,
+    @JsonKey(
+      name: 'teacher_reviews_by_question',
+      fromJson: _teacherReviewsByQuestionFromJson,
+      toJson: _teacherReviewsByQuestionToJson,
+    )
+    @Default({})
+    Map<String, Map<String, dynamic>> teacherReviewsByQuestion,
     @JsonKey(name: 'error_message') String? errorMessage,
   }) = _ExamAnalysis;
 
@@ -110,6 +118,12 @@ extension ExamAnalysisX on ExamAnalysis {
   bool get isReady => status == ExamAnalysisStatus.ready;
   bool get isProcessing => status == ExamAnalysisStatus.processing;
   bool get isError => status == ExamAnalysisStatus.error;
+
+  AiTeacherReview? teacherReviewForQuestion(String questionId) {
+    final raw = teacherReviewsByQuestion[questionId];
+    if (raw == null) return null;
+    return AiTeacherReview.fromJson(raw);
+  }
 }
 
 Map<String, QuestionAnalysisFeedback> _questionFeedbacksFromJson(
@@ -131,6 +145,26 @@ Map<String, dynamic> _questionFeedbacksToJson(
 ) {
   return questionFeedbacks.map(
     (key, value) => MapEntry(key, value.toJson()),
+  );
+}
+
+Map<String, Map<String, dynamic>> _teacherReviewsByQuestionFromJson(
+  Map<String, dynamic>? json,
+) {
+  if (json == null) return {};
+  return json.map(
+    (key, value) => MapEntry(
+      key,
+      Map<String, dynamic>.from(value as Map),
+    ),
+  );
+}
+
+Map<String, dynamic> _teacherReviewsByQuestionToJson(
+  Map<String, Map<String, dynamic>> teacherReviewsByQuestion,
+) {
+  return teacherReviewsByQuestion.map(
+    (key, value) => MapEntry(key, value),
   );
 }
 

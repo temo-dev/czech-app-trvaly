@@ -126,7 +126,7 @@ export async function ensureVietnameseUserFacingJson<
   payload: T,
   context: string,
 ): Promise<T> {
-  const inspection = inspectSuspiciousEnglish(payload);
+  const inspection = inspectUserFacingEnglish(payload);
   if (inspection.suspiciousCount === 0) {
     return payload;
   }
@@ -153,7 +153,7 @@ export async function ensureVietnameseUserFacingJson<
     );
 
     const merged = mergeNormalizedJson(payload, rewritten) as T;
-    const remaining = inspectSuspiciousEnglish(merged);
+    const remaining = inspectUserFacingEnglish(merged);
     logGuardEvent({
       status: remaining.suspiciousCount === 0 ? "rewritten" : "partial",
       context,
@@ -204,7 +204,7 @@ function looksEnglish(text: string): boolean {
   return ENGLISH_MARKERS.some((marker) => normalized.includes(marker));
 }
 
-function inspectSuspiciousEnglish(value: unknown): GuardInspection {
+export function inspectUserFacingEnglish(value: unknown): GuardInspection {
   const suspiciousPaths: string[] = [];
   visitSuspiciousEnglish(value, suspiciousPaths, "$");
   return {

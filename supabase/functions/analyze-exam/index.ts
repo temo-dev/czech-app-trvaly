@@ -84,6 +84,11 @@ interface AiAttemptRow {
   transcript?: string | null;
 }
 
+interface MaterializedQuestionReview {
+  questionFeedback: Record<string, unknown>;
+  teacherReview: Record<string, unknown> | null;
+}
+
 const SUBJECTIVE_WAIT_RETRIES = 10;
 const SUBJECTIVE_WAIT_INTERVAL = 3_000;
 const OBJECTIVE_CONCURRENCY = 5;
@@ -94,14 +99,14 @@ Bạn là AI Teacher tổng hợp kết quả bài thi tiếng Séc cho học vi
 
 Nhiệm vụ:
 1. Tóm tắt ngắn gọn điểm mạnh / điểm yếu theo từng kỹ năng có trong bài thi.
-2. Đưa ra 3-5 gợi ý hành động cụ thể, ưu tiên việc học thực tế và dễ làm ngay.
+2. Đưa ra 1-2 gợi ý hành động cụ thể, ưu tiên việc học thực tế và dễ làm ngay.
 
 Yêu cầu:
 - Viết hoàn toàn bằng tiếng Việt.
 - Dựa sát vào section_scores và feedback từng câu, không bịa chi tiết.
-- "summary" mỗi kỹ năng: 1-2 câu.
+- "summary" mỗi kỹ năng: 1 câu.
 - "main_issue": 1 câu, nêu vấn đề chính cần cải thiện nhất.
-- "overall_recommendations": 3-5 mục, ngắn gọn nhưng cụ thể.
+- "overall_recommendations": 1-2 mục, ngắn gọn nhưng cụ thể.
 
 Trả về JSON:
 {
@@ -260,13 +265,13 @@ Deno.serve(async (req) => {
       }),
     }));
 
-    const feedbackEntries = await mapWithConcurrency(
+    const materializedReviewEntries = await mapWithConcurrency(
       analysisQuestions,
       OBJECTIVE_CONCURRENCY,
       async (context) =>
         [
           context.question.id,
-          await buildQuestionFeedback({
+          await buildQuestionReview({
             supabase,
             attemptId: attemptId!,
             context,
@@ -275,7 +280,20 @@ Deno.serve(async (req) => {
         ] as const,
     );
 
-    const questionFeedbacks = Object.fromEntries(feedbackEntries);
+    const questionFeedbacks = Object.fromEntries(
+      materializedReviewEntries.map(([questionId, materialized]) => [
+        questionId,
+        materialized.questionFeedback,
+      ]),
+    );
+    const teacherReviewsByQuestion = Object.fromEntries(
+      materializedReviewEntries
+        .filter(([, materialized]) => materialized.teacherReview != null)
+        .map(([questionId, materialized]) => [
+          questionId,
+          materialized.teacherReview,
+        ]),
+    );
 
     const synthesis = await buildExamSynthesis({
       examResult,
@@ -291,6 +309,7 @@ Deno.serve(async (req) => {
         guest_token: guestToken,
         status: "ready",
         question_feedbacks: questionFeedbacks,
+        teacher_reviews_by_question: teacherReviewsByQuestion,
         skill_insights: synthesis.skillInsights,
         overall_recommendations: synthesis.overallRecommendations,
         error_message: null,
@@ -327,12 +346,12 @@ Deno.serve(async (req) => {
   }
 });
 
-async function buildQuestionFeedback(args: {
+async function buildQuestionReview(args: {
   supabase: SupabaseClient;
   attemptId: string;
   context: AnalysisQuestionContext;
   subjectiveAttempts: SubjectiveAttempts;
-}): Promise<Record<string, unknown>> {
+}): Promise<MaterializedQuestionReview> {
   const { supabase, attemptId, context, subjectiveAttempts } = args;
   const { question } = context;
 
@@ -361,7 +380,7 @@ async function buildQuestionFeedback(args: {
 async function buildObjectiveQuestionFeedback(args: {
   supabase: SupabaseClient;
   context: AnalysisQuestionContext;
-}): Promise<Record<string, unknown>> {
+}): Promise<MaterializedQuestionReview> {
   const { supabase, context } = args;
   const { question, storedAnswer } = context;
   const normalizedType = normalizeQuestionFeedbackType(question.type);
@@ -386,7 +405,7 @@ async function buildObjectiveQuestionFeedback(args: {
       const isAnswered = selectedOption != null;
       const isCorrect = selectedOption?.is_correct ?? false;
       if (!isAnswered) {
-        return {
+        return wrapQuestionFeedback({
           ...commonPayload,
           verdict: "incorrect",
           error_analysis: "Bạn đã bỏ trống câu này nên mất điểm.",
@@ -394,11 +413,11 @@ async function buildObjectiveQuestionFeedback(args: {
           short_tip: "Đọc kỹ từ khóa trước khi chọn đáp án.",
           key_concept: skillConceptLabel(question.skill),
           matching_feedback: null,
-        };
+        });
       }
 
       if (isCorrect) {
-        return {
+        return wrapQuestionFeedback({
           ...commonPayload,
           verdict: "correct",
           error_analysis: "",
@@ -406,7 +425,7 @@ async function buildObjectiveQuestionFeedback(args: {
           short_tip: "",
           key_concept: skillConceptLabel(question.skill),
           matching_feedback: null,
-        };
+        });
       }
 
       return fetchObjectiveFeedbackFromAi({
@@ -423,7 +442,7 @@ async function buildObjectiveQuestionFeedback(args: {
       const isCorrect = matchesAcceptedAnswer(userAnswerText, question);
 
       if (!isAnswered) {
-        return {
+        return wrapQuestionFeedback({
           ...commonPayload,
           verdict: "incorrect",
           error_analysis: "Bạn chưa điền đáp án nên câu này bị tính sai.",
@@ -431,11 +450,11 @@ async function buildObjectiveQuestionFeedback(args: {
           short_tip: "Kiểm tra dạng từ và chính tả.",
           key_concept: skillConceptLabel(question.skill),
           matching_feedback: null,
-        };
+        });
       }
 
       if (isCorrect) {
-        return {
+        return wrapQuestionFeedback({
           ...commonPayload,
           verdict: "correct",
           error_analysis: "",
@@ -443,7 +462,7 @@ async function buildObjectiveQuestionFeedback(args: {
           short_tip: "",
           key_concept: skillConceptLabel(question.skill),
           matching_feedback: null,
-        };
+        });
       }
 
       return fetchObjectiveFeedbackFromAi({
@@ -463,7 +482,7 @@ async function buildObjectiveQuestionFeedback(args: {
         : isMatchingCorrect(question, userAnswerText);
 
       if (!isAnswered) {
-        return {
+        return wrapQuestionFeedback({
           ...commonPayload,
           verdict: "incorrect",
           error_analysis: "Bạn chưa hoàn thành câu ghép/sắp xếp này.",
@@ -471,11 +490,11 @@ async function buildObjectiveQuestionFeedback(args: {
           short_tip: "Đối chiếu từng vị trí trước khi nộp.",
           key_concept: skillConceptLabel(question.skill),
           matching_feedback: [],
-        };
+        });
       }
 
       if (isCorrect) {
-        return {
+        return wrapQuestionFeedback({
           ...commonPayload,
           verdict: "correct",
           error_analysis: "",
@@ -483,7 +502,7 @@ async function buildObjectiveQuestionFeedback(args: {
           short_tip: "",
           key_concept: skillConceptLabel(question.skill),
           matching_feedback: [],
-        };
+        });
       }
 
       return fetchObjectiveFeedbackFromAi({
@@ -501,7 +520,7 @@ async function fetchObjectiveFeedbackFromAi(args: {
   question: QuestionRow;
   userAnswerText: string;
   correctAnswerText: string;
-}): Promise<Record<string, unknown>> {
+}): Promise<MaterializedQuestionReview> {
   const { supabase, question, userAnswerText, correctAnswerText } = args;
   const request: QuestionFeedbackRequest = {
     question_id: question.id,
@@ -527,7 +546,7 @@ async function fetchObjectiveFeedbackFromAi(args: {
       timeoutMs: OBJECTIVE_TIMEOUT_MS,
     });
 
-    return {
+    return wrapQuestionFeedback({
       verdict: "incorrect",
       error_analysis: feedback.error_analysis,
       correct_explanation: feedback.correct_explanation,
@@ -535,10 +554,10 @@ async function fetchObjectiveFeedbackFromAi(args: {
       key_concept: feedback.key_concept,
       matching_feedback: feedback.matching_feedback,
       skipped: false,
-    };
+    });
   } catch (error) {
     console.warn("objective feedback skipped:", question.id, error);
-    return {
+    return wrapQuestionFeedback({
       verdict: "incorrect",
       error_analysis: "",
       correct_explanation: buildCorrectExplanationFallback(
@@ -549,7 +568,7 @@ async function fetchObjectiveFeedbackFromAi(args: {
       key_concept: skillConceptLabel(question.skill),
       matching_feedback: null,
       skipped: true,
-    };
+    });
   }
 }
 
@@ -557,7 +576,7 @@ async function buildSpeakingQuestionFeedback(args: {
   attemptId: string;
   context: AnalysisQuestionContext;
   subjectiveAttempts: SubjectiveAttempts;
-}): Promise<Record<string, unknown>> {
+}): Promise<MaterializedQuestionReview> {
   const { attemptId, context, subjectiveAttempts } = args;
   const row = findSubjectiveAttemptRow(
     subjectiveAttempts.speaking,
@@ -566,27 +585,27 @@ async function buildSpeakingQuestionFeedback(args: {
   );
 
   if (!isStoredAnswerAnswered(context.storedAnswer)) {
-    return {
+    return wrapQuestionFeedback({
       verdict: "incorrect",
       summary: "Bạn chưa nộp bài nói cho câu này.",
       criteria: [],
       short_tips: ["Ghi âm đầy đủ để nhận nhận xét chi tiết."],
       skipped: false,
-    };
+    });
   }
 
   if (!row || row.status === "processing") {
-    return {
+    return wrapQuestionFeedback({
       verdict: "incorrect",
       summary: "AI chưa kịp hoàn tất phân tích cho bài nói này.",
       criteria: [],
       short_tips: [],
       skipped: true,
-    };
+    });
   }
 
   if (row.status === "error") {
-    return {
+    return wrapQuestionFeedback({
       verdict: "incorrect",
       summary: normalizeSpeakingAnalysisError(
         row.error_message ?? "Không thể phân tích bài nói này.",
@@ -594,7 +613,7 @@ async function buildSpeakingQuestionFeedback(args: {
       criteria: [],
       short_tips: [],
       skipped: true,
-    };
+    });
   }
 
   const payload = await ensureVietnameseUserFacingJson(
@@ -608,17 +627,20 @@ async function buildSpeakingQuestionFeedback(args: {
   );
 
   return {
-    verdict: payload.verdict,
-    summary: payload.summary,
-    criteria: payload.criteria.map((criterion) => ({
-      label: String(criterion["title"] ?? ""),
-      score: toNullableNumber(criterion["score"]),
-      max_score: toNullableNumber(criterion["max_score"]),
-      feedback: String(criterion["feedback"] ?? ""),
-      tip: String(criterion["tip"] ?? ""),
-    })),
-    short_tips: payload.artifacts.short_tips ?? [],
-    skipped: false,
+    questionFeedback: {
+      verdict: payload.verdict,
+      summary: payload.summary,
+      criteria: payload.criteria.map((criterion) => ({
+        label: String(criterion["title"] ?? ""),
+        score: toNullableNumber(criterion["score"]),
+        max_score: toNullableNumber(criterion["max_score"]),
+        feedback: String(criterion["feedback"] ?? ""),
+        tip: String(criterion["tip"] ?? ""),
+      })),
+      short_tips: payload.artifacts.short_tips ?? [],
+      skipped: false,
+    },
+    teacherReview: materializeExamTeacherReview(payload),
   };
 }
 
@@ -637,7 +659,7 @@ async function buildWritingQuestionFeedback(args: {
   attemptId: string;
   context: AnalysisQuestionContext;
   subjectiveAttempts: SubjectiveAttempts;
-}): Promise<Record<string, unknown>> {
+}): Promise<MaterializedQuestionReview> {
   const { attemptId, context, subjectiveAttempts } = args;
   const row = findSubjectiveAttemptRow(
     subjectiveAttempts.writing,
@@ -646,33 +668,33 @@ async function buildWritingQuestionFeedback(args: {
   );
 
   if (!isStoredAnswerAnswered(context.storedAnswer)) {
-    return {
+    return wrapQuestionFeedback({
       verdict: "incorrect",
       summary: "Bạn chưa nộp bài viết cho câu này.",
       criteria: [],
       short_tips: ["Hoàn thành bài viết để nhận nhận xét AI."],
       skipped: false,
-    };
+    });
   }
 
   if (!row || row.status === "processing") {
-    return {
+    return wrapQuestionFeedback({
       verdict: "incorrect",
       summary: "AI chưa kịp hoàn tất phân tích cho bài viết này.",
       criteria: [],
       short_tips: [],
       skipped: true,
-    };
+    });
   }
 
   if (row.status === "error") {
-    return {
+    return wrapQuestionFeedback({
       verdict: "incorrect",
       summary: String(row.error_message ?? "Không thể phân tích bài viết này."),
       criteria: [],
       short_tips: [],
       skipped: true,
-    };
+    });
   }
 
   const payload = await ensureVietnameseUserFacingJson(
@@ -686,17 +708,38 @@ async function buildWritingQuestionFeedback(args: {
   );
 
   return {
-    verdict: payload.verdict,
-    summary: payload.summary,
-    criteria: payload.criteria.map((criterion) => ({
-      label: String(criterion["title"] ?? ""),
-      score: toNullableNumber(criterion["score"]),
-      max_score: toNullableNumber(criterion["max_score"]),
-      feedback: String(criterion["feedback"] ?? ""),
-      tip: String(criterion["tip"] ?? ""),
-    })),
-    short_tips: payload.artifacts.short_tips ?? [],
-    skipped: false,
+    questionFeedback: {
+      verdict: payload.verdict,
+      summary: payload.summary,
+      criteria: payload.criteria.map((criterion) => ({
+        label: String(criterion["title"] ?? ""),
+        score: toNullableNumber(criterion["score"]),
+        max_score: toNullableNumber(criterion["max_score"]),
+        feedback: String(criterion["feedback"] ?? ""),
+        tip: String(criterion["tip"] ?? ""),
+      })),
+      short_tips: payload.artifacts.short_tips ?? [],
+      skipped: false,
+    },
+    teacherReview: materializeExamTeacherReview(payload),
+  };
+}
+
+function wrapQuestionFeedback(
+  questionFeedback: Record<string, unknown>,
+): MaterializedQuestionReview {
+  return {
+    questionFeedback,
+    teacherReview: null,
+  };
+}
+
+function materializeExamTeacherReview(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...payload,
+    is_premium: true,
   };
 }
 
@@ -829,17 +872,16 @@ function buildFallbackSynthesis(args: {
         section.skill,
         {
           "summary": sectionScore != null
-            ? `Bạn đang ở mức ${sectionScore}/100 cho phần ${section.label}. ${
-              weakCount === 0
-                ? "Nền tảng đang khá ổn."
-                : "Vẫn còn vài điểm cần rà lại."
+            ? `Bạn đang ở mức ${sectionScore}/100 cho phần ${section.label}. ${weakCount === 0
+              ? "Nền tảng đang khá ổn."
+              : "Vẫn còn vài điểm cần rà lại."
             }`
             : `Phần ${section.label} đã được phân tích từ toàn bộ câu trả lời.`,
           "main_issue": skippedCount > 0
             ? "Một số câu chưa có đủ dữ liệu AI nên nên xem lại phần trả lời gốc."
             : concepts.length > 0
-            ? `Chủ điểm cần ưu tiên là ${concepts[0]}.`
-            : "Cần luyện thêm độ chính xác và cách áp dụng mẫu câu.",
+              ? `Chủ điểm cần ưu tiên là ${concepts[0]}.`
+              : "Cần luyện thêm độ chính xác và cách áp dụng mẫu câu.",
         },
       ];
     }),
@@ -852,9 +894,8 @@ function buildFallbackSynthesis(args: {
 
   const overallRecommendations = focusSkills.slice(0, 3).map((skill) => ({
     "title": `Ôn lại ${skillConceptLabel(skill)}`,
-    "detail": `Làm lại các câu ${
-      skillLabel(skill).toLowerCase()
-    } sai và ghi chú quy tắc chính vào sổ tay.`,
+    "detail": `Làm lại các câu ${skillLabel(skill).toLowerCase()
+      } sai và ghi chú quy tắc chính vào sổ tay.`,
   }));
 
   if (overallRecommendations.length < 3) {

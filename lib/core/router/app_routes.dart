@@ -16,6 +16,8 @@ abstract final class AppRoutes {
   static const mockTestQuestion = '/mock-test/question/:attemptId';
   static const mockTestReview = '/mock-test/review';
   static const mockTestResult = '/mock-test/result/:attemptId';
+  static const mockTestSubjectiveReview =
+      '/mock-test/result/:attemptId/review/:questionId';
 
   // ── App shell root (authenticated) ─────────────────────────────────────────
   static const dashboard = '/app/dashboard';
@@ -74,6 +76,11 @@ abstract final class AppRoutes {
       '/mock-test/question/$attemptId';
   static String mockTestResultPath(String attemptId) =>
       '/mock-test/result/$attemptId';
+  static String mockTestSubjectiveReviewPath(
+    String attemptId,
+    String questionId,
+  ) =>
+      '/mock-test/result/$attemptId/review/$questionId';
   static String practiceExercisePath(String exerciseId) =>
       '/app/practice/exercise/$exerciseId';
   static String practiceQuestionPath(int index) =>
