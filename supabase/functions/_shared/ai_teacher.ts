@@ -23,6 +23,13 @@ export type ReviewPayload = {
   };
 };
 
+type ReviewMistakeRecord = {
+  title: string;
+  explanation: string;
+  correction: string;
+  tip: string;
+};
+
 export async function getRequesterContext(
   supabase: SupabaseClient,
   req: Request,
@@ -174,6 +181,10 @@ export function buildSpeakingReviewPayload(args: {
   const issues = ((row["issues"] as unknown[]) ?? [])
     .map((item) => item as Record<string, unknown>);
   const shortTips = ((metrics["short_tips"] as string[]) ?? []).slice(0, 5);
+  const majorIssues = toStringList(metrics["major_issues"], 2);
+  const nextStepFocus = String(metrics["next_step_focus"] ?? "");
+  const cefrEstimate = String(metrics["cefr_estimate"] ?? "");
+  const confidence = String(metrics["confidence"] ?? "");
   const score = Number(row["overall_score"] ?? 0);
   const summary = String(metrics["overall_feedback"] ?? "");
   const needsRetry = score == 0 && summary.toLowerCase().includes("tiếng séc");
@@ -201,7 +212,14 @@ export function buildSpeakingReviewPayload(args: {
       metrics["vocabulary_tip"],
     ),
     buildCriterion(
-      "Nội dung & ngữ pháp",
+      "Ngữ pháp",
+      null,
+      100,
+      metrics["grammar_feedback"],
+      metrics["grammar_tip"],
+    ),
+    buildCriterion(
+      "Đáp ứng yêu cầu",
       metrics["task_achievement"],
       100,
       metrics["content_feedback"] ?? metrics["grammar_feedback"],
@@ -209,14 +227,31 @@ export function buildSpeakingReviewPayload(args: {
     ),
   ].filter(Boolean) as Array<Record<string, unknown>>;
 
-  let mistakes = issues.map((issue) => ({
-    title: speakingIssueTitle(issue["type"] as string | null),
-    explanation: String(
-      issue["explanation"] ?? issue["word"] ?? issue["token"] ?? "",
-    ),
-    correction: String(issue["suggestion"] ?? ""),
-    tip: "",
-  })).filter((item) => item.explanation.length > 0);
+  let mistakes: ReviewMistakeRecord[] = issues
+    .slice()
+    .sort(compareSpeakingIssues)
+    .map((issue) => {
+      const issueType = issue["type"] as string | null;
+      const criterion = findCriterionForIssue(criteria, issueType);
+      const severity = speakingSeverityLabel(
+        issue["severity"] as string | null,
+      );
+      const token = String(issue["word"] ?? issue["token"] ?? "").trim();
+      const explanation = String(issue["explanation"] ?? "").trim();
+
+      return {
+        title: severity.length > 0
+          ? `${speakingIssueTitle(issueType)} (${severity})`
+          : speakingIssueTitle(issueType),
+        explanation: joinNonEmptyParts([
+          explanation,
+          token.length > 0 ? `Từ/cụm cần chú ý: "${token}".` : "",
+        ]),
+        correction: String(issue["suggestion"] ?? ""),
+        tip: String(criterion?.["tip"] ?? ""),
+      };
+    })
+    .filter((item) => item.explanation.length > 0);
 
   if (mistakes.length === 0) {
     mistakes = criteria
@@ -229,10 +264,26 @@ export function buildSpeakingReviewPayload(args: {
       .filter((item) => item.explanation.length > 0);
   }
 
-  const suggestions = shortTips.map((tip, index) => ({
-    title: `${isExamLike ? "Lưu ý" : "Gợi ý luyện"} ${index + 1}`,
-    detail: tip,
-  }));
+  mistakes = enrichSpeakingMistakes({
+    mistakes,
+    criteria,
+    majorIssues,
+  });
+
+  const suggestions = buildSpeakingSuggestions({
+    shortTips,
+    majorIssues,
+    nextStepFocus,
+    isExamLike,
+  });
+
+  const reinforcement = needsRetry ? "" : buildSpeakingReinforcement({
+    criteria,
+    majorIssues,
+    cefrEstimate,
+    confidence,
+    isExamLike,
+  });
 
   return {
     review_id: reviewId,
@@ -241,7 +292,7 @@ export function buildSpeakingReviewPayload(args: {
     source,
     verdict: needsRetry ? "needs_retry" : verdictFromScore(score),
     summary,
-    reinforcement: "",
+    reinforcement,
     criteria: needsRetry ? [] : criteria,
     mistakes,
     suggestions,
@@ -305,6 +356,8 @@ function writingIssueTitle(issueType: string | null): string {
 
 function speakingIssueTitle(issueType: string | null): string {
   switch (issueType) {
+    case "pronunciation":
+      return "Phát âm";
     case "grammar":
       return "Ngữ pháp khi nói";
     case "vocabulary":
@@ -312,4 +365,190 @@ function speakingIssueTitle(issueType: string | null): string {
     default:
       return "Phát âm / diễn đạt";
   }
+}
+
+function toStringList(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => item.length > 0)
+    .slice(0, limit);
+}
+
+function joinNonEmptyParts(parts: string[]): string {
+  return parts.map((part) => part.trim()).filter((part) => part.length > 0)
+    .join(" ");
+}
+
+function speakingSeverityLabel(severity: string | null): string {
+  switch (severity) {
+    case "high":
+      return "cần sửa trước";
+    case "medium":
+      return "ảnh hưởng rõ";
+    case "low":
+      return "nên chỉnh thêm";
+    default:
+      return "";
+  }
+}
+
+function speakingIssuePriority(severity: string | null): number {
+  switch (severity) {
+    case "high":
+      return 0;
+    case "medium":
+      return 1;
+    case "low":
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+function compareSpeakingIssues(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+): number {
+  return speakingIssuePriority(left["severity"] as string | null) -
+    speakingIssuePriority(right["severity"] as string | null);
+}
+
+function findCriterionForIssue(
+  criteria: Array<Record<string, unknown>>,
+  issueType: string | null,
+): Record<string, unknown> | null {
+  const criterionTitle = issueType === "grammar"
+    ? "Ngữ pháp"
+    : issueType === "vocabulary"
+    ? "Từ vựng"
+    : "Phát âm";
+  return criteria.find((criterion) => criterion["title"] === criterionTitle) ??
+    null;
+}
+
+function enrichSpeakingMistakes(args: {
+  mistakes: ReviewMistakeRecord[];
+  criteria: Array<Record<string, unknown>>;
+  majorIssues: string[];
+}): ReviewMistakeRecord[] {
+  const mistakes = [...args.mistakes];
+  const existingExplanations = new Set(
+    mistakes.map((mistake) => String(mistake["explanation"] ?? "").trim()),
+  );
+
+  const weakestCriteria = args.criteria
+    .filter((criterion) =>
+      typeof criterion["score"] === "number" &&
+      String(criterion["feedback"] ?? "").trim().length > 0
+    )
+    .sort((left, right) =>
+      Number(left["score"] ?? 0) - Number(right["score"] ?? 0)
+    );
+
+  for (const criterion of weakestCriteria) {
+    if (mistakes.length >= 4) break;
+    const explanation = String(criterion["feedback"] ?? "").trim();
+    if (!explanation || existingExplanations.has(explanation)) continue;
+    mistakes.push({
+      title: String(criterion["title"] ?? "Điểm cần sửa"),
+      explanation,
+      correction: "",
+      tip: String(criterion["tip"] ?? ""),
+    });
+    existingExplanations.add(explanation);
+  }
+
+  for (const issue of args.majorIssues) {
+    if (mistakes.length >= 5) break;
+    if (existingExplanations.has(issue)) continue;
+    mistakes.push({
+      title: "Vấn đề chính",
+      explanation: issue,
+      correction: "",
+      tip: "",
+    });
+    existingExplanations.add(issue);
+  }
+
+  return mistakes;
+}
+
+function buildSpeakingSuggestions(args: {
+  shortTips: string[];
+  majorIssues: string[];
+  nextStepFocus: string;
+  isExamLike: boolean;
+}): Array<Record<string, string>> {
+  const suggestions: Array<Record<string, string>> = [];
+  const seen = new Set<string>();
+
+  const pushSuggestion = (title: string, detail: string) => {
+    const normalizedDetail = detail.trim();
+    if (!normalizedDetail || seen.has(normalizedDetail)) return;
+    suggestions.push({ title, detail: normalizedDetail });
+    seen.add(normalizedDetail);
+  };
+
+  if (args.nextStepFocus.trim().length > 0) {
+    pushSuggestion(
+      args.isExamLike ? "Trọng tâm lần sau" : "Trọng tâm luyện tập",
+      args.nextStepFocus,
+    );
+  }
+
+  for (const issue of args.majorIssues) {
+    pushSuggestion("Ưu tiên sửa", issue);
+  }
+
+  for (const tip of args.shortTips) {
+    pushSuggestion(
+      `${args.isExamLike ? "Lưu ý" : "Gợi ý luyện"} ${suggestions.length + 1}`,
+      tip,
+    );
+  }
+
+  return suggestions;
+}
+
+function buildSpeakingReinforcement(args: {
+  criteria: Array<Record<string, unknown>>;
+  majorIssues: string[];
+  cefrEstimate: string;
+  confidence: string;
+  isExamLike: boolean;
+}): string {
+  const strongestCriteria = args.criteria
+    .filter((criterion) => typeof criterion["score"] === "number")
+    .sort((left, right) =>
+      Number(right["score"] ?? 0) - Number(left["score"] ?? 0)
+    )
+    .filter((criterion) => Number(criterion["score"] ?? 0) >= 65)
+    .slice(0, 2)
+    .map((criterion) => String(criterion["title"] ?? "").trim())
+    .filter((title) => title.length > 0);
+
+  const levelHint = args.cefrEstimate === "above_a2"
+    ? "Bài nói hiện đã vượt mức tối thiểu A2."
+    : args.cefrEstimate === "a2"
+    ? "Bài nói đang ở quanh mức A2."
+    : "";
+
+  if (strongestCriteria.length > 0) {
+    return joinNonEmptyParts([
+      levelHint,
+      args.isExamLike
+        ? `Điểm làm tốt hơn cả hiện tại là ${strongestCriteria.join(" và ")}.`
+        : `Bạn đang làm khá tốt ở ${strongestCriteria.join(" và ")}.`,
+    ]);
+  }
+
+  if (
+    levelHint.length > 0 && args.majorIssues.length <= 1 &&
+    args.confidence !== "low"
+  ) {
+    return levelHint;
+  }
+
+  return "";
 }

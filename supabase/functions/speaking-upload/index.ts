@@ -435,6 +435,14 @@ async function processSpeakingAttempt(args: {
       overall_feedback: isCzech
         ? String(scored["overall_feedback"] ?? "")
         : nonCzechFeedback,
+      cefr_estimate: isCzech ? String(scored["cefr_estimate"] ?? "") : "",
+      confidence: isCzech ? String(scored["confidence"] ?? "") : "",
+      major_issues: isCzech
+        ? normalizeShortStringList(scored["major_issues"], 2)
+        : [],
+      next_step_focus: isCzech
+        ? String(scored["next_step_focus"] ?? "").trim()
+        : "",
       short_tips: isCzech ? normalizeTips(scored["short_tips"]) : [],
       detected_language: detectedLanguage,
       review_mode: reviewMode,
@@ -739,6 +747,14 @@ function normalizeTips(value: unknown): string[] {
     .map((item) => String(item ?? "").trim())
     .filter((item) => item.length > 0)
     .slice(0, 3);
+}
+
+function normalizeShortStringList(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => item.length > 0)
+    .slice(0, limit);
 }
 
 function normalizeAudioFormat(value: unknown): string | null {

@@ -332,7 +332,7 @@ Note:
 | audio_key | text | | Storage path |
 | status | text NOT NULL | `'processing'` | CHECK IN ('processing','ready','error') |
 | overall_score | int | | 0–100 |
-| metrics | jsonb | | `{pronunciation,fluency,vocabulary,task_achievement, pronunciation_feedback,pronunciation_tip, fluency_feedback,fluency_tip, vocabulary_feedback,vocabulary_tip, grammar_feedback,grammar_tip, overall_feedback, short_tips, detected_language, review_mode, scoring_mode}` |
+| metrics | jsonb | | `{pronunciation,fluency,vocabulary,task_achievement, pronunciation_feedback,pronunciation_tip, fluency_feedback,fluency_tip, vocabulary_feedback,vocabulary_tip, grammar_feedback,grammar_tip, content_feedback,content_tip, overall_feedback, cefr_estimate, confidence, major_issues, next_step_focus, short_tips, detected_language, review_mode, scoring_mode}` |
 | transcript | text | | |
 | issues | jsonb | | `[{word, type?, suggestion?, explanation?}]` |
 | strengths | text[] | | |
